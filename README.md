@@ -1,11 +1,11 @@
 # Paperless Assistant
 
-An automated document analyzer for Paperless-ngx using ChatGPT to automatically analyze and tag your documents.
+An automated document analyzer for Paperless-ngx using OpenAI API to automatically analyze and tag your documents.
 
 ## Features
 
 - 🔍 Automatic document scanning in Paperless-ngx
-- 🤖 AI-powered document analysis using ChatGPT
+- 🤖 AI-powered document analysis using OpenAI (ChatGPT)
 - 🏷️ Automatic tag and correspondent assignment
 - 🚀 Easy setup through web interface
 - 📊 Document processing dashboard
@@ -24,8 +24,8 @@ An automated document analyzer for Paperless-ngx using ChatGPT to automatically 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/paperless-assistant.git
-cd paperless-assistant
+git clone https://github.com/clusterzx/paperless-ai.git
+cd paperless-ai
 ```
 
 2. Start the container:
