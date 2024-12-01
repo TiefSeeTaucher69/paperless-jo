@@ -49,38 +49,39 @@ async function scanDocuments() {
         // Analyze with ChatGPT
         const analysis = await openaiService.analyzeDocument(content);
         
-        // Process tags
-        const existingTags = await paperlessService.getTags();
+        // Initialize tag IDs array
         const tagIds = [];
         
+        // Process tags
         for (const tagName of analysis.tags) {
-          let tag = existingTags.find(t => t.name.toLowerCase() === tagName.toLowerCase());
-          if (!tag) {
-            tag = await paperlessService.createTag(tagName);
+          const tag = await paperlessService.createOrGetTag(tagName);
+          if (tag) {
+            tagIds.push(tag.id);
           }
-          tagIds.push(tag.id);
         }
         
-        // Process correspondent
+        // Process correspondent if present
         if (analysis.correspondent) {
-          const existingCorrespondents = await paperlessService.getCorrespondents();
-          let correspondent = existingCorrespondents.find(
-            c => c.name.toLowerCase() === analysis.correspondent.toLowerCase()
-          );
-          
-          if (!correspondent) {
-            correspondent = await paperlessService.createCorrespondent(analysis.correspondent);
+          try {
+            const correspondent = await paperlessService.createCorrespondent(analysis.correspondent);
+            
+            // Update document with tags and correspondent
+            await paperlessService.updateDocument(doc.id, {
+              tags: tagIds,
+              correspondent: correspondent.id
+            });
+          } catch (error) {
+            console.error(`Error processing correspondent for document ${doc.title}:`, error);
+            // Still update tags even if correspondent processing failed
+            await paperlessService.updateDocument(doc.id, { tags: tagIds });
           }
-          
-          // Update document
-          await paperlessService.updateDocument(doc.id, {
-            tags: tagIds,
-            correspondent: correspondent.id
-          });
+        } else {
+          // Update only tags if no correspondent was identified
+          await paperlessService.updateDocument(doc.id, { tags: tagIds });
         }
         
         // Mark as processed
-        documentModel.addProcessedDocument(doc.id, doc.title);
+        await documentModel.addProcessedDocument(doc.id, doc.title);
         console.log(`Document ${doc.title} processed successfully`);
       }
     }
