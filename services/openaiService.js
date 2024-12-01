@@ -1,4 +1,3 @@
-// services/openaiService.js
 const OpenAI = require('openai');
 const config = require('../config/config');
 
@@ -15,9 +14,8 @@ class OpenAIService {
     }
   }
 
-  async analyzeDocument(content) {
+  async analyzeDocument(content, existingTags = []) {
     try {
-      // Ensure client is initialized
       this.initialize();
 
       if (!this.client) {
@@ -25,12 +23,36 @@ class OpenAIService {
         return { tags: [], correspondent: null };
       }
 
+      // Formatiere existierende Tags für den Prompt
+      const existingTagsList = existingTags
+        .map(tag => tag.name)
+        .join(', ');
+
+      const systemPrompt = `Sie sind ein Dokumentanalysator. Ihre Aufgabe:
+
+1. Analysieren Sie den Dokumentinhalt und extrahieren Sie wichtige Informationen.
+2. Erstellen Sie ein JSON-Objekt mit passenden Tags und dem Korrespondenten.
+3. Berücksichtigen Sie die folgenden bereits existierenden Tags:
+${existingTagsList}
+
+Wichtige Regeln:
+- Prüfen Sie zuerst, ob einer der existierenden Tags passt, bevor Sie neue vorschlagen
+- Verwenden Sie nur relevante Kategorien (Rechnung, Steuer, Vertrag, Mitteilung, Kfz, Versicherung etc.)
+- Wenn Sie eine Kundennummer finden, erstellen Sie einen Tag "KdNr-[Nummer]"
+- Vermeiden Sie generische oder irrelevante Tags
+- Es sollen wirklich nur die wichtigsten Informationen zum erstellen eines Tags benutzt werden.
+- Der Korrespondent sollte die tatsächlich sendende Firma/Institution sein
+- Geben Sie NUR das JSON-Objekt zurück, keine Erklärungen oder Markdown
+- Format: {"tags": ["Tag1", "Tag2"], "correspondent": "Firma"}
+
+Prüfen Sie für jeden neuen Tag, ob nicht ein existierender Tag den gleichen Zweck erfüllt.`;
+
       const response = await this.client.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: 'Analysieren Sie den Inhalt des Dokuments und extrahieren Sie nur die wichtigsten Informationen. Generieren Sie ein JSON-Objekt mit den vorgeschlagenen Tags und dem entsprechenden Korrespondenten. Erfassen Sie dabei ausschließlich relevante Kategorien wie Rechnung, Steuer, Vertrag, Mitteilung, Kfz, Versicherung usw. sowie die zugehörige Firma oder Institution. Vermeiden Sie generische Tags oder irrelevante Korrespondenten. Ausgabeformat: {tags: ["Tag1", "Tag2"], correspondent: "Firma/Institution"} – keine Markdown-Syntax, nur das JSON-Objekt."'
+            content: systemPrompt
           },
           {
             role: "user",
@@ -41,31 +63,17 @@ class OpenAIService {
       });
 
       let jsonContent = response.choices[0].message.content;
+      jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       
-      // Remove any markdown code block syntax if present
-      jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-      
-      // Remove any leading/trailing whitespace
-      jsonContent = jsonContent.trim();
-      
-      // Try to parse the cleaned JSON
       const parsedResponse = JSON.parse(jsonContent);
       
-      // Validate the structure
       if (!Array.isArray(parsedResponse.tags) || typeof parsedResponse.correspondent !== 'string') {
         throw new Error('Invalid response structure');
       }
       
       return parsedResponse;
     } catch (error) {
-      if (error.message.includes('OpenAI')) {
-        console.error('OpenAI API Error:', error);
-      } else {
-        console.error('Failed to parse OpenAI response:', error);
-        if (response?.choices[0]?.message?.content) {
-          console.log('Raw API response:', response.choices[0].message.content);
-        }
-      }
+      console.error('Failed to analyze document:', error);
       return { tags: [], correspondent: null };
     }
   }

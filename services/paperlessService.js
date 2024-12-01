@@ -1,9 +1,13 @@
+// services/paperlessService.js
 const axios = require('axios');
 const config = require('../config/config');
 
 class PaperlessService {
   constructor() {
     this.client = null;
+    this.tagCache = new Map();
+    this.lastTagRefresh = 0;
+    this.CACHE_LIFETIME = 30000; // 30 Sekunden
   }
 
   initialize() {
@@ -18,33 +22,110 @@ class PaperlessService {
     }
   }
 
-  async findTagByName(name) {
-    const response = await this.client.get('/tags/', {
-      params: {
-        name: name
-      }
-    });
-    return response.data.results.find(tag => tag.name.toLowerCase() === name.toLowerCase());
+  // Aktualisiert den Tag-Cache, wenn er älter als CACHE_LIFETIME ist
+  async ensureTagCache() {
+    const now = Date.now();
+    if (this.tagCache.size === 0 || (now - this.lastTagRefresh) > this.CACHE_LIFETIME) {
+      await this.refreshTagCache();
+    }
   }
 
-  async createOrGetTag(name) {
+  // Lädt alle existierenden Tags
+  async refreshTagCache() {
     try {
-      // First try to find existing tag
-      const existingTag = await this.findTagByName(name);
-      if (existingTag) {
-        console.log(`Tag "${name}" already exists with ID ${existingTag.id}`);
-        return existingTag;
-      }
+      console.log('Refreshing tag cache...');
+      const response = await this.client.get('/tags/');
+      this.tagCache.clear();
+      response.data.results.forEach(tag => {
+        this.tagCache.set(tag.name.toLowerCase(), tag);
+      });
+      this.lastTagRefresh = Date.now();
+      console.log(`Tag cache refreshed. Found ${this.tagCache.size} tags.`);
+    } catch (error) {
+      console.error('Error refreshing tag cache:', error.message);
+      throw error;
+    }
+  }
 
-      // If not found, create new tag
+  async getTags() {
+    this.initialize();
+    try {
+      const response = await this.client.get('/tags/');
+      return response.data.results;
+    } catch (error) {
+      console.error('Error fetching tags:', error.message);
+      return [];
+    }
+  }
+
+  // Hauptfunktion für die Tag-Verarbeitung
+  async processTags(tagNames) {
+    this.initialize();
+    await this.ensureTagCache();
+
+    const tagIds = [];
+    const errors = [];
+
+    for (const tagName of tagNames) {
+      const normalizedName = tagName.toLowerCase();
+      try {
+        // Prüfe zuerst im Cache
+        const existingTag = this.tagCache.get(normalizedName);
+        
+        if (existingTag) {
+          console.log(`Using cached tag "${tagName}" with ID ${existingTag.id}`);
+          tagIds.push(existingTag.id);
+          continue;
+        }
+
+        // Wenn nicht im Cache, aktualisiere Cache und prüfe erneut
+        await this.refreshTagCache();
+        const refreshedTag = this.tagCache.get(normalizedName);
+        
+        if (refreshedTag) {
+          console.log(`Found tag "${tagName}" after cache refresh with ID ${refreshedTag.id}`);
+          tagIds.push(refreshedTag.id);
+          continue;
+        }
+
+        // Nur wenn der Tag wirklich nicht existiert, erstelle ihn
+        console.log(`Creating new tag: "${tagName}"`);
+        const newTag = await this.createTag(tagName);
+        this.tagCache.set(normalizedName, newTag);
+        tagIds.push(newTag.id);
+
+      } catch (error) {
+        console.error(`Error processing tag "${tagName}":`, error.message);
+        errors.push({ tagName, error: error.message });
+        
+        // Bei einem 400er Fehler versuche nochmal den Tag zu finden
+        if (error.response?.status === 400) {
+          await this.refreshTagCache();
+          const existingTag = this.tagCache.get(normalizedName);
+          if (existingTag) {
+            console.log(`Found tag "${tagName}" after error with ID ${existingTag.id}`);
+            tagIds.push(existingTag.id);
+            // Entferne den Fehler aus der Liste
+            errors.pop();
+          }
+        }
+      }
+    }
+
+    return { tagIds, errors };
+  }
+
+  // Hilfsfunktion zum Erstellen eines einzelnen Tags
+  async createTag(name) {
+    try {
       const response = await this.client.post('/tags/', { name });
-      console.log(`Created new tag "${name}" with ID ${response.data.id}`);
+      console.log(`Successfully created tag "${name}" with ID ${response.data.id}`);
       return response.data;
     } catch (error) {
-      if (error.response?.status === 400 && error.response?.data?.error?.includes('unique constraint')) {
-        // Tag was created in the meantime, try to fetch it
-        console.log(`Tag "${name}" appears to exist, fetching...`);
-        const existingTag = await this.findTagByName(name);
+      if (error.response?.status === 400) {
+        // Wenn der Tag möglicherweise schon existiert, versuche ihn zu finden
+        await this.refreshTagCache();
+        const existingTag = this.tagCache.get(name.toLowerCase());
         if (existingTag) {
           return existingTag;
         }
@@ -53,66 +134,158 @@ class PaperlessService {
     }
   }
 
+  async getOrCreateCorrespondent(name) {
+    this.initialize();
+    const normalizedName = name.toLowerCase();
+  
+    try {
+      // Zuerst versuchen, den Korrespondenten zu finden
+      const response = await this.client.get('/correspondents/', {
+        params: { name: name }
+      });
+  
+      const existingCorrespondent = response.data.results.find(
+        c => c.name.toLowerCase() === normalizedName
+      );
+  
+      if (existingCorrespondent) {
+        console.log(`Found existing correspondent "${name}" with ID ${existingCorrespondent.id}`);
+        return existingCorrespondent;
+      }
+  
+      // Wenn nicht gefunden, erstelle neuen Korrespondenten
+      try {
+        const createResponse = await this.client.post('/correspondents/', { name });
+        console.log(`Created new correspondent "${name}" with ID ${createResponse.data.id}`);
+        return createResponse.data;
+      } catch (createError) {
+        if (createError.response?.status === 400 && 
+            createError.response?.data?.error?.includes('unique constraint')) {
+          
+          // Falls der Korrespondent in der Zwischenzeit erstellt wurde
+          const retryResponse = await this.client.get('/correspondents/', {
+            params: { name: name }
+          });
+          
+          const justCreatedCorrespondent = retryResponse.data.results.find(
+            c => c.name.toLowerCase() === normalizedName
+          );
+          
+          if (justCreatedCorrespondent) {
+            console.log(`Retrieved correspondent "${name}" after constraint error with ID ${justCreatedCorrespondent.id}`);
+            return justCreatedCorrespondent;
+          }
+        }
+        throw createError;
+      }
+    } catch (error) {
+      console.error(`Failed to process correspondent "${name}":`, error.message);
+      throw error;
+    }
+  }
+
+  // Verbesserte getOrCreateTag Funktion
+  async getOrCreateTag(tagName) {
+    const normalizedName = tagName.toLowerCase();
+    
+    // 1. Prüfe Cache
+    const cachedTag = this.tagCache.get(normalizedName);
+    if (cachedTag) {
+      console.log(`Found tag "${tagName}" in cache with ID ${cachedTag.id}`);
+      return cachedTag;
+    }
+
+    // 2. Versuche Tag zu finden
+    try {
+      const response = await this.client.get('/tags/', {
+        params: { name: tagName }
+      });
+
+      const existingTag = response.data.results.find(
+        tag => tag.name.toLowerCase() === normalizedName
+      );
+
+      if (existingTag) {
+        console.log(`Found existing tag "${tagName}" with ID ${existingTag.id}`);
+        this.tagCache.set(normalizedName, existingTag);
+        return existingTag;
+      }
+
+      // 3. Wenn nicht gefunden, erstelle neuen Tag
+      const createResponse = await this.client.post('/tags/', { name: tagName });
+      const newTag = createResponse.data;
+      console.log(`Created new tag "${tagName}" with ID ${newTag.id}`);
+      this.tagCache.set(normalizedName, newTag);
+      return newTag;
+
+    } catch (error) {
+      if (error.response?.status === 400 && 
+          error.response?.data?.error?.includes('unique constraint')) {
+        
+        // Wenn unique constraint verletzt wurde, aktualisiere Cache und versuche erneut
+        await this.refreshTagCache();
+        const refreshedTag = this.tagCache.get(normalizedName);
+        
+        if (refreshedTag) {
+          console.log(`Retrieved tag "${tagName}" after constraint error with ID ${refreshedTag.id}`);
+          return refreshedTag;
+        }
+      }
+      
+      console.error(`Failed to process tag "${tagName}":`, error.message);
+      throw error;
+    }
+  }
+
+  // Rest der Service-Methoden...
   async getDocuments() {
     this.initialize();
-    if (!this.client) {
-      console.error('Paperless client not initialized - missing configuration');
-      return [];
-    }
     const response = await this.client.get('/documents/');
     return response.data.results;
   }
 
   async getDocumentContent(documentId) {
     this.initialize();
-    if (!this.client) return null;
     const response = await this.client.get(`/documents/${documentId}/`);
     return response.data.content;
   }
 
+  async getDocument(documentId) {
+    this.initialize();
+    try {
+      const response = await this.client.get(`/documents/${documentId}/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching document ${documentId}:`, error.message);
+      throw error;
+    }
+  }
+  
   async updateDocument(documentId, updates) {
     this.initialize();
     if (!this.client) return;
-
-    // Ensure tags array is unique
-    if (updates.tags) {
-      updates.tags = [...new Set(updates.tags)];
-    }
-
-    await this.client.patch(`/documents/${documentId}/`, updates);
-  }
-
-  async getTags() {
-    this.initialize();
-    if (!this.client) return [];
-    const response = await this.client.get('/tags/');
-    return response.data.results;
-  }
-
-  async getCorrespondents() {
-    this.initialize();
-    if (!this.client) return [];
-    const response = await this.client.get('/correspondents/');
-    return response.data.results;
-  }
-
-  async createCorrespondent(name) {
-    this.initialize();
-    if (!this.client) return null;
+  
     try {
-      const response = await this.client.post('/correspondents/', { name });
-      return response.data;
-    } catch (error) {
-      if (error.response?.status === 400 && error.response?.data?.error?.includes('unique constraint')) {
-        // Try to fetch existing correspondent
-        const existingCorrespondents = await this.getCorrespondents();
-        const existingCorrespondent = existingCorrespondents.find(
-          c => c.name.toLowerCase() === name.toLowerCase()
-        );
-        if (existingCorrespondent) {
-          return existingCorrespondent;
-        }
+      // Hole aktuelles Dokument mit existierenden Tags
+      const currentDoc = await this.getDocument(documentId);
+      
+      // Wenn das Update Tags enthält, füge sie zu den existierenden hinzu
+      if (updates.tags) {
+        console.log(`Current tags for document ${documentId}:`, currentDoc.tags);
+        console.log(`Adding new tags:`, updates.tags);
+        
+        // Kombiniere existierende und neue Tags
+        const combinedTags = [...new Set([...currentDoc.tags, ...updates.tags])];
+        updates.tags = combinedTags;
+        
+        console.log(`Combined tags:`, combinedTags);
       }
+  
+      // Führe das Update durch
+      await this.client.patch(`/documents/${documentId}/`, updates);
+      console.log(`Updated document ${documentId} while preserving existing tags`);
+    } catch (error) {
+      console.error(`Error updating document ${documentId}:`, error.message);
       throw error;
     }
   }

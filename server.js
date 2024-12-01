@@ -31,14 +31,17 @@ app.use((req, res, next) => {
 // Use setup routes
 app.use('/', setupRoutes);
 
-// Main scanning function
 async function scanDocuments() {
   console.log('Starting document scan...');
   try {
+    // Hole zuerst alle existierenden Tags
+    const existingTags = await paperlessService.getTags();
+    console.log(`Found ${existingTags.length} existing tags`);
+    
     const documents = await paperlessService.getDocuments();
     
     for (const doc of documents) {
-      const isProcessed = documentModel.isDocumentProcessed(doc.id);
+      const isProcessed = await documentModel.isDocumentProcessed(doc.id);
       
       if (!isProcessed) {
         console.log(`Processing new document: ${doc.title}`);
@@ -46,43 +49,38 @@ async function scanDocuments() {
         // Get document content
         const content = await paperlessService.getDocumentContent(doc.id);
         
-        // Analyze with ChatGPT
-        const analysis = await openaiService.analyzeDocument(content);
-        
-        // Initialize tag IDs array
-        const tagIds = [];
+        // Analyze with ChatGPT, passing existing tags
+        const analysis = await openaiService.analyzeDocument(content, existingTags);
         
         // Process tags
-        for (const tagName of analysis.tags) {
-          const tag = await paperlessService.createOrGetTag(tagName);
-          if (tag) {
-            tagIds.push(tag.id);
-          }
-        }
+        const { tagIds, errors } = await paperlessService.processTags(analysis.tags);
         
-        // Process correspondent if present
+        if (errors.length > 0) {
+          console.warn('Some tags could not be processed:', errors);
+        }
+
+        // Process correspondent
+        let updateData = { tags: tagIds };
+        
         if (analysis.correspondent) {
           try {
-            const correspondent = await paperlessService.createCorrespondent(analysis.correspondent);
-            
-            // Update document with tags and correspondent
-            await paperlessService.updateDocument(doc.id, {
-              tags: tagIds,
-              correspondent: correspondent.id
-            });
+            const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.correspondent);
+            if (correspondent) {
+              updateData.correspondent = correspondent.id;
+            }
           } catch (error) {
-            console.error(`Error processing correspondent for document ${doc.title}:`, error);
-            // Still update tags even if correspondent processing failed
-            await paperlessService.updateDocument(doc.id, { tags: tagIds });
+            console.error(`Error processing correspondent "${analysis.correspondent}":`, error.message);
           }
-        } else {
-          // Update only tags if no correspondent was identified
-          await paperlessService.updateDocument(doc.id, { tags: tagIds });
         }
+
+        // Update document
+        await paperlessService.updateDocument(doc.id, updateData);
+        console.log(`Updated document ${doc.title} with ${tagIds.length} tags` + 
+                   (updateData.correspondent ? ' and correspondent' : ''));
         
         // Mark as processed
         await documentModel.addProcessedDocument(doc.id, doc.title);
-        console.log(`Document ${doc.title} processed successfully`);
+        console.log(`Document ${doc.title} processing completed`);
       }
     }
   } catch (error) {
