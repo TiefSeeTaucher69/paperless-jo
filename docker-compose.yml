@@ -3,7 +3,7 @@ version: '3.8'
 services:
   paperless-assistant:
     build: .
-    container_name: paperless-assistant
+    container_name: paperless-ai
     volumes:
       - ./data:/app/data
       - ./config:/app/config
