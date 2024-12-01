@@ -5,7 +5,7 @@ An automated document analyzer for Paperless-ngx using OpenAI API to automatical
 ## Features
 
 - 🔍 Automatic document scanning in Paperless-ngx
-- 🤖 AI-powered document analysis using OpenAI (ChatGPT)
+- 🤖 AI-powered document analysis using OpenAI API
 - 🏷️ Automatic tag and correspondent assignment
 - 🚀 Easy setup through web interface
 - 📊 Document processing dashboard
@@ -51,7 +51,7 @@ http://localhost:3000
    - Tracks processed documents in a local SQLite database
 
 2. **AI Analysis**
-   - Sends document content to ChatGPT for analysis
+   - Sends document content to OpenAI API for analysis
    - Extracts relevant tags and correspondent information
    - Uses GPT-4 for accurate document understanding
 
@@ -161,7 +161,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx) for the amazing document management system
-- OpenAI for the ChatGPT API
+- OpenAI API
 - The Express.js and Node.js communities for their excellent tools
 
 ## Support
