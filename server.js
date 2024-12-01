@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const cron = require('node-cron');
 const path = require('path');
@@ -5,6 +6,7 @@ const config = require('./config/config');
 const paperlessService = require('./services/paperlessService');
 const openaiService = require('./services/openaiService');
 const documentModel = require('./models/document');
+const setupService = require('./services/setupService');
 const setupRoutes = require('./routes/setup');
 
 const app = express();
@@ -12,6 +14,10 @@ const app = express();
 // EJS setup
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+// Body parser middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Custom render function
 app.use((req, res, next) => {
@@ -28,13 +34,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// Use setup routes
-app.use('/', setupRoutes);
-
+// Main scanning function
 async function scanDocuments() {
   console.log('Starting document scan...');
   try {
-    // Hole zuerst alle existierenden Tags
+    // Prüfe zuerst, ob Setup abgeschlossen ist
+    const isConfigured = await setupService.isConfigured();
+    if (!isConfigured) {
+      console.log('Setup not completed. Skipping document scan.');
+      return;
+    }
+
+    // Hole existierende Tags
     const existingTags = await paperlessService.getTags();
     console.log(`Found ${existingTags.length} existing tags`);
     
@@ -49,7 +60,7 @@ async function scanDocuments() {
         // Get document content
         const content = await paperlessService.getDocumentContent(doc.id);
         
-        // Analyze with ChatGPT, passing existing tags
+        // Analyze with ChatGPT, passing existing tags for context
         const analysis = await openaiService.analyzeDocument(content, existingTags);
         
         // Process tags
@@ -59,9 +70,10 @@ async function scanDocuments() {
           console.warn('Some tags could not be processed:', errors);
         }
 
-        // Process correspondent
+        // Prepare update data
         let updateData = { tags: tagIds };
         
+        // Process correspondent if present
         if (analysis.correspondent) {
           try {
             const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.correspondent);
@@ -73,14 +85,18 @@ async function scanDocuments() {
           }
         }
 
-        // Update document
-        await paperlessService.updateDocument(doc.id, updateData);
-        console.log(`Updated document ${doc.title} with ${tagIds.length} tags` + 
-                   (updateData.correspondent ? ' and correspondent' : ''));
-        
-        // Mark as processed
-        await documentModel.addProcessedDocument(doc.id, doc.title);
-        console.log(`Document ${doc.title} processing completed`);
+        try {
+          // Update document while preserving existing tags
+          await paperlessService.updateDocument(doc.id, updateData);
+          console.log(`Updated document ${doc.title} with ${tagIds.length} tags` + 
+                     (updateData.correspondent ? ' and correspondent' : ''));
+          
+          // Mark as processed
+          await documentModel.addProcessedDocument(doc.id, doc.title);
+          console.log(`Document ${doc.title} processing completed`);
+        } catch (error) {
+          console.error(`Error processing document: ${error}`);
+        }
       }
     }
   } catch (error) {
@@ -88,39 +104,17 @@ async function scanDocuments() {
   }
 }
 
-// Health check endpoint
-app.get('/health', async (req, res) => {
-  try {
-    // Check if config exists
-    const isConfigured = await setupService.isConfigured();
-    if (!isConfigured) {
-      return res.status(503).json({ status: 'not_configured' });
-    }
+// Setup route handling
+app.use('/', setupRoutes);
 
-    // Check database
-    try {
-      documentModel.isDocumentProcessed(1);
-    } catch (error) {
-      return res.status(503).json({ status: 'database_error' });
-    }
-
-    // All checks passed
-    res.json({ status: 'healthy' });
-  } catch (error) {
-    console.error('Health check failed:', error);
-    res.status(503).json({ status: 'error', message: error.message });
-  }
-});
-
-// Schedule periodic scanning
-cron.schedule(config.scanInterval, () => {
-  console.log('Scheduled document scan started');
-  scanDocuments();
-});
-
-// Routes
+// Main route with setup check
 app.get('/', async (req, res) => {
   try {
+    const isConfigured = await setupService.isConfigured();
+    if (!isConfigured) {
+      return res.redirect('/setup');
+    }
+
     const documents = await paperlessService.getDocuments();
     res.render('index', { documents });
   } catch (error) {
@@ -128,6 +122,61 @@ app.get('/', async (req, res) => {
     res.status(500).send('Error fetching documents');
   }
 });
+
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    const isConfigured = await setupService.isConfigured();
+    if (!isConfigured) {
+      return res.status(503).json({ 
+        status: 'not_configured',
+        message: 'Application setup not completed'
+      });
+    }
+
+    // Check database
+    try {
+      await documentModel.isDocumentProcessed(1);
+    } catch (error) {
+      return res.status(503).json({ 
+        status: 'database_error',
+        message: 'Database check failed'
+      });
+    }
+
+    res.json({ status: 'healthy' });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).json({ 
+      status: 'error', 
+      message: error.message 
+    });
+  }
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
+});
+
+// Schedule periodic scanning
+const startScanning = () => {
+  // Initial scan wird nur durchgeführt, wenn Setup abgeschlossen
+  setupService.isConfigured().then(isConfigured => {
+    if (isConfigured) {
+      console.log('Running initial scan...');
+      scanDocuments();
+    } else {
+      console.log('Setup not completed. Skipping initial scan. Visit http://your-domain-or-ip.com:3000/setup to complete setup.');
+    }
+  });
+
+  // Plane regelmäßige Scans
+  cron.schedule(config.scanInterval, () => {
+    scanDocuments();
+  });
+};
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
@@ -160,6 +209,5 @@ process.on('unhandledRejection', (reason, promise) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  // Initial scan
-  scanDocuments();
+  startScanning();
 });

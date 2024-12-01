@@ -27,50 +27,50 @@ router.use(async (req, res, next) => {
 
 // Setup routes
 router.get('/setup', async (req, res) => {
+  const isConfigured = await setupService.isConfigured();
+  if (isConfigured) {
+    const config = await setupService.loadConfig();
+    res.render('setup', { 
+      success: 'Die Anwendung ist bereits konfiguriert. Neue Einstellungen überschreiben die bestehenden.',
+      config
+    });
+  } else {
+    res.render('setup');
+  }
+});
+
+// Health check endpoint
+router.get('/health', async (req, res) => {
+  try {
+    // Check if config exists
     const isConfigured = await setupService.isConfigured();
-    if (isConfigured) {
-      const config = await setupService.loadConfig();
-      res.render('setup', { 
-        success: 'Die Anwendung ist bereits konfiguriert. Neue Einstellungen überschreiben die bestehenden.',
-        config
+    if (!isConfigured) {
+      return res.status(503).json({ 
+        status: 'not_configured',
+        message: 'Application setup not completed'
       });
-    } else {
-      res.render('setup');
     }
-  });
-  
-  // Health check endpoint
-  router.get('/health', async (req, res) => {
+
+    // Check database
     try {
-      // Check if config exists
-      const isConfigured = await setupService.isConfigured();
-      if (!isConfigured) {
-        return res.status(503).json({ 
-          status: 'not_configured',
-          message: 'Application setup not completed'
-        });
-      }
-  
-      // Check database
-      try {
-        await documentModel.isDocumentProcessed(1);
-      } catch (error) {
-        return res.status(503).json({ 
-          status: 'database_error',
-          message: 'Database check failed'
-        });
-      }
-  
-      // All checks passed
-      res.json({ status: 'healthy' });
+      await documentModel.isDocumentProcessed(1);
     } catch (error) {
-      console.error('Health check failed:', error);
-      res.status(503).json({ 
-        status: 'error', 
-        message: error.message 
+      return res.status(503).json({ 
+        status: 'database_error',
+        message: 'Database check failed'
       });
     }
-  });
+
+    // All checks passed
+    res.json({ status: 'healthy' });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).json({ 
+      status: 'error', 
+      message: error.message 
+    });
+  }
+});
 
 router.post('/setup', express.urlencoded({ extended: true }), async (req, res) => {
   try {
