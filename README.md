@@ -1,4 +1,4 @@
-# Paperless Assistant
+# Paperless-Ai
 
 An automated document analyzer for Paperless-ngx using OpenAI API to automatically analyze and tag your documents.
 
