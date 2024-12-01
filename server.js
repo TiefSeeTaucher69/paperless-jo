@@ -114,6 +114,7 @@ app.get('/health', async (req, res) => {
 
 // Schedule periodic scanning
 cron.schedule(config.scanInterval, () => {
+  console.log('Scheduled document scan started');
   scanDocuments();
 });
 

@@ -38,7 +38,6 @@ ${existingTagsList}
 Wichtige Regeln:
 - Prüfen Sie zuerst, ob einer der existierenden Tags passt, bevor Sie neue vorschlagen
 - Verwenden Sie nur relevante Kategorien (Rechnung, Steuer, Vertrag, Mitteilung, Kfz, Versicherung etc.)
-- Wenn Sie eine Kundennummer finden, erstellen Sie einen Tag "KdNr-[Nummer]"
 - Vermeiden Sie generische oder irrelevante Tags
 - Es sollen wirklich nur die wichtigsten Informationen zum erstellen eines Tags benutzt werden.
 - Der Korrespondent sollte die tatsächlich sendende Firma/Institution sein
