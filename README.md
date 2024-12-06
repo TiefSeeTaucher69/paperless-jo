@@ -179,8 +179,9 @@ If you encounter any issues or have questions:
 
 ## Roadmap
 
-- [ ] Support for multiple language analysis
-- [ ] Advanced tag matching algorithms
+- [x] Support for custom AI models
+- [x] Support for multiple language analysis
+- [x] Advanced tag matching algorithms
 - [ ] Custom rules for document processing
 - [ ] Enhanced web interface with statistics
-- [ ] Support for custom AI models
+
