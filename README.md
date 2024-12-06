@@ -1,11 +1,11 @@
 # Paperless-Ai
 
-An automated document analyzer for Paperless-ngx using OpenAI API to automatically analyze and tag your documents.
+An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mistral, llama, phi 3, gemma 2) to automatically analyze and tag your documents.
 
 ## Features
 
 - 🔍 Automatic document scanning in Paperless-ngx
-- 🤖 AI-powered document analysis using OpenAI API
+- 🤖 AI-powered document analysis using OpenAI API and Ollama (Mistral, llama, phi 3, gemma 2)
 - 🏷️ Automatic tag and correspondent assignment
 - 🚀 Easy setup through web interface
 - 📊 Document processing dashboard
@@ -41,6 +41,8 @@ http://localhost:3000
 4. Complete the setup by providing:
 - Paperless-ngx API URL
 - Paperless-ngx API Token
+- Ollama API Data
+    OR
 - OpenAI API Key
 - Scan interval (default: every 30 minutes)
 
@@ -69,7 +71,10 @@ The application can be configured through environment variables:
 |----------|-------------|---------|
 | PAPERLESS_API_URL | URL to your Paperless-ngx API | - |
 | PAPERLESS_API_TOKEN | API Token from Paperless-ngx | - |
-| OPENAI_API_KEY | Your OpenAI API key | - |
+| AI_PROVIDER | AI provider to use (openai or ollama) | openai |
+| OPENAI_API_KEY | Your OpenAI API key (required if using openai) | - |
+| OLLAMA_API_URL | URL to your Ollama instance | http://localhost:11434 |
+| OLLAMA_MODEL | Ollama model to use (e.g. llama2, mistral) | llama2 |
 | SCAN_INTERVAL | Cron expression for scan interval | */30 * * * * |
 
 ## Docker Support
