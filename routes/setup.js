@@ -7,13 +7,7 @@ const API_ENDPOINTS = ['/health'];
 
 // Setup middleware to check if app is configured
 router.use(async (req, res, next) => {
-  // Skip redirect for API endpoints
-  if (API_ENDPOINTS.includes(req.path)) {
-    return next();
-  }
-
-  // Skip redirect for setup page
-  if (req.path === '/setup') {
+  if (API_ENDPOINTS.includes(req.path) || req.path === '/setup') {
     return next();
   }
   
@@ -25,7 +19,6 @@ router.use(async (req, res, next) => {
   next();
 });
 
-// Setup routes
 router.get('/setup', async (req, res) => {
   const isConfigured = await setupService.isConfigured();
   if (isConfigured) {
@@ -39,10 +32,8 @@ router.get('/setup', async (req, res) => {
   }
 });
 
-// Health check endpoint
 router.get('/health', async (req, res) => {
   try {
-    // Check if config exists
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
       return res.status(503).json({ 
@@ -51,7 +42,6 @@ router.get('/health', async (req, res) => {
       });
     }
 
-    // Check database
     try {
       await documentModel.isDocumentProcessed(1);
     } catch (error) {
@@ -61,7 +51,6 @@ router.get('/health', async (req, res) => {
       });
     }
 
-    // All checks passed
     res.json({ status: 'healthy' });
   } catch (error) {
     console.error('Health check failed:', error);
@@ -74,7 +63,15 @@ router.get('/health', async (req, res) => {
 
 router.post('/setup', express.urlencoded({ extended: true }), async (req, res) => {
   try {
-    const { paperlessUrl, paperlessToken, openaiKey, scanInterval } = req.body;
+    const { 
+      paperlessUrl, 
+      paperlessToken, 
+      aiProvider,
+      openaiKey,
+      ollamaUrl,
+      ollamaModel,
+      scanInterval 
+    } = req.body;
 
     // Validate Paperless config
     const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
@@ -85,22 +82,38 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
       });
     }
 
-    // Validate OpenAI config
-    const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
-    if (!isOpenAIValid) {
-      return res.render('setup', { 
-        error: 'OpenAI API Key ist ungültig.',
-        config: req.body
-      });
+    // Prepare base config
+    const config = {
+      PAPERLESS_API_URL: paperlessUrl,
+      PAPERLESS_API_TOKEN: paperlessToken,
+      AI_PROVIDER: aiProvider,
+      SCAN_INTERVAL: scanInterval
+    };
+
+    // Validate AI provider config
+    if (aiProvider === 'openai') {
+      const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
+      if (!isOpenAIValid) {
+        return res.render('setup', { 
+          error: 'OpenAI API Key ist ungültig.',
+          config: req.body
+        });
+      }
+      config.OPENAI_API_KEY = openaiKey;
+    } else if (aiProvider === 'ollama') {
+      const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
+      if (!isOllamaValid) {
+        return res.render('setup', { 
+          error: 'Ollama Verbindung fehlgeschlagen. Bitte überprüfen Sie URL und Modell.',
+          config: req.body
+        });
+      }
+      config.OLLAMA_API_URL = ollamaUrl;
+      config.OLLAMA_MODEL = ollamaModel;
     }
 
     // Save configuration
-    await setupService.saveConfig({
-      PAPERLESS_API_URL: paperlessUrl,
-      PAPERLESS_API_TOKEN: paperlessToken,
-      OPENAI_API_KEY: openaiKey,
-      SCAN_INTERVAL: scanInterval
-    });
+    await setupService.saveConfig(config);
 
     // Send success response
     res.render('setup', { 

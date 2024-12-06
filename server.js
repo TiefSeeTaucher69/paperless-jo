@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const path = require('path');
 const config = require('./config/config');
 const paperlessService = require('./services/paperlessService');
-const openaiService = require('./services/openaiService');
+const AIServiceFactory = require('./services/aiServiceFactory');
 const documentModel = require('./models/document');
 const setupService = require('./services/setupService');
 const setupRoutes = require('./routes/setup');
@@ -61,8 +61,10 @@ async function scanDocuments() {
         const content = await paperlessService.getDocumentContent(doc.id);
         
         // Analyze with ChatGPT, passing existing tags for context
-        const analysis = await openaiService.analyzeDocument(content, existingTags);
-        
+        //const analysis = await openaiService.analyzeDocument(content, existingTags);
+        const aiService = AIServiceFactory.getService();
+        const analysis = await aiService.analyzeDocument(content, existingTags);
+
         // Process tags
         const { tagIds, errors } = await paperlessService.processTags(analysis.tags);
         
@@ -206,7 +208,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startScanning();

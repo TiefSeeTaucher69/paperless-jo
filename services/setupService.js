@@ -52,7 +52,57 @@ class SetupService {
     }
   }
 
+  async validateOllamaConfig(url, model) {
+    try {
+      // Test connection to Ollama server
+      const response = await axios.post(`${url}/api/generate`, {
+        model: model || 'llama3.2',
+        prompt: 'Test',
+        stream: false
+      });
+      return response.data && response.data.response;
+    } catch (error) {
+      console.error('Ollama validation error:', error.message);
+      return false;
+    }
+  }
+
+  async validateConfig(config) {
+    // Validate Paperless config
+    const paperlessValid = await this.validatePaperlessConfig(
+      config.PAPERLESS_API_URL,
+      config.PAPERLESS_API_TOKEN
+    );
+    
+    if (!paperlessValid) {
+      throw new Error('Invalid Paperless configuration');
+    }
+
+    // Validate AI provider config
+    const aiProvider = config.AI_PROVIDER || 'openai';
+    
+    if (aiProvider === 'openai') {
+      const openaiValid = await this.validateOpenAIConfig(config.OPENAI_API_KEY);
+      if (!openaiValid) {
+        throw new Error('Invalid OpenAI configuration');
+      }
+    } else if (aiProvider === 'ollama') {
+      const ollamaValid = await this.validateOllamaConfig(
+        config.OLLAMA_API_URL || 'http://localhost:11434',
+        config.OLLAMA_MODEL
+      );
+      if (!ollamaValid) {
+        throw new Error('Invalid Ollama configuration');
+      }
+    }
+
+    return true;
+  }
+
   async saveConfig(config) {
+    // Validate the new configuration before saving
+    await this.validateConfig(config);
+
     const envContent = Object.entries(config)
       .map(([key, value]) => `${key}=${value}`)
       .join('\n');
@@ -68,7 +118,16 @@ class SetupService {
     try {
       await fs.access(this.envPath);
       const config = await this.loadConfig();
-      return config !== null;
+      if (!config) return false;
+      
+      // Validate all configurations
+      try {
+        await this.validateConfig(config);
+        return true;
+      } catch (error) {
+        console.error('Configuration validation failed:', error.message);
+        return false;
+      }
     } catch {
       return false;
     }

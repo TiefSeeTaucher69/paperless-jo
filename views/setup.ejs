@@ -12,7 +12,8 @@
       font-weight: bold;
     }
     input[type="text"], 
-    input[type="password"] {
+    input[type="password"],
+    select {
       width: 100%;
       padding: 8px;
       border: 1px solid #ddd;
@@ -51,6 +52,13 @@
       border: 1px solid #28a745;
       border-radius: 4px;
       background: #d4edda;
+    }
+    .provider-settings {
+      display: none;
+      margin-top: 10px;
+    }
+    .provider-settings.active {
+      display: block;
     }
   </style>
 </head>
@@ -92,15 +100,54 @@
     </div>
 
     <div class="form-group">
-      <label for="openaiKey">OpenAI API Key:</label>
-      <input 
-        type="password" 
-        id="openaiKey" 
-        name="openaiKey" 
-        value="<%= typeof config !== 'undefined' ? config.OPENAI_API_KEY || config.openaiKey || '' : '' %>"
+      <label for="aiProvider">KI Provider:</label>
+      <select 
+        id="aiProvider" 
+        name="aiProvider" 
+        onchange="toggleProviderSettings()"
         required
       >
-      <div class="help-text">Ihr OpenAI API Key für die ChatGPT Integration</div>
+        <option value="openai" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'openai' ? 'selected' : '' %>>OpenAI (ChatGPT)</option>
+        <option value="ollama" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? 'selected' : '' %>>Ollama (Lokales LLM)</option>
+      </select>
+      <div class="help-text">Wählen Sie Ihren bevorzugten KI-Provider</div>
+    </div>
+
+    <div id="openaiSettings" class="provider-settings <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? '' : 'active' %>">
+      <div class="form-group">
+        <label for="openaiKey">OpenAI API Key:</label>
+        <input 
+          type="password" 
+          id="openaiKey" 
+          name="openaiKey" 
+          value="<%= typeof config !== 'undefined' ? config.OPENAI_API_KEY || config.openaiKey || '' : '' %>"
+        >
+        <div class="help-text">Ihr OpenAI API Key für die ChatGPT Integration</div>
+      </div>
+    </div>
+
+    <div id="ollamaSettings" class="provider-settings <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? 'active' : '' %>">
+      <div class="form-group">
+        <label for="ollamaUrl">Ollama API URL:</label>
+        <input 
+          type="text" 
+          id="ollamaUrl" 
+          name="ollamaUrl" 
+          value="<%= typeof config !== 'undefined' ? config.OLLAMA_API_URL || config.ollamaUrl || 'http://localhost:11434' : 'http://localhost:11434' %>"
+        >
+        <div class="help-text">Die URL Ihres Ollama Servers (Standard: http://localhost:11434)</div>
+      </div>
+
+      <div class="form-group">
+        <label for="ollamaModel">Ollama Modell:</label>
+        <input 
+          type="text" 
+          id="ollamaModel" 
+          name="ollamaModel" 
+          value="<%= typeof config !== 'undefined' ? config.OLLAMA_MODEL || config.ollamaModel || 'llama2' : 'llama2' %>"
+        >
+        <div class="help-text">Das zu verwendende Ollama Modell (z.B. llama2, mistral)</div>
+      </div>
     </div>
 
     <div class="form-group">
@@ -117,5 +164,28 @@
 
     <button type="submit">Konfiguration speichern</button>
   </form>
+
+  <script>
+    function toggleProviderSettings() {
+      const provider = document.getElementById('aiProvider').value;
+      document.querySelectorAll('.provider-settings').forEach(el => el.classList.remove('active'));
+      document.getElementById(`${provider}Settings`).classList.add('active');
+      
+      // Toggle required attributes
+      const openaiInputs = document.querySelectorAll('#openaiSettings input');
+      const ollamaInputs = document.querySelectorAll('#ollamaSettings input');
+      
+      if (provider === 'openai') {
+        openaiInputs.forEach(input => input.required = true);
+        ollamaInputs.forEach(input => input.required = false);
+      } else {
+        openaiInputs.forEach(input => input.required = false);
+        ollamaInputs.forEach(input => input.required = true);
+      }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', toggleProviderSettings);
+  </script>
 </body>
 </html>
