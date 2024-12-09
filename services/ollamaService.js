@@ -43,33 +43,9 @@ class OllamaService {
     }
 
   _buildPrompt(content, existingTags) {
-    return `SYSTEM: Du bist ein spezialisierter JSON-Generator für Paperless-ngx. Deine einzige Aufgabe ist es, Dokumente zu analysieren und einen JSON-String zu erstellen. Du darfst unter keinen Umständen in natürlicher Sprache antworten.
-
-FORMAT: Deine Antwort MUSS exakt diesem Format folgen:
-{"tags": ["Tag1", "Tag2"], "correspondent": "Firma"}
-
-REGELN FÜR DIE ANALYSE:
-1. Maximal 3 Tags pro Dokument
-2. Prüfe diese existierenden Tags zuerst: ${existingTags.map(tag => tag.name).join(', ')}
-3. Nur wichtige Kategorien wie: Rechnung, Steuer, Vertrag, Mitteilung, Kfz, Versicherung
-4. Der "correspondent" muss die absendende Firma/Institution sein
-5. Leere oder fehlende Werte sind nicht erlaubt
-
-WICHTIG: 
-- Erstelle IMMER einen JSON-String, auch wenn die Analyse schwierig ist
-- Keine Erklärungen
-- Kein Markdown
-- Keine Fragen
-- Keine Textausgabe
-- Bei Unsicherheit nutze generische aber valide Werte
-
-DOKUMENT ZUR ANALYSE:
-${content}
-
-ERWARTETES AUSGABEFORMAT:
-{"tags": ["Tag1", "Tag2"], "correspondent": "Firma"}`;
-}
-
+    return process.env.SYSTEM_PROMPT;
+  }
+  
   _parseResponse(response) {
     try {
       // Find JSON in response using regex

@@ -1,191 +1,240 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" class="h-full bg-gray-100">
 <head>
-  <title>Paperless Assistant Setup</title>
-  <style>
-    .form-group {
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: bold;
-    }
-    input[type="text"], 
-    input[type="password"],
-    select {
-      width: 100%;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 16px;
-    }
-    .help-text {
-      font-size: 0.9em;
-      color: #666;
-      margin-top: 5px;
-    }
-    button {
-      background: #007bff;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 16px;
-    }
-    button:hover {
-      background: #0056b3;
-    }
-    .error {
-      color: #dc3545;
-      padding: 10px;
-      margin-bottom: 20px;
-      border: 1px solid #dc3545;
-      border-radius: 4px;
-      background: #f8d7da;
-    }
-    .success {
-      color: #28a745;
-      padding: 10px;
-      margin-bottom: 20px;
-      border: 1px solid #28a745;
-      border-radius: 4px;
-      background: #d4edda;
-    }
-    .provider-settings {
-      display: none;
-      margin-top: 10px;
-    }
-    .provider-settings.active {
-      display: block;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paperless Assistant Setup</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body>
-  <h1>Paperless Assistant Setup</h1>
-  
-  <% if (typeof error !== 'undefined' && error) { %>
-    <div class="error"><%= error %></div>
-  <% } %>
-  
-  <% if (typeof success !== 'undefined' && success) { %>
-    <div class="success"><%= success %></div>
-  <% } %>
+<body class="h-full">
+    <div class="min-h-full">
+        <nav class="bg-blue-600">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-file-alt text-white text-2xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <h1 class="text-white text-xl font-semibold">Paperless Assistant Setup</h1>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
 
-  <form action="/setup" method="POST">
-    <div class="form-group">
-      <label for="paperlessUrl">Paperless-ngx API URL:</label>
-      <input 
-        type="text" 
-        id="paperlessUrl" 
-        name="paperlessUrl" 
-        value="<%= typeof config !== 'undefined' ? config.PAPERLESS_API_URL || config.paperlessUrl || '' : '' %>"
-        placeholder="http://your-paperless-instance:8000/api" 
-        required
-      >
-      <div class="help-text">Die vollständige URL zu Ihrer Paperless-ngx API</div>
+        <main>
+            <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+                <div class="px-4 py-6 sm:px-0">
+                    <div class="bg-white rounded-lg shadow px-6 py-8">
+                        <% if (typeof error !== 'undefined' && error) { %>
+                            <div class="mb-4 p-4 rounded-md bg-red-50 border border-red-200">
+                                <div class="flex">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-exclamation-circle text-red-400"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm text-red-700"><%= error %></p>
+                                    </div>
+                                </div>
+                            </div>
+                        <% } %>
+
+                        <% if (typeof success !== 'undefined' && success) { %>
+                            <div class="mb-4 p-4 rounded-md bg-green-50 border border-green-200">
+                                <div class="flex">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-check-circle text-green-400"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm text-green-700"><%= success %></p>
+                                    </div>
+                                </div>
+                            </div>
+                        <% } %>
+
+                        <form action="/setup" method="POST" class="space-y-6">
+                            <!-- Paperless URL -->
+                            <div>
+                                <label for="paperlessUrl" class="block text-sm font-medium text-gray-700">
+                                    Paperless-ngx API URL
+                                </label>
+                                <div class="mt-1">
+                                    <input type="text" 
+                                           id="paperlessUrl" 
+                                           name="paperlessUrl"
+                                           value="<%= typeof config !== 'undefined' ? config.PAPERLESS_API_URL || config.paperlessUrl || '' : '' %>"
+                                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                           placeholder="http://your-paperless-instance:8000/api"
+                                           required>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-500">The complete URL of your paperless-ngx instance API</p>
+                            </div>
+
+                            <!-- API Token -->
+                            <div>
+                                <label for="paperlessToken" class="block text-sm font-medium text-gray-700">
+                                    Paperless-ngx API Token
+                                </label>
+                                <div class="mt-1 relative rounded-md shadow-sm">
+                                    <input type="password" 
+                                           id="paperlessToken" 
+                                           name="paperlessToken"
+                                           value="<%= typeof config !== 'undefined' ? config.PAPERLESS_API_TOKEN || config.paperlessToken || '' : '' %>"
+                                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                           required>
+                                    <button type="button" 
+                                            onclick="togglePassword('paperlessToken')"
+                                            class="absolute inset-y-0 right-0 px-3 flex items-center">
+                                        <i class="fas fa-eye text-gray-400"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- AI Provider -->
+                            <div>
+                                <label for="aiProvider" class="block text-sm font-medium text-gray-700">
+                                    AI Provider
+                                </label>
+                                <select id="aiProvider" 
+                                        name="aiProvider"
+                                        onchange="toggleProviderSettings()"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    <option value="openai" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'openai' ? 'selected' : '' %>>
+                                        OpenAI (ChatGPT)
+                                    </option>
+                                    <option value="ollama" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? 'selected' : '' %>>
+                                        Ollama (Local LLM)
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- OpenAI Settings -->
+                            <div id="openaiSettings" class="provider-settings space-y-6">
+                                <div>
+                                    <label for="openaiKey" class="block text-sm font-medium text-gray-700">
+                                        OpenAI API Key
+                                    </label>
+                                    <div class="mt-1 relative rounded-md shadow-sm">
+                                        <input type="password" 
+                                               id="openaiKey" 
+                                               name="openaiKey"
+                                               value="<%= typeof config !== 'undefined' ? config.OPENAI_API_KEY || config.openaiKey || '' : '' %>"
+                                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        <button type="button" 
+                                                onclick="togglePassword('openaiKey')"
+                                                class="absolute inset-y-0 right-0 px-3 flex items-center">
+                                            <i class="fas fa-eye text-gray-400"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Ollama Settings -->
+                            <div id="ollamaSettings" class="provider-settings space-y-6">
+                                <div>
+                                    <label for="ollamaUrl" class="block text-sm font-medium text-gray-700">
+                                        Ollama API URL
+                                    </label>
+                                    <input type="text" 
+                                           id="ollamaUrl" 
+                                           name="ollamaUrl"
+                                           value="<%= typeof config !== 'undefined' ? config.OLLAMA_API_URL || config.ollamaUrl || 'http://localhost:11434' : 'http://localhost:11434' %>"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                </div>
+
+                                <div>
+                                    <label for="ollamaModel" class="block text-sm font-medium text-gray-700">
+                                        Ollama Model
+                                    </label>
+                                    <input type="text" 
+                                           id="ollamaModel" 
+                                           name="ollamaModel"
+                                           value="<%= typeof config !== 'undefined' ? config.OLLAMA_MODEL || config.ollamaModel || 'llama2' : 'llama2' %>"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                </div>
+                            </div>
+
+                            <!-- Scan Interval -->
+                            <div>
+                                <label for="scanInterval" class="block text-sm font-medium text-gray-700">
+                                    Scan Interval (Cron Format)
+                                </label>
+                                <input type="text" 
+                                       id="scanInterval" 
+                                       name="scanInterval"
+                                       value="<%= typeof config !== 'undefined' ? config.SCAN_INTERVAL || config.scanInterval || '*/30 * * * *' : '*/30 * * * *' %>"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                       required>
+                                <p class="mt-2 text-sm text-gray-500">How often should we scan for new documents? Default: every 30 minutes</p>
+                            </div>
+
+                            <!-- System Prompt -->
+                            <div>
+                                <label for="systemPrompt" class="block text-sm font-medium text-gray-700">
+                                    Prompt Description
+                                </label>
+                                <textarea id="systemPrompt" 
+                                          name="systemPrompt"
+                                          rows="8"
+                                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                          placeholder="Describe how the AI should analyze your documents..."><%= typeof config !== 'undefined' ? config.SYSTEM_PROMPT || config.systemPrompt || '' : '' %></textarea>
+                                <p class="mt-2 text-sm text-gray-500">Your personal prompt for the AI</p>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <div class="pt-5">
+                                <button type="submit"
+                                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                    Save Configuration
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
-    <div class="form-group">
-      <label for="paperlessToken">Paperless-ngx API Token:</label>
-      <input 
-        type="password" 
-        id="paperlessToken" 
-        name="paperlessToken" 
-        value="<%= typeof config !== 'undefined' ? config.PAPERLESS_API_TOKEN || config.paperlessToken || '' : '' %>"
-        required
-      >
-      <div class="help-text">Ihr API Token aus den Paperless-ngx Einstellungen</div>
-    </div>
+    <script>
+        function toggleProviderSettings() {
+            const provider = document.getElementById('aiProvider').value;
+            const openaiSettings = document.getElementById('openaiSettings');
+            const ollamaSettings = document.getElementById('ollamaSettings');
+            
+            if (provider === 'openai') {
+                openaiSettings.style.display = 'block';
+                ollamaSettings.style.display = 'none';
+                document.getElementById('openaiKey').required = true;
+                document.getElementById('ollamaUrl').required = false;
+                document.getElementById('ollamaModel').required = false;
+            } else {
+                openaiSettings.style.display = 'none';
+                ollamaSettings.style.display = 'block';
+                document.getElementById('openaiKey').required = false;
+                document.getElementById('ollamaUrl').required = true;
+                document.getElementById('ollamaModel').required = true;
+            }
+        }
 
-    <div class="form-group">
-      <label for="aiProvider">KI Provider:</label>
-      <select 
-        id="aiProvider" 
-        name="aiProvider" 
-        onchange="toggleProviderSettings()"
-        required
-      >
-        <option value="openai" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'openai' ? 'selected' : '' %>>OpenAI (ChatGPT)</option>
-        <option value="ollama" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? 'selected' : '' %>>Ollama (Lokales LLM)</option>
-      </select>
-      <div class="help-text">Wählen Sie Ihren bevorzugten KI-Provider</div>
-    </div>
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const icon = input.nextElementSibling.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
 
-    <div id="openaiSettings" class="provider-settings <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? '' : 'active' %>">
-      <div class="form-group">
-        <label for="openaiKey">OpenAI API Key:</label>
-        <input 
-          type="password" 
-          id="openaiKey" 
-          name="openaiKey" 
-          value="<%= typeof config !== 'undefined' ? config.OPENAI_API_KEY || config.openaiKey || '' : '' %>"
-        >
-        <div class="help-text">Ihr OpenAI API Key für die ChatGPT Integration</div>
-      </div>
-    </div>
-
-    <div id="ollamaSettings" class="provider-settings <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? 'active' : '' %>">
-      <div class="form-group">
-        <label for="ollamaUrl">Ollama API URL:</label>
-        <input 
-          type="text" 
-          id="ollamaUrl" 
-          name="ollamaUrl" 
-          value="<%= typeof config !== 'undefined' ? config.OLLAMA_API_URL || config.ollamaUrl || 'http://localhost:11434' : 'http://localhost:11434' %>"
-        >
-        <div class="help-text">Die URL Ihres Ollama Servers (Standard: http://localhost:11434)</div>
-      </div>
-
-      <div class="form-group">
-        <label for="ollamaModel">Ollama Modell:</label>
-        <input 
-          type="text" 
-          id="ollamaModel" 
-          name="ollamaModel" 
-          value="<%= typeof config !== 'undefined' ? config.OLLAMA_MODEL || config.ollamaModel || 'llama2' : 'llama2' %>"
-        >
-        <div class="help-text">Das zu verwendende Ollama Modell (z.B. llama2, mistral)</div>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label for="scanInterval">Scan Interval (Cron Format):</label>
-      <input 
-        type="text" 
-        id="scanInterval" 
-        name="scanInterval" 
-        value="<%= typeof config !== 'undefined' ? config.SCAN_INTERVAL || config.scanInterval || '*/30 * * * *' : '*/30 * * * *' %>"
-        required
-      >
-      <div class="help-text">Wie oft soll nach neuen Dokumenten gesucht werden? Standard: Alle 30 Minuten</div>
-    </div>
-
-    <button type="submit">Konfiguration speichern</button>
-  </form>
-
-  <script>
-    function toggleProviderSettings() {
-      const provider = document.getElementById('aiProvider').value;
-      document.querySelectorAll('.provider-settings').forEach(el => el.classList.remove('active'));
-      document.getElementById(`${provider}Settings`).classList.add('active');
-      
-      // Toggle required attributes
-      const openaiInputs = document.querySelectorAll('#openaiSettings input');
-      const ollamaInputs = document.querySelectorAll('#ollamaSettings input');
-      
-      if (provider === 'openai') {
-        openaiInputs.forEach(input => input.required = true);
-        ollamaInputs.forEach(input => input.required = false);
-      } else {
-        openaiInputs.forEach(input => input.required = false);
-        ollamaInputs.forEach(input => input.required = true);
-      }
-    }
-
-    // Initialize on page load
-    document.addEventListener('DOMContentLoaded', toggleProviderSettings);
-  </script>
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', toggleProviderSettings);
+    </script>
 </body>
 </html>

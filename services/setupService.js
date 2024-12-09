@@ -102,9 +102,23 @@ class SetupService {
   async saveConfig(config) {
     // Validate the new configuration before saving
     await this.validateConfig(config);
-
+    const JSON_STANDARD_PROMPT = `
+        Geben Sie das Ergebnis AUSSCHLIESSLICH als JSON-Objekt zurück:
+        
+        {
+          "title": "Prägnanter Titel",
+          "correspondent": "Absender/Firma",
+          "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
+          "document_date": "YYYY-MM-DD",
+          "language": "de"
+        }`;
     const envContent = Object.entries(config)
-      .map(([key, value]) => `${key}=${value}`)
+      .map(([key, value]) => {
+        if (key === "SYSTEM_PROMPT") {
+          return `${key}=\`${value}\n${JSON_STANDARD_PROMPT}\``;
+        }
+        return `${key}=${value}`;
+      })
       .join('\n');
     await fs.writeFile(this.envPath, envContent);
     

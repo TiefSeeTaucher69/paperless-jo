@@ -47,6 +47,111 @@ class PaperlessService {
     }
   }
 
+  async findExistingTag(tagName) {
+    const normalizedName = tagName.toLowerCase();
+    
+    // 1. Zuerst im Cache suchen
+    const cachedTag = this.tagCache.get(normalizedName);
+    if (cachedTag) {
+      console.log(`Found tag "${tagName}" in cache with ID ${cachedTag.id}`);
+      return cachedTag;
+    }
+
+    // 2. Direkte API-Suche
+    try {
+      const response = await this.client.get('/tags/', {
+        params: {
+          name__iexact: normalizedName  // Case-insensitive exact match
+        }
+      });
+
+      if (response.data.results.length > 0) {
+        const foundTag = response.data.results[0];
+        console.log(`Found existing tag "${tagName}" via API with ID ${foundTag.id}`);
+        this.tagCache.set(normalizedName, foundTag);
+        return foundTag;
+      }
+    } catch (error) {
+      console.warn(`Error searching for tag "${tagName}":`, error.message);
+    }
+
+    return null;
+  }
+
+  async createTagSafely(tagName) {
+    const normalizedName = tagName.toLowerCase();
+    
+    try {
+      // Versuche zuerst, den Tag zu erstellen
+      const response = await this.client.post('/tags/', { name: tagName });
+      const newTag = response.data;
+      console.log(`Successfully created tag "${tagName}" with ID ${newTag.id}`);
+      this.tagCache.set(normalizedName, newTag);
+      return newTag;
+    } catch (error) {
+      if (error.response?.status === 400) {
+        // Bei einem 400er Fehler könnte der Tag bereits existieren
+        // Aktualisiere den Cache und suche erneut
+        await this.refreshTagCache();
+        
+        // Suche nochmal nach dem Tag
+        const existingTag = await this.findExistingTag(tagName);
+        if (existingTag) {
+          return existingTag;
+        }
+      }
+      throw error; // Wenn wir den Tag nicht finden konnten, werfen wir den Fehler weiter
+    }
+  }
+
+  // Hauptfunktion für die Tag-Verarbeitung
+  async processTags(tagNames) {
+    this.initialize();
+    await this.ensureTagCache();
+
+    const tagIds = [];
+    const errors = [];
+    const processedTags = new Set(); // Verhindert Duplikate
+
+    for (const tagName of tagNames) {
+      if (!tagName || typeof tagName !== 'string') {
+        console.warn(`Skipping invalid tag name: ${tagName}`);
+        continue;
+      }
+
+      const normalizedName = tagName.toLowerCase().trim();
+      
+      // Überspringe leere oder bereits verarbeitete Tags
+      if (!normalizedName || processedTags.has(normalizedName)) {
+        continue;
+      }
+
+      try {
+        // Suche zuerst nach existierendem Tag
+        let tag = await this.findExistingTag(tagName);
+        
+        // Wenn kein existierender Tag gefunden wurde, erstelle einen neuen
+        if (!tag) {
+          tag = await this.createTagSafely(tagName);
+        }
+
+        if (tag && tag.id) {
+          tagIds.push(tag.id);
+          processedTags.add(normalizedName);
+        }
+
+      } catch (error) {
+        console.error(`Error processing tag "${tagName}":`, error.message);
+        errors.push({ tagName, error: error.message });
+      }
+    }
+
+    return { 
+      tagIds: [...new Set(tagIds)], // Entferne eventuelle Duplikate
+      errors 
+    };
+  }
+
   async getTags() {
     this.initialize();
     try {
@@ -58,78 +163,57 @@ class PaperlessService {
     }
   }
 
-  // Hauptfunktion für die Tag-Verarbeitung
-  async processTags(tagNames) {
+  // Verbesserte getAllDocuments Methode mit Paginierung
+  async getAllDocuments() {
     this.initialize();
-    await this.ensureTagCache();
+    let documents = [];
+    let page = 1;
+    let hasMore = true;
 
-    const tagIds = [];
-    const errors = [];
-
-    for (const tagName of tagNames) {
-      const normalizedName = tagName.toLowerCase();
+    while (hasMore) {
       try {
-        // Prüfe zuerst im Cache
-        const existingTag = this.tagCache.get(normalizedName);
-        
-        if (existingTag) {
-          console.log(`Using cached tag "${tagName}" with ID ${existingTag.id}`);
-          tagIds.push(existingTag.id);
-          continue;
-        }
-
-        // Wenn nicht im Cache, aktualisiere Cache und prüfe erneut
-        await this.refreshTagCache();
-        const refreshedTag = this.tagCache.get(normalizedName);
-        
-        if (refreshedTag) {
-          console.log(`Found tag "${tagName}" after cache refresh with ID ${refreshedTag.id}`);
-          tagIds.push(refreshedTag.id);
-          continue;
-        }
-
-        // Nur wenn der Tag wirklich nicht existiert, erstelle ihn
-        console.log(`Creating new tag: "${tagName}"`);
-        const newTag = await this.createTag(tagName);
-        this.tagCache.set(normalizedName, newTag);
-        tagIds.push(newTag.id);
-
-      } catch (error) {
-        console.error(`Error processing tag "${tagName}":`, error.message);
-        errors.push({ tagName, error: error.message });
-        
-        // Bei einem 400er Fehler versuche nochmal den Tag zu finden
-        if (error.response?.status === 400) {
-          await this.refreshTagCache();
-          const existingTag = this.tagCache.get(normalizedName);
-          if (existingTag) {
-            console.log(`Found tag "${tagName}" after error with ID ${existingTag.id}`);
-            tagIds.push(existingTag.id);
-            // Entferne den Fehler aus der Liste
-            errors.pop();
+        const response = await this.client.get('/documents/', {
+          params: {
+            page: page,
+            page_size: 100  // Erhöhen Sie die Seitengröße für effizienteres Abrufen
           }
-        }
+        });
+        
+        documents = documents.concat(response.data.results);
+        
+        // Prüfe, ob es weitere Seiten gibt
+        hasMore = response.data.next !== null;
+        page++;
+        
+        console.log(`Fetched page ${page-1}, got ${response.data.results.length} documents. Total so far: ${documents.length}`);
+        
+      } catch (error) {
+        console.error(`Error fetching documents page ${page}:`, error.message);
+        throw error;
       }
     }
 
-    return { tagIds, errors };
+    return documents;
   }
 
-  // Hilfsfunktion zum Erstellen eines einzelnen Tags
-  async createTag(name) {
+  // Aktualisierte getDocuments Methode
+  async getDocuments() {
+    return this.getAllDocuments();
+  }
+
+  async getDocumentContent(documentId) {
+    this.initialize();
+    const response = await this.client.get(`/documents/${documentId}/`);
+    return response.data.content;
+  }
+
+  async getDocument(documentId) {
+    this.initialize();
     try {
-      const response = await this.client.post('/tags/', { name });
-      console.log(`Successfully created tag "${name}" with ID ${response.data.id}`);
+      const response = await this.client.get(`/documents/${documentId}/`);
       return response.data;
     } catch (error) {
-      if (error.response?.status === 400) {
-        // Wenn der Tag möglicherweise schon existiert, versuche ihn zu finden
-        await this.refreshTagCache();
-        const existingTag = this.tagCache.get(name.toLowerCase());
-        if (existingTag) {
-          return existingTag;
-        }
-      }
+      console.error(`Error fetching document ${documentId}:`, error.message);
       throw error;
     }
   }
@@ -184,83 +268,51 @@ class PaperlessService {
     }
   }
 
-  // Verbesserte getOrCreateTag Funktion
-  async getOrCreateTag(tagName) {
-    const normalizedName = tagName.toLowerCase();
-    
-    // 1. Prüfe Cache
-    const cachedTag = this.tagCache.get(normalizedName);
-    if (cachedTag) {
-      console.log(`Found tag "${tagName}" in cache with ID ${cachedTag.id}`);
-      return cachedTag;
-    }
-
-    // 2. Versuche Tag zu finden
-    try {
-      const response = await this.client.get('/tags/', {
-        params: { name: tagName }
-      });
-
-      const existingTag = response.data.results.find(
-        tag => tag.name.toLowerCase() === normalizedName
-      );
-
-      if (existingTag) {
-        console.log(`Found existing tag "${tagName}" with ID ${existingTag.id}`);
-        this.tagCache.set(normalizedName, existingTag);
-        return existingTag;
-      }
-
-      // 3. Wenn nicht gefunden, erstelle neuen Tag
-      const createResponse = await this.client.post('/tags/', { name: tagName });
-      const newTag = createResponse.data;
-      console.log(`Created new tag "${tagName}" with ID ${newTag.id}`);
-      this.tagCache.set(normalizedName, newTag);
-      return newTag;
-
-    } catch (error) {
-      if (error.response?.status === 400 && 
-          error.response?.data?.error?.includes('unique constraint')) {
-        
-        // Wenn unique constraint verletzt wurde, aktualisiere Cache und versuche erneut
-        await this.refreshTagCache();
-        const refreshedTag = this.tagCache.get(normalizedName);
-        
-        if (refreshedTag) {
-          console.log(`Retrieved tag "${tagName}" after constraint error with ID ${refreshedTag.id}`);
-          return refreshedTag;
-        }
-      }
-      
-      console.error(`Failed to process tag "${tagName}":`, error.message);
-      throw error;
-    }
-  }
-
-  // Rest der Service-Methoden...
-  async getDocuments() {
+  async removeUnusedTagsFromDocument(documentId, keepTagIds) {
     this.initialize();
-    const response = await this.client.get('/documents/');
-    return response.data.results;
-  }
-
-  async getDocumentContent(documentId) {
-    this.initialize();
-    const response = await this.client.get(`/documents/${documentId}/`);
-    return response.data.content;
-  }
-
-  async getDocument(documentId) {
-    this.initialize();
-    try {
-      const response = await this.client.get(`/documents/${documentId}/`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching document ${documentId}:`, error.message);
-      throw error;
-    }
-  }
+    if (!this.client) return;
   
+    try {
+      console.log(`Removing unused tags from document ${documentId}, keeping tags:`, keepTagIds);
+      
+      // Hole aktuelles Dokument
+      const currentDoc = await this.getDocument(documentId);
+      
+      // Finde Tags die entfernt werden sollen (die nicht in keepTagIds sind)
+      const tagsToRemove = currentDoc.tags.filter(tagId => !keepTagIds.includes(tagId));
+      
+      if (tagsToRemove.length === 0) {
+        console.log('No tags to remove');
+        return currentDoc;
+      }
+  
+      // Update das Dokument mit nur den zu behaltenden Tags
+      const updateData = {
+        tags: keepTagIds
+      };
+  
+      // Führe das Update durch
+      await this.client.patch(`/documents/${documentId}/`, updateData);
+      console.log(`Successfully removed ${tagsToRemove.length} tags from document ${documentId}`);
+      
+      return await this.getDocument(documentId);
+    } catch (error) {
+      console.error(`Error removing unused tags from document ${documentId}:`, error.message);
+      throw error;
+    }
+  }
+
+  async getTagTextFromId(tagId) {
+    this.initialize();
+    try {
+      const response = await this.client.get(`/tags/${tagId}/`);
+      return response.data.name;
+    } catch (error) {
+      console.error(`Error fetching tag text for ID ${tagId}:`, error.message);
+      return null;
+    }
+  }
+
   async updateDocument(documentId, updates) {
     this.initialize();
     if (!this.client) return;
@@ -281,12 +333,23 @@ class PaperlessService {
         console.log(`Combined tags:`, combinedTags);
       }
   
+      // Bereite die Update-Daten vor
+      const updateData = {
+        ...updates,
+        // Wenn ein Datum vorhanden ist, formatiere es korrekt für die API
+        ...(updates.created && {
+          created: new Date(updates.created).toISOString()
+        })
+      };
+  
       // Führe das Update durch
-      await this.client.patch(`/documents/${documentId}/`, updates);
-      console.log(`Updated document ${documentId} while preserving existing tags`);
+      await this.client.patch(`/documents/${documentId}/`, updateData);
+      console.log(`Updated document ${documentId} with:`, updateData);
+      
+      return await this.getDocument(documentId); // Optional: Gib das aktualisierte Dokument zurück
     } catch (error) {
       console.error(`Error updating document ${documentId}:`, error.message);
-      throw error;
+      return null; // Oder eine andere geeignete Rückgabe
     }
   }
 }

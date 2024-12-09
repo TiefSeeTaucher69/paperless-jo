@@ -38,14 +38,12 @@ app.use((req, res, next) => {
 async function scanDocuments() {
   console.log('Starting document scan...');
   try {
-    // Prüfe zuerst, ob Setup abgeschlossen ist
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
       console.log('Setup not completed. Skipping document scan.');
       return;
     }
 
-    // Hole existierende Tags
     const existingTags = await paperlessService.getTags();
     console.log(`Found ${existingTags.length} existing tags`);
     
@@ -57,25 +55,25 @@ async function scanDocuments() {
       if (!isProcessed) {
         console.log(`Processing new document: ${doc.title}`);
         
-        // Get document content
         const content = await paperlessService.getDocumentContent(doc.id);
-        
-        // Analyze with ChatGPT, passing existing tags for context
-        //const analysis = await openaiService.analyzeDocument(content, existingTags);
         const aiService = AIServiceFactory.getService();
         const analysis = await aiService.analyzeDocument(content, existingTags);
 
-        // Process tags
+        // Verarbeite Tags
         const { tagIds, errors } = await paperlessService.processTags(analysis.tags);
         
         if (errors.length > 0) {
           console.warn('Some tags could not be processed:', errors);
         }
 
-        // Prepare update data
-        let updateData = { tags: tagIds };
+        // Bereite Update-Daten vor
+        let updateData = { 
+          tags: tagIds,
+          title: analysis.title || doc.title, // Benutze den analysierten Titel oder behalte den bestehenden
+          created: analysis.document_date || doc.created, // Setze das Dokumentdatum wenn verfügbar
+        };
         
-        // Process correspondent if present
+        // Verarbeite Korrespondent wenn vorhanden
         if (analysis.correspondent) {
           try {
             const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.correspondent);
@@ -87,15 +85,19 @@ async function scanDocuments() {
           }
         }
 
+        // Optional: Setze die Sprache wenn verfügbar
+        if (analysis.language) {
+          updateData.language = analysis.language;
+        }
+
         try {
-          // Update document while preserving existing tags
+          // Update Dokument
           await paperlessService.updateDocument(doc.id, updateData);
-          console.log(`Updated document ${doc.title} with ${tagIds.length} tags` + 
-                     (updateData.correspondent ? ' and correspondent' : ''));
+          console.log(`Updated document ${doc.title} with:`, updateData);
           
-          // Mark as processed
-          await documentModel.addProcessedDocument(doc.id, doc.title);
-          console.log(`Document ${doc.title} processing completed`);
+          // Markiere als verarbeitet
+          await documentModel.addProcessedDocument(doc.id, updateData.title);
+          console.log(`Document ${updateData.title} processing completed`);
         } catch (error) {
           console.error(`Error processing document: ${error}`);
         }

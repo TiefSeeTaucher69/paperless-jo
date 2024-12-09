@@ -27,24 +27,8 @@ class OpenAIService {
       const existingTagsList = existingTags
         .map(tag => tag.name)
         .join(', ');
-
-      const systemPrompt = `Sie sind ein Dokumentanalysator. Ihre Aufgabe:
-
-1. Analysieren Sie den Dokumentinhalt und extrahieren Sie wichtige Informationen.
-2. Erstellen Sie ein JSON-Objekt mit passenden Tags und dem Korrespondenten.
-3. Berücksichtigen Sie die folgenden bereits existierenden Tags:
-${existingTagsList}
-
-Wichtige Regeln:
-- Prüfen Sie zuerst, ob einer der existierenden Tags passt, bevor Sie neue vorschlagen
-- Verwenden Sie nur relevante Kategorien (Rechnung, Steuer, Vertrag, Mitteilung, Kfz, Versicherung etc.)
-- Vermeiden Sie generische oder irrelevante Tags
-- Es sollen wirklich nur die wichtigsten Informationen zum erstellen eines Tags benutzt werden.
-- Der Korrespondent sollte die tatsächlich sendende Firma/Institution sein
-- Geben Sie NUR das JSON-Objekt zurück, keine Erklärungen oder Markdown
-- Format: {"tags": ["Tag1", "Tag2"], "correspondent": "Firma"}
-
-Prüfen Sie für jeden neuen Tag, ob nicht ein existierender Tag den gleichen Zweck erfüllt.`;
+      
+      const systemPrompt = process.env.SYSTEM_PROMPT;
 
       const response = await this.client.chat.completions.create({
         model: "gpt-4o-mini",
