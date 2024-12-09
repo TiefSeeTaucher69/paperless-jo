@@ -101,22 +101,3 @@ class ManualService {
 }
 
 module.exports = ManualService;
-
-//how do I use this service to trigger a manual analysis of a document using the OpenAI API or the Ollama API?
-//You can use the `analyzeDocument` method of the `ManualService` class to trigger a manual analysis of a document using the OpenAI API or the Ollama API.
-
-//Here's an example of how you can use the `ManualService` class to trigger a manual analysis of a document using the OpenAI API:
-
-// const manualService = new ManualService();
-// const content = 'This is a test document.';
-// const existingTags = [{ name: 'tag1' }, { name: 'tag2' }];
-// const provider = 'openai';
-
-// manualService.analyzeDocument(content, existingTags, provider)
-//     .then(result => {
-//         console.log('Analysis result:', result);
-//     })
-//     .catch(error => {
-//         console.error('Error analyzing document:', error);
-//     });
-
