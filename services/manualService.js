@@ -100,4 +100,4 @@ class ManualService {
     }
 }
 
-module.exports = ManualService;
+module.exports = ManualService; 
