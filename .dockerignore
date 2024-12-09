@@ -5,3 +5,9 @@ data
 .gitignore
 .env
 *.md
+api-test.ps1
+openai_debug.log
+prompt.bak
+data_bak/
+preview.png
+.env.bak

@@ -1,8 +1,10 @@
 .env
 .env.bak
+.dockerignore
 data/
 node_modules/
 api-test.ps1
 openai_debug.log
 prompt.bak
 data bak/
+data_bak/

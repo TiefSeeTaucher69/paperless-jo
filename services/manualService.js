@@ -1,8 +1,7 @@
-// create a service that triggers a manual analysis of a document using the OpenAI API or the Ollama API. 
-
 const axios = require('axios');
 const OpenAI = require('openai');
 const config = require('../config/config');
+const emptyVar = null;
 
 class ManualService {
     constructor() {
