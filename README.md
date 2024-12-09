@@ -19,7 +19,7 @@ An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mi
 
 - Docker and Docker Compose
 - Access to a Paperless-ngx installation
-- OpenAI API key
+- OpenAI API key or your own Ollama instance with your chosen model running and reachable.
 - Basic understanding of cron syntax (for scan interval configuration)
 
 ## Installation
