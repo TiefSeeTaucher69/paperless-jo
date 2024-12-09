@@ -55,9 +55,9 @@ http://localhost:3000
    - Tracks processed documents in a local SQLite database
 
 2. **AI Analysis**
-   - Sends document content to OpenAI API for analysis
+   - Sends document content to OpenAI API or Ollama for analysis
    - Extracts relevant tags and correspondent information
-   - Uses GPT-4 for accurate document understanding
+   - Uses GPT-4o-mini or your custom Ollama model for accurate document understanding
 
 3. **Automatic Organization**
    - Creates new tags if they don't exist
