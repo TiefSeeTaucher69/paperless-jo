@@ -5,8 +5,10 @@ An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mi
 ## Features
 
 - 🔍 Automatic document scanning in Paperless-ngx
+
 - 🤖 AI-powered document analysis using OpenAI API and Ollama (Mistral, llama, phi 3, gemma 2)
 - 🏷️ Automatic tag and correspondent assignment
+- 🔨 (NEW) Manual mode to do analysing by hand with help of AI.
 - 🚀 Easy setup through web interface
 - 📊 Document processing dashboard
 - 🔄 Automatic restart and health monitoring
@@ -62,6 +64,13 @@ http://localhost:3000
    - Creates new correspondents if they don't exist
    - Updates documents with analyzed information
    - Marks documents as processed to avoid duplicate analysis
+
+## NEW! Manual Mode
+You can now manually analyze your files by hand with the help of AI in a beautiful Webinterface.
+Reachable via the /manual endpoint from the webinterface.
+
+Preview:
+![Preview Image](./preview.png)
 
 ## Configuration Options
 
