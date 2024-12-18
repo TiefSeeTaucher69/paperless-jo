@@ -78,7 +78,7 @@ http://localhost:3000
 
 ## NEW! Manual Mode
 You can now manually analyze your files by hand with the help of AI in a beautiful Webinterface.
-Reachable via the /manual endpoint from the webinterface.
+Reachable via the ```/manual``` endpoint from the webinterface.
 
 Preview:
 ![Preview Image](./preview.png)
