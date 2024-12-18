@@ -103,14 +103,14 @@ class SetupService {
     // Validate the new configuration before saving
     await this.validateConfig(config);
     const JSON_STANDARD_PROMPT = `
-        Geben Sie das Ergebnis AUSSCHLIESSLICH als JSON-Objekt zurück:
+        Return the result EXCLUSIVELY as a JSON object. In addition, fill the data according to the language of the original document.:
         
         {
-          "title": "Prägnanter Titel",
-          "correspondent": "Absender/Firma",
+          "title": "Title",
+          "correspondent": "Correspondent/Author",
           "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
           "document_date": "YYYY-MM-DD",
-          "language": "de"
+          "language": "eng/de/esp/..."
         }`;
     const envContent = Object.entries(config)
       .map(([key, value]) => {
