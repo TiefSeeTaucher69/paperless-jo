@@ -1,3 +1,7 @@
+![GitHub commit activity](https://img.shields.io/github/commit-activity/t/clusterzx/paperless-ai) ![Docker Pulls](https://img.shields.io/docker/pulls/clusterzx/paperless-ai) ![GitHub User's stars](https://img.shields.io/github/stars/clusterzx) ![GitHub License](https://img.shields.io/github/license/clusterzx/paperless-ai?cacheSeconds=1)
+
+
+
 # Paperless-Ai
 
 An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mistral, llama, phi 3, gemma 2) to automatically analyze and tag your documents.
@@ -189,7 +193,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you encounter any issues or have questions:
 
-1. Check the [Issues](https://github.com/yourusername/paperless-assistant/issues) section
+1. Check the [Issues](https://github.com/clusterzx/paperless-ai/issues) section
 2. Create a new issue if yours isn't already listed
 3. Provide detailed information about your setup and the problem
 
