@@ -110,7 +110,7 @@ class SetupService {
           "correspondent": "Correspondent/Author",
           "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
           "document_date": "YYYY-MM-DD",
-          "language": "eng/de/esp/..."
+          "language": "en/de/esp/..."
         }`;
     const envContent = Object.entries(config)
       .map(([key, value]) => {
