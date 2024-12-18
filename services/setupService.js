@@ -42,7 +42,7 @@ class SetupService {
     try {
       const openai = new OpenAI({ apiKey });
       const response = await openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4o-mini",
         messages: [{ role: "user", content: "Test" }],
       });
       return response.choices && response.choices.length > 0;
@@ -103,11 +103,11 @@ class SetupService {
     // Validate the new configuration before saving
     await this.validateConfig(config);
     const JSON_STANDARD_PROMPT = `
-        Return the result EXCLUSIVELY as a JSON object. In addition, fill the data according to the language of the original document.:
+        Return the result EXCLUSIVELY as a JSON object. The Tags and Title MUST be in the language that is used in the document.:
         
         {
-          "title": "Title",
-          "correspondent": "Correspondent/Author",
+          "title": "xxxxx",
+          "correspondent": "xxxxxxxx",
           "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
           "document_date": "YYYY-MM-DD",
           "language": "en/de/es/..."

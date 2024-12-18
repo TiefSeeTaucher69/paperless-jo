@@ -200,6 +200,7 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
       paperlessToken, 
       aiProvider,
       openaiKey,
+      openaiModel,
       ollamaUrl,
       ollamaModel,
       scanInterval ,
@@ -234,6 +235,7 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
         });
       }
       config.OPENAI_API_KEY = openaiKey;
+      config.OPENAI_MODEL = openaiModel;
     } else if (aiProvider === 'ollama') {
       const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
       if (!isOllamaValid) {

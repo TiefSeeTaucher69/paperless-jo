@@ -29,9 +29,10 @@ class OpenAIService {
         .join(', ');
       
       const systemPrompt = process.env.SYSTEM_PROMPT;
+      const model = process.env.OPENAI_MODEL;
 
       const response = await this.client.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: model,
         messages: [
           {
             role: "system",
