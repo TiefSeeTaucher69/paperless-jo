@@ -9,11 +9,11 @@ class OllamaService {
         timeout: 300000 // 5 Minuten Timeout
       });
     }
-  
+
     async analyzeDocument(content, existingTags) {
       try {
         const prompt = this._buildPrompt(content, existingTags);
-        
+
         const response = await this.client.post(`${this.apiUrl}/api/generate`, {
           model: this.model,
           prompt: prompt,
@@ -24,13 +24,13 @@ class OllamaService {
             repeat_penalty: 1.1  // Verhindert Wiederholungen
           }
         });
-  
+
         // Prüfe explizit auf Response-Fehler
         if (!response.data || !response.data.response) {
           console.error('Unexpected Ollama response format:', response);
           throw new Error('Invalid response from Ollama API');
         }
-  
+
         return this._parseResponse(response.data.response);
       } catch (error) {
         if (error.code === 'ECONNABORTED') {
@@ -43,9 +43,9 @@ class OllamaService {
     }
 
   _buildPrompt(content, existingTags) {
-    return process.env.SYSTEM_PROMPT;
+    return process.env.SYSTEM_PROMPT + '\n\n' + JSON.stringify(content);
   }
-  
+
   _parseResponse(response) {
     try {
       // Find JSON in response using regex
