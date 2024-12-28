@@ -149,6 +149,39 @@ The application provides a health check endpoint at `/health` that returns:
 }
 ```
 
+## Debug Interface
+
+The application includes a debug interface accessible via `/debug` that helps administrators monitor and troubleshoot the system's data:
+
+- 🔍 View all system tags
+- 📄 Inspect processed documents
+- 👥 Review correspondent information
+
+### Accessing the Debug Interface
+
+1. Navigate to:
+```
+http://your-instance:3000/debug
+```
+
+2. The interface provides:
+   - Interactive dropdown to select data category
+   - Tree view visualization of JSON responses
+   - Color-coded data representation
+   - Collapsible/expandable data nodes
+
+### Available Debug Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| /debug/tags | Lists all tags in the system |
+| /debug/documents | Shows processed document information |
+| /debug/correspondents | Displays correspondent data |
+
+### Health Check Integration
+
+The debug interface also integrates with the health check system, showing a configuration warning if the system is not properly set up.
+
 ## Development
 
 To run the application locally without Docker:
