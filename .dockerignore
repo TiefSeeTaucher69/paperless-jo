@@ -9,6 +9,7 @@ api-test.ps1
 openai_debug.log
 prompt.bak
 data_bak/
+data_bak2/
 data_*/
 preview.png
 .env.bak

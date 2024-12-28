@@ -5,6 +5,7 @@ const paperlessService = require('../services/paperlessService.js');
 const openaiService = require('../services/openaiService.js');
 const ollamaService = require('../services/ollamaService.js');
 const documentModel = require('../models/document.js');
+const debugService = require('../services/debugService.js');
 
 // API endpoints that should not redirect
 const API_ENDPOINTS = ['/health', '/manual'];
@@ -90,6 +91,33 @@ router.get('/manual/tags', async (req, res) => {
 router.get('/manual/documents', async (req, res) => {
   const getDocuments = await paperlessService.getDocuments();
   res.json(getDocuments);
+});
+
+router.get('/debug', async (req, res) => {
+  const isConfigured = await setupService.isConfigured();
+  if (!isConfigured) {
+    return res.status(503).json({ 
+      status: 'not_configured',
+      message: 'Application setup not completed'
+    });
+  }
+
+  res.render('debug');
+});
+
+router.get('/debug/tags', async (req, res) => {
+  const tags = await debugService.getTags();
+  res.json(tags);
+});
+
+router.get('/debug/documents', async (req, res) => {
+  const documents = await debugService.getDocuments();
+  res.json(documents);
+});
+
+router.get('/debug/correspondents', async (req, res) => {
+  const correspondents = await debugService.getCorrespondents();
+  res.json(correspondents);
 });
 
 router.post('/manual/analyze', express.json(), async (req, res) => {
