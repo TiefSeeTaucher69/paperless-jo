@@ -163,29 +163,87 @@ class PaperlessService {
     }
   }
 
-  // Verbesserte getAllDocuments Methode mit Paginierung
   async getAllDocuments() {
     this.initialize();
     let documents = [];
     let page = 1;
     let hasMore = true;
+    const shouldFilterByTags = process.env.PROCESS_PREDEFINED_DOCUMENTS === 'yes';
+    let predefinedTags = [];
+
+    // Vorverarbeitung der Tags, wenn Filter aktiv ist
+    if (shouldFilterByTags) {
+      if (!process.env.TAGS) {
+        console.warn('PROCESS_PREDEFINED_DOCUMENTS is set to yes but no TAGS are defined');
+        return [];
+      }
+      // Initialen Tag-Cache aufbauen
+      await this.ensureTagCache();
+      predefinedTags = process.env.TAGS.split(',').map(tag => tag.trim().toLowerCase());
+      console.log('Filtering documents for tags:', predefinedTags);
+    }
 
     while (hasMore) {
       try {
         const response = await this.client.get('/documents/', {
           params: {
             page: page,
-            page_size: 100  // Erhöhen Sie die Seitengröße für effizienteres Abrufen
+            page_size: 100
           }
         });
         
-        documents = documents.concat(response.data.results);
+        let pageDocuments = response.data.results;
+
+        // Filter nach Tags, wenn aktiviert
+        if (shouldFilterByTags) {
+          // Verarbeite Dokumente parallel für bessere Performance
+          const filteredDocuments = await Promise.all(
+            pageDocuments.map(async doc => {
+              // Prüfe Tags des Dokuments
+              if (!doc.tags || doc.tags.length === 0) return null;
+
+              // Hole alle Tag-Namen für die Tag-IDs des Dokuments
+              const docTagNames = await Promise.all(
+                doc.tags.map(async tagId => {
+                  // Versuche zuerst im Cache nachzusehen
+                  for (const [tagName, tagData] of this.tagCache) {
+                    if (tagData.id === tagId) return tagName;
+                  }
+                  // Wenn nicht im Cache, hole von API
+                  try {
+                    const tagText = await this.getTagTextFromId(tagId);
+                    return tagText ? tagText.toLowerCase() : null;
+                  } catch (error) {
+                    console.error(`Error fetching tag ${tagId}:`, error.message);
+                    return null;
+                  }
+                })
+              );
+
+              // Prüfe, ob mindestens ein Tag übereinstimmt
+              const hasMatchingTag = docTagNames.some(tagName => 
+                tagName && predefinedTags.includes(tagName)
+              );
+
+              return hasMatchingTag ? doc : null;
+            })
+          );
+
+          // Filtere null-Werte heraus
+          pageDocuments = filteredDocuments.filter(doc => doc !== null);
+        }
         
-        // Prüfe, ob es weitere Seiten gibt
+        documents = documents.concat(pageDocuments);
+        
+        // Prüfe auf weitere Seiten
         hasMore = response.data.next !== null;
         page++;
         
-        console.log(`Fetched page ${page-1}, got ${response.data.results.length} documents. Total so far: ${documents.length}`);
+        console.log(
+          `Fetched page ${page-1}, got ${pageDocuments.length} ` +
+          `${shouldFilterByTags ? 'matching ' : ''}documents. ` +
+          `Total so far: ${documents.length}`
+        );
         
       } catch (error) {
         console.error(`Error fetching documents page ${page}:`, error.message);
@@ -193,9 +251,12 @@ class PaperlessService {
       }
     }
 
+    if (shouldFilterByTags) {
+      console.log(`Finished filtering. Found ${documents.length} documents matching the predefined tags.`);
+    }
     return documents;
   }
-
+  
   // Aktualisierte getDocuments Methode
   async getDocuments() {
     return this.getAllDocuments();

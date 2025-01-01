@@ -1,308 +1,259 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-100">
+<html lang="en" class="h-full" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paperless Assistant Setup</title>
+    <title>Paperless-ai Setup</title>
     <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/setup.css">
 </head>
 <body class="h-full">
+    <button id="themeToggle" class="theme-toggle material-button-2">
+        <i class="fas fa-moon dark:fas fa-sun"></i>
+    </button>
+
     <div class="min-h-full">
-        <nav class="bg-blue-600">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="flex h-16 items-center justify-between">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-file-alt text-white text-2xl"></i>
+        <nav class="modern-nav">
+            <div class="mx-auto max-w-7xl px-6 lg:px-8">
+                <div class="flex h-24 items-center justify-between">
+                    <div class="flex items-center space-x-6">
+                        <div class="nav-icon">
+                            <i class="fas fa-file-alt text-white text-xl"></i>
                         </div>
-                        <div class="ml-4">
-                            <h1 class="text-white text-xl font-semibold">Paperless Assistant Setup</h1>
+                        <div>
+                            <h1 class="text-2xl font-bold">Paperless-AI</h1>
+                            <p class="text-sm text-secondary">Configuration Setup</p>
                         </div>
                     </div>
                 </div>
             </div>
         </nav>
 
-        <main>
-            <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
-                <div class="px-4 py-6 sm:px-0">
-                    <div class="bg-white rounded-lg shadow px-6 py-8">
-                        <% if (typeof error !== 'undefined' && error) { %>
-                            <div class="mb-4 p-4 rounded-md bg-red-50 border border-red-200">
-                                <div class="flex">
-                                    <div class="flex-shrink-0">
-                                        <i class="fas fa-exclamation-circle text-red-400"></i>
-                                    </div>
-                                    <div class="ml-3">
-                                        <p class="text-sm text-red-700"><%= error %></p>
-                                    </div>
-                                </div>
-                            </div>
-                        <% } %>
+        <main class="py-10">
+            <div class="mx-auto max-w-3xl px-6 lg:px-8">
+                <!-- Alert Messages -->
+                <% if (typeof error !== 'undefined' && error) { %>
+                    <div class="alert alert-error">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p><%= error %></p>
+                    </div>
+                <% } %>
 
-                        <% if (typeof success !== 'undefined' && success) { %>
-                            <div class="mb-4 p-4 rounded-md bg-green-50 border border-green-200">
-                                <div class="flex">
-                                    <div class="flex-shrink-0">
-                                        <i class="fas fa-check-circle text-green-400"></i>
-                                    </div>
-                                    <div class="ml-3">
-                                        <p class="text-sm text-green-700"><%= success %></p>
-                                    </div>
-                                </div>
-                            </div>
-                        <% } %>
+                <% if (typeof success !== 'undefined' && success) { %>
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i>
+                        <p><%= success %></p>
+                    </div>
+                <% } %>
 
-                        <form action="/setup" method="POST" class="space-y-6">
-                            <!-- Paperless URL -->
-                            <div>
-                                <label for="paperlessUrl" class="block text-sm font-medium text-gray-700">
-                                    Paperless-ngx API URL
-                                </label>
-                                <div class="mt-1">
+                <!-- Main Form Card -->
+                <div class="material-card">
+                    <form id="setupForm" action="/setup" method="POST" class="space-y-12">
+                        <!-- Connection Section -->
+                        <section>
+                            <h2 class="section-title">
+                                <i class="fas fa-link"></i>
+                                Connection Settings
+                            </h2>
+                            <div class="space-y-6">
+                                <div class="form-group">
+                                    <label for="paperlessUrl">Paperless-ngx API URL</label>
                                     <input type="text" 
                                            id="paperlessUrl" 
                                            name="paperlessUrl"
                                            value="<%= typeof config !== 'undefined' ? config.PAPERLESS_API_URL || config.paperlessUrl || '' : '' %>"
-                                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                           class="modern-input"
                                            placeholder="http://your-paperless-instance:8000/api"
                                            required>
                                 </div>
-                                <p class="mt-2 text-sm text-gray-500">The complete URL of your paperless-ngx instance API</p>
-                            </div>
 
-                            <!-- API Token -->
-                            <div>
-                                <label for="paperlessToken" class="block text-sm font-medium text-gray-700">
-                                    Paperless-ngx API Token
-                                </label>
-                                <div class="mt-1 relative rounded-md shadow-sm">
-                                    <input type="password" 
-                                           id="paperlessToken" 
-                                           name="paperlessToken"
-                                           value="<%= typeof config !== 'undefined' ? config.PAPERLESS_API_TOKEN || config.paperlessToken || '' : '' %>"
-                                           class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                           required>
-                                    <button type="button" 
-                                            onclick="togglePassword('paperlessToken')"
-                                            class="absolute inset-y-0 right-0 px-3 flex items-center">
-                                        <i class="fas fa-eye text-gray-400"></i>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- AI Provider -->
-                            <div>
-                                <label for="aiProvider" class="block text-sm font-medium text-gray-700">
-                                    AI Provider
-                                </label>
-                                <select id="aiProvider" 
-                                        name="aiProvider"
-                                        onchange="toggleProviderSettings()"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                    <option value="openai" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'openai' ? 'selected' : '' %>>
-                                        OpenAI (ChatGPT)
-                                    </option>
-                                    <option value="ollama" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? 'selected' : '' %>>
-                                        Ollama (Local LLM)
-                                    </option>
-                                </select>
-                            </div>
-
-                            <!-- OpenAI Settings -->
-                            <div id="openaiSettings" class="provider-settings space-y-6">
-                                <div>
-                                    <label for="openaiKey" class="block text-sm font-medium text-gray-700">
-                                        OpenAI API Key
-                                    </label>
-                                    <div class="mt-1 relative rounded-md shadow-sm">
+                                <div class="form-group">
+                                    <label for="paperlessToken">API Token</label>
+                                    <div class="password-input">
                                         <input type="password" 
-                                               id="openaiKey" 
-                                               name="openaiKey"
-                                               value="<%= typeof config !== 'undefined' ? config.OPENAI_API_KEY || config.openaiKey || '' : '' %>"
-                                               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                        <button type="button" 
-                                                onclick="togglePassword('openaiKey')"
-                                                class="absolute inset-y-0 right-0 px-3 flex items-center">
-                                            <i class="fas fa-eye text-gray-400"></i>
+                                               id="paperlessToken" 
+                                               name="paperlessToken"
+                                               value="<%= typeof config !== 'undefined' ? config.PAPERLESS_API_TOKEN || config.paperlessToken || '' : '' %>"
+                                               class="modern-input"
+                                               required>
+                                        <button type="button" class="password-toggle" data-input="paperlessToken">
+                                            <i class="fas fa-eye"></i>
                                         </button>
                                     </div>
                                 </div>
-                                <div>
-                                    <label for="openaiModel" class="block text-sm font-medium text-gray-700">
-                                        OpenAI Model
-                                    </label>
-                                    <select id="openaiModel" 
-                                            name="openaiModel"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                        <option value="gpt-3.5-turbo-0125" <%= typeof config !== 'undefined' && config.OPENAI_MODEL === 'gpt-3.5-turbo-0125' ? 'selected' : '' %>>
-                                            GPT-3.5 Turbo
+                            </div>
+                        </section>
+
+                        <!-- AI Configuration Section -->
+                        <section>
+                            <h2 class="section-title">
+                                <i class="fas fa-robot"></i>
+                                AI Configuration
+                            </h2>
+                            <div class="space-y-6">
+                                <div class="form-group">
+                                    <label for="aiProvider">AI Provider</label>
+                                    <select id="aiProvider" 
+                                            name="aiProvider"
+                                            class="modern-input">
+                                        <option value="openai" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'openai' ? 'selected' : '' %>>
+                                            OpenAI (ChatGPT)
                                         </option>
-                                        <option value="gpt-4o" <%= typeof config !== 'undefined' && config.OPENAI_MODEL === 'gpt-4o' ? 'selected' : '' %>>
-                                            GPT-4o
-                                        </option>
-                                        <option value="gpt-4o-mini" <%= typeof config !== 'undefined' && config.OPENAI_MODEL === 'babbage' ? 'selected' : '' %>>
-                                            GPT-4o-mini (best in price performance ratio)
+                                        <option value="ollama" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? 'selected' : '' %>>
+                                            Ollama (Local LLM)
                                         </option>
                                     </select>
                                 </div>
-                            </div>
 
-                            <!-- Ollama Settings -->
-                            <div id="ollamaSettings" class="provider-settings space-y-6">
-                                <div>
-                                    <label for="ollamaUrl" class="block text-sm font-medium text-gray-700">
-                                        Ollama API URL
-                                    </label>
+                                <!-- OpenAI Settings -->
+                                <div id="openaiSettings" class="provider-settings">
+                                    <div class="form-group">
+                                        <label for="openaiKey">OpenAI API Key</label>
+                                        <div class="password-input">
+                                            <input type="password" 
+                                                   id="openaiKey" 
+                                                   name="openaiKey"
+                                                   value="<%= typeof config !== 'undefined' ? config.OPENAI_API_KEY || config.openaiKey || '' : '' %>"
+                                                   class="modern-input">
+                                            <button type="button" class="password-toggle" data-input="openaiKey">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="openaiModel">OpenAI Model</label>
+                                        <select id="openaiModel" 
+                                                name="openaiModel"
+                                                class="modern-input">
+                                            <option value="gpt-3.5-turbo-0125">GPT-3.5 Turbo</option>
+                                            <option value="gpt-4o">GPT-4o</option>
+                                            <option value="gpt-4o-mini">GPT-4o-mini (Best value)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Ollama Settings -->
+                                <div id="ollamaSettings" class="provider-settings">
+                                    <div class="form-group">
+                                        <label for="ollamaUrl">Ollama API URL</label>
+                                        <input type="text" 
+                                               id="ollamaUrl" 
+                                               name="ollamaUrl"
+                                               value="<%= typeof config !== 'undefined' ? config.OLLAMA_API_URL || config.ollamaUrl || 'http://localhost:11434' : 'http://localhost:11434' %>"
+                                               class="modern-input">
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="ollamaModel">Ollama Model</label>
+                                        <input type="text" 
+                                               id="ollamaModel" 
+                                               name="ollamaModel"
+                                               value="<%= typeof config !== 'undefined' ? config.OLLAMA_MODEL || config.ollamaModel || 'llama2' : 'llama2' %>"
+                                               class="modern-input">
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Advanced Settings Section -->
+                        <section>
+                            <h2 class="section-title">
+                                <i class="fas fa-cog"></i>
+                                Advanced Settings
+                            </h2>
+                            <div class="space-y-6">
+                                <div class="form-group">
+                                    <label for="scanInterval">Scan Interval (Cron Format)</label>
                                     <input type="text" 
-                                           id="ollamaUrl" 
-                                           name="ollamaUrl"
-                                           value="<%= typeof config !== 'undefined' ? config.OLLAMA_API_URL || config.ollamaUrl || 'http://localhost:11434' : 'http://localhost:11434' %>"
-                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                           id="scanInterval" 
+                                           name="scanInterval"
+                                           value="<%= typeof config !== 'undefined' ? config.SCAN_INTERVAL || config.scanInterval || '*/30 * * * *' : '*/30 * * * *' %>"
+                                           class="modern-input"
+                                           required>
+                                    <p class="help-text">Default: every 30 minutes</p>
                                 </div>
 
-                                <div>
-                                    <label for="ollamaModel" class="block text-sm font-medium text-gray-700">
-                                        Ollama Model
-                                    </label>
-                                    <input type="text" 
-                                           id="ollamaModel" 
-                                           name="ollamaModel"
-                                           value="<%= typeof config !== 'undefined' ? config.OLLAMA_MODEL || config.ollamaModel || 'llama2' : 'llama2' %>"
-                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                <div class="form-group">
+                                    <label for="showTags">Process only specific pre tagged documents?</label>
+                                    <select id="showTags" 
+                                            name="showTags" 
+                                            class="modern-input">
+                                        <option value="no">No</option>
+                                        <option value="yes">Yes</option>
+                                    </select>
+                                </div>
+
+                                <!-- Tags Input -->
+                                <div id="tagsInputSection" class="hidden">
+                                    <div class="form-group">
+                                        <label for="tagInput">Tags</label>
+                                        <div class="tag-input-container">
+                                            <input type="text" 
+                                                id="tagInput" 
+                                                class="modern-input"
+                                                placeholder="Enter a tag and press Enter">
+                                            <button type="button" 
+                                                    class="material-button add-tag-btn">
+                                                <i class="fas fa-plus"></i>
+                                                Add
+                                            </button>
+                                        </div>
+                                        <div id="tagsContainer" class="tags-container">
+                                            
+                                        </div>
+                                        <input type="hidden" id="tags" name="tags" value="">
+                                    </div>
+                                </div>
+
+                                <!-- System Prompt -->
+                                <div class="form-group">
+                                    <label for="systemPrompt">Prompt Description</label>
+                                    <div class="prompt-container">
+                                        <textarea id="systemPrompt" 
+                                                  name="systemPrompt"
+                                                  rows="8"
+                                                  class="modern-input"
+                                                  placeholder="Describe how the AI should analyze your documents..."><%= typeof config !== 'undefined' ? config.SYSTEM_PROMPT || config.systemPrompt || '' : '' %></textarea>
+                                        <button type="button" 
+                                                class="material-button example-btn">
+                                            <i class="fas fa-lightbulb"></i>
+                                            Example
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
+                        </section>
 
-                            <!-- Scan Interval -->
-                            <div>
-                                <label for="scanInterval" class="block text-sm font-medium text-gray-700">
-                                    Scan Interval (Cron Format)
-                                </label>
-                                <input type="text" 
-                                       id="scanInterval" 
-                                       name="scanInterval"
-                                       value="<%= typeof config !== 'undefined' ? config.SCAN_INTERVAL || config.scanInterval || '*/30 * * * *' : '*/30 * * * *' %>"
-                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                       required>
-                                <p class="mt-2 text-sm text-gray-500">How often should we scan for new documents? Default: every 30 minutes</p>
-                            </div>
-
-                            <!-- System Prompt -->
-                            <div>
-                                <label for="systemPrompt" class="block text-sm font-medium text-gray-700">
-                                    Prompt Description
-                                </label>
-                                <div class="flex items-start space-x-2">
-                                    <textarea id="systemPrompt" 
-                                              name="systemPrompt"
-                                              rows="8"
-                                              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                              placeholder="Describe how the AI should analyze your documents... "><%= typeof config !== 'undefined' ? config.SYSTEM_PROMPT || config.systemPrompt || '' : '' %></textarea>
-                                    <button type="button" 
-                                            class="mt-1 px-4 py-2 bg-blue-500 text-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                            onclick="prefillExample()">Prefill example</button>
-                                </div>
-                                <p class="mt-2 text-sm text-gray-500">Your personal prompt for the AI</p>
-                            </div>
-
-                            <!-- Submit Button -->
-                            <div class="pt-5">
-                                <button type="submit"
-                                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    Save Configuration
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                        <!-- Submit Button -->
+                        <div class="pt-6">
+                            <button type="submit" class="material-button submit-btn">
+                                <i class="fas fa-save"></i>
+                                Save Configuration
+                            </button>
+                        </div>
+                    </form>
+                    <hr/>
+                    <!-- <button id="debug" class="material-button submit-btn">
+                        <i class="fas fa-save"></i>
+                        Test Configuration DEBUG
+                    </button> -->
                 </div>
             </div>
         </main>
     </div>
-    <script>
-        function prefillExample() {
-            const examplePrompt = `You are a personalized document analyzer. Your task is to analyze documents and extract relevant information.
-            
-            Analyze the document content and extract the following information into a structured JSON object:
-            
-            1. title: Create a concise, meaningful title for the document
-            2. correspondent: Identify the sender/institution
-            3. tags: Select up to 4 relevant thematic tags
-            4. document_date: Extract the document date (format: YYYY-MM-DD)
-            5. language: Determine the document language (e.g. "de" or "en")
-                  
-            Important rules for the analysis:
-            
-            For tags:
-            - FIRST check the existing tags before suggesting new ones
-            - Use only relevant categories
-            - Maximum 4 tags per document, less if sufficient (at least 1)
-            - Avoid generic or too specific tags
-            - Use only the most important information for tag creation
-            - The output language is the one used in the document! IMPORTANT!
-            
-            For the title:
-            - Short and concise
-            - Contains the most important identification features
-            - For invoices/orders, mention invoice/order number if available
-            - The output language is the one used in the document! IMPORTANT!
-            
-            For the correspondent:
-            - Identify the sender or institution
-            - Include relevant contact information if available
-            - Mention the department or position if applicable
-            
-            For the document date:
-            - Extract the date of the document
-            - Use the format YYYY-MM-DD
-            - If multiple dates are present, use the most relevant one
-            
-            For the language:
-            - Determine the document language
-            - Use language codes like "de" for German or "en" for English
-            - If the language is not clear, use "und" as a placeholder`;
-        
-            document.getElementById('systemPrompt').value = examplePrompt;
-        }
-        </script>
-    <script>
-        function toggleProviderSettings() {
-            const provider = document.getElementById('aiProvider').value;
-            const openaiSettings = document.getElementById('openaiSettings');
-            const ollamaSettings = document.getElementById('ollamaSettings');
-            
-            if (provider === 'openai') {
-                openaiSettings.style.display = 'block';
-                ollamaSettings.style.display = 'none';
-                document.getElementById('openaiKey').required = true;
-                document.getElementById('ollamaUrl').required = false;
-                document.getElementById('ollamaModel').required = false;
-            } else {
-                openaiSettings.style.display = 'none';
-                ollamaSettings.style.display = 'block';
-                document.getElementById('openaiKey').required = false;
-                document.getElementById('ollamaUrl').required = true;
-                document.getElementById('ollamaModel').required = true;
+    <!-- <script>
+        document.getElementById('debug').addEventListener('click', function() {
+            var form = document.getElementById('setupForm');
+            var formData = new FormData(form);
+            var payload = {};
+            for (var pair of formData.entries()) {
+                payload[pair[0]] = pair[1];
             }
-        }
-
-        function togglePassword(inputId) {
-            const input = document.getElementById(inputId);
-            const icon = input.nextElementSibling.querySelector('i');
-            
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.classList.remove('fa-eye');
-                icon.classList.add('fa-eye-slash');
-            } else {
-                input.type = 'password';
-                icon.classList.remove('fa-eye-slash');
-                icon.classList.add('fa-eye');
-            }
-        }
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', toggleProviderSettings);
-    </script>
+            console.log(payload);
+        });
+    </script> -->
+    <script src="js/setup.js"></script>
 </body>
 </html>

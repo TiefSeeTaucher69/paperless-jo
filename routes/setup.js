@@ -232,7 +232,9 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
       ollamaUrl,
       ollamaModel,
       scanInterval ,
-      systemPrompt
+      systemPrompt,
+      showTags,
+      tags
     } = req.body;
 
     // Validate Paperless config
@@ -250,7 +252,9 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
       PAPERLESS_API_TOKEN: paperlessToken,
       AI_PROVIDER: aiProvider,
       SCAN_INTERVAL: scanInterval,
-      SYSTEM_PROMPT: systemPrompt
+      SYSTEM_PROMPT: systemPrompt,
+      PROCESS_PREDEFINED_DOCUMENTS: showTags,
+      TAGS: tags.split(',').map(tag => tag.trim())
     };
 
     // Validate AI provider config

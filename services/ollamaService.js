@@ -17,6 +17,17 @@ class OllamaService {
         const response = await this.client.post(`${this.apiUrl}/api/generate`, {
           model: this.model,
           prompt: prompt,
+          system: `
+          You are a document analyzer. Your task is to analyze documents and extract relevant information. You do not ask back questions. 
+          YOU MUST: Analyze the document content and extract the following information into this structured JSON format and only this format!:         {
+          "title": "xxxxx",
+          "correspondent": "xxxxxxxx",
+          "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
+          "document_date": "YYYY-MM-DD",
+          "language": "en/de/es/..."
+          }
+          ALWAYS USE THE INFORMATION TO FILL OUT THE JSON OBJECT. DO NOT ASK BACK QUESTIONS.
+          `,
           stream: false,
           options: {
             temperature: 0.7,    // Kreativität (0.0 - 1.0)

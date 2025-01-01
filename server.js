@@ -19,6 +19,9 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Static files middleware
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Custom render function
 app.use((req, res, next) => {
   const originalRender = res.render;
