@@ -323,7 +323,7 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
   } catch (error) {
     console.error('Setup error:', error);
     res.render('setup', { 
-      error: 'An error occured: ' + error.message,
+      error: 'An error occurred: ' + error.message,
       config: req.body
     });
   }
