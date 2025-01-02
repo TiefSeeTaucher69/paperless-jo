@@ -239,8 +239,10 @@ For the language:
 
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    /* eslint-disable no-unused-vars */
     const themeManager = new ThemeManager();
     const formManager = new FormManager();
     const tagsManager = new TagsManager();
     const promptManager = new PromptManager();
+    /* eslint-enable no-unused-vars */
 });
