@@ -245,6 +245,12 @@
             </div>
         </main>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const systemPromptTextarea = document.getElementById('systemPrompt');
+            systemPromptTextarea.value = systemPromptTextarea.value.replace(/\\n/g, '\n');
+        });
+    </script>
     <script src="js/setup.js"></script>
 </body>
 </html>

@@ -24,7 +24,17 @@ router.use(async (req, res, next) => {
   next();
 });
 
+// const base64Encode = (str) => Buffer.from(str).toString('base64');
+
 router.get('/setup', async (req, res) => {
+
+  // Helper function to properly handle multiline strings
+  const processSystemPrompt = (prompt) => {
+    if (!prompt) return '';
+    // Replace escaped newlines with actual newlines
+    return prompt.replace('\n', '\n');
+  };
+
   const isConfigured = await setupService.isConfigured();
   let config = {
     PAPERLESS_API_URL: process.env.PAPERLESS_API_URL || 'http://localhost:8000',
@@ -244,11 +254,14 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
       openaiModel,
       ollamaUrl,
       ollamaModel,
-      scanInterval ,
+      scanInterval,
       systemPrompt,
       showTags,
       tags
     } = req.body;
+
+    // Process system prompt - replace line breaks with \n
+    const processedPrompt = systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
 
     // Validate Paperless config
     const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
@@ -265,7 +278,7 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
       PAPERLESS_API_TOKEN: paperlessToken,
       AI_PROVIDER: aiProvider,
       SCAN_INTERVAL: scanInterval,
-      SYSTEM_PROMPT: systemPrompt,
+      SYSTEM_PROMPT: processedPrompt, // Use the processed prompt
       PROCESS_PREDEFINED_DOCUMENTS: showTags,
       TAGS: tags.split(',').map(tag => tag.trim())
     };
