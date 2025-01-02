@@ -62,7 +62,7 @@
                                     <input type="text" 
                                            id="paperlessUrl" 
                                            name="paperlessUrl"
-                                           value="<%= typeof config !== 'undefined' ? config.PAPERLESS_API_URL || config.paperlessUrl || '' : '' %>"
+                                           value="<%= config.PAPERLESS_API_URL %>"
                                            class="modern-input"
                                            placeholder="http://your-paperless-instance:8000/api"
                                            required>
@@ -74,7 +74,7 @@
                                         <input type="password" 
                                                id="paperlessToken" 
                                                name="paperlessToken"
-                                               value="<%= typeof config !== 'undefined' ? config.PAPERLESS_API_TOKEN || config.paperlessToken || '' : '' %>"
+                                               value="<%= config.PAPERLESS_API_TOKEN %>"
                                                class="modern-input"
                                                required>
                                         <button type="button" class="password-toggle" data-input="paperlessToken">
@@ -97,10 +97,10 @@
                                     <select id="aiProvider" 
                                             name="aiProvider"
                                             class="modern-input">
-                                        <option value="openai" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'openai' ? 'selected' : '' %>>
+                                        <option value="openai" <%= config.AI_PROVIDER === 'openai' ? 'selected' : '' %>>
                                             OpenAI (ChatGPT)
                                         </option>
-                                        <option value="ollama" <%= typeof config !== 'undefined' && config.AI_PROVIDER === 'ollama' ? 'selected' : '' %>>
+                                        <option value="ollama" <%= config.AI_PROVIDER === 'ollama' ? 'selected' : '' %>>
                                             Ollama (Local LLM)
                                         </option>
                                     </select>
@@ -114,7 +114,7 @@
                                             <input type="password" 
                                                    id="openaiKey" 
                                                    name="openaiKey"
-                                                   value="<%= typeof config !== 'undefined' ? config.OPENAI_API_KEY || config.openaiKey || '' : '' %>"
+                                                   value="<%= config.OPENAI_API_KEY %>"
                                                    class="modern-input">
                                             <button type="button" class="password-toggle" data-input="openaiKey">
                                                 <i class="fas fa-eye"></i>
@@ -127,9 +127,9 @@
                                         <select id="openaiModel" 
                                                 name="openaiModel"
                                                 class="modern-input">
-                                            <option value="gpt-3.5-turbo-0125">GPT-3.5 Turbo</option>
-                                            <option value="gpt-4o">GPT-4o</option>
-                                            <option value="gpt-4o-mini">GPT-4o-mini (Best value)</option>
+                                            <option value="gpt-3.5-turbo-0125" <%= config.OPENAI_MODEL === 'gpt-3.5-turbo-0125' ? 'selected' : '' %>>GPT-3.5 Turbo</option>
+                                            <option value="gpt-4o" <%= config.OPENAI_MODEL === 'gpt-4o' ? 'selected' : '' %>>GPT-4o</option>
+                                            <option value="gpt-4o-mini" <%= config.OPENAI_MODEL === 'gpt-4o-mini' ? 'selected' : '' %>>GPT-4o-mini (Best value)</option>
                                         </select>
                                     </div>
                                 </div>
@@ -141,7 +141,7 @@
                                         <input type="text" 
                                                id="ollamaUrl" 
                                                name="ollamaUrl"
-                                               value="<%= typeof config !== 'undefined' ? config.OLLAMA_API_URL || config.ollamaUrl || 'http://localhost:11434' : 'http://localhost:11434' %>"
+                                               value="<%= config.OLLAMA_API_URL %>"
                                                class="modern-input">
                                     </div>
                                     
@@ -150,7 +150,7 @@
                                         <input type="text" 
                                                id="ollamaModel" 
                                                name="ollamaModel"
-                                               value="<%= typeof config !== 'undefined' ? config.OLLAMA_MODEL || config.ollamaModel || 'llama2' : 'llama2' %>"
+                                               value="<%= config.OLLAMA_MODEL %>"
                                                class="modern-input">
                                     </div>
                                 </div>
@@ -169,7 +169,7 @@
                                     <input type="text" 
                                            id="scanInterval" 
                                            name="scanInterval"
-                                           value="<%= typeof config !== 'undefined' ? config.SCAN_INTERVAL || config.scanInterval || '*/30 * * * *' : '*/30 * * * *' %>"
+                                           value="<%= config.SCAN_INTERVAL %>"
                                            class="modern-input"
                                            required>
                                     <p class="help-text">Default: every 30 minutes</p>
@@ -180,13 +180,13 @@
                                     <select id="showTags" 
                                             name="showTags" 
                                             class="modern-input">
-                                        <option value="no">No</option>
-                                        <option value="yes">Yes</option>
+                                        <option value="no" <%= config.PROCESS_PREDEFINED_DOCUMENTS === 'no' ? 'selected' : '' %>>No</option>
+                                        <option value="yes" <%= config.PROCESS_PREDEFINED_DOCUMENTS === 'yes' ? 'selected' : '' %>>Yes</option>
                                     </select>
                                 </div>
 
                                 <!-- Tags Input -->
-                                <div id="tagsInputSection" class="hidden">
+                                <div id="tagsInputSection" class="<%= config.PROCESS_PREDEFINED_DOCUMENTS === 'yes' ? '' : 'hidden' %>">
                                     <div class="form-group">
                                         <label for="tagInput">Tags</label>
                                         <div class="tag-input-container">
@@ -201,9 +201,16 @@
                                             </button>
                                         </div>
                                         <div id="tagsContainer" class="tags-container">
-                                            
+                                            <% if (config.TAGS && config.TAGS.length > 0) { %>
+                                                <% config.TAGS.forEach(tag => { %>
+                                                    <div class="modern-tag fade-in">
+                                                        <span><%= tag.trim() %></span>
+                                                        <button type="button"><i class="fas fa-times"></i></button>
+                                                    </div>
+                                                <% }); %>
+                                            <% } %>
                                         </div>
-                                        <input type="hidden" id="tags" name="tags" value="">
+                                        <input type="hidden" id="tags" name="tags" value="<%= config.TAGS ? config.TAGS.join(',') : '' %>">
                                     </div>
                                 </div>
 
@@ -215,7 +222,7 @@
                                                   name="systemPrompt"
                                                   rows="8"
                                                   class="modern-input"
-                                                  placeholder="Describe how the AI should analyze your documents..."><%= typeof config !== 'undefined' ? config.SYSTEM_PROMPT || config.systemPrompt || '' : '' %></textarea>
+                                                  placeholder="Describe how the AI should analyze your documents..."><%= config.SYSTEM_PROMPT %></textarea>
                                         <button type="button" 
                                                 class="material-button example-btn">
                                             <i class="fas fa-lightbulb"></i>
@@ -234,26 +241,10 @@
                             </button>
                         </div>
                     </form>
-                    <hr/>
-                    <!-- <button id="debug" class="material-button submit-btn">
-                        <i class="fas fa-save"></i>
-                        Test Configuration DEBUG
-                    </button> -->
                 </div>
             </div>
         </main>
     </div>
-    <!-- <script>
-        document.getElementById('debug').addEventListener('click', function() {
-            var form = document.getElementById('setupForm');
-            var formData = new FormData(form);
-            var payload = {};
-            for (var pair of formData.entries()) {
-                payload[pair[0]] = pair[1];
-            }
-            console.log(payload);
-        });
-    </script> -->
     <script src="js/setup.js"></script>
 </body>
 </html>

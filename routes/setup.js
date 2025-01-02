@@ -26,16 +26,29 @@ router.use(async (req, res, next) => {
 
 router.get('/setup', async (req, res) => {
   const isConfigured = await setupService.isConfigured();
-  if (isConfigured) {
-    const config = await setupService.loadConfig();
+  let config = {
+    PAPERLESS_API_URL: process.env.PAPERLESS_API_URL || 'http://localhost:8000',
+    PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN || '',
+    AI_PROVIDER: process.env.AI_PROVIDER || 'openai',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    OLLAMA_API_URL: process.env.OLLAMA_API_URL || 'http://localhost:11434',
+    OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'llama2',
+    SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
+    SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
+    PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
+    TAGS: process.env.TAGS ? process.env.TAGS.split(',') : []
+  };
   
-    res.render('setup', { 
-      success: 'The application is already configured. You can update the configuration below.',
-      config
-    });
-  } else {;
-    res.render('setup');
+  if (isConfigured) {
+    const savedConfig = await setupService.loadConfig();
+    config = { ...config, ...savedConfig };
   }
+  
+  res.render('setup', { 
+    config,
+    success: isConfigured ? 'The application is already configured. You can update the configuration below.' : undefined
+  });
 });
 
 router.get('/manual/preview/:id', async (req, res) => {

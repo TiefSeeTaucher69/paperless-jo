@@ -43,6 +43,9 @@ class FormManager {
         // Initialize provider settings
         this.toggleProviderSettings();
         
+        // Initialize tags section
+        this.toggleTagsInput();
+        
         // Add event listeners
         this.aiProvider.addEventListener('change', () => this.toggleProviderSettings());
         this.showTags.addEventListener('change', () => this.toggleTagsInput());
@@ -118,6 +121,14 @@ class TagsManager {
         this.tagsHiddenInput = document.getElementById('tags');
         this.addTagButton = document.querySelector('.add-tag-btn');
         this.initialize();
+        
+        // Initialize existing tags with click handlers
+        document.querySelectorAll('.modern-tag button').forEach(button => {
+            button.addEventListener('click', () => {
+                button.closest('.modern-tag').remove();
+                this.updateHiddenInput();
+            });
+        });
     }
 
     initialize() {
