@@ -32,7 +32,7 @@ router.get('/setup', async (req, res) => {
   const processSystemPrompt = (prompt) => {
     if (!prompt) return '';
     // Replace escaped newlines with actual newlines
-    return prompt.replace('\n', '\n');
+    return prompt.replace(/\\n/g, '\n');
   };
 
   const isConfigured = await setupService.isConfigured();
