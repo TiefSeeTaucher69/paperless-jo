@@ -274,7 +274,7 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
 
     // Prepare base config
     const config = {
-      PAPERLESS_API_URL: paperlessUrl,
+      PAPERLESS_API_URL: paperlessUrl + '/api',
       PAPERLESS_API_TOKEN: paperlessToken,
       AI_PROVIDER: aiProvider,
       SCAN_INTERVAL: scanInterval,

@@ -165,6 +165,11 @@ class PaperlessService {
 
   async getAllDocuments() {
     this.initialize();
+    if (!this.client) {
+      console.error('Client not initialized');
+      return [];
+    }
+
     let documents = [];
     let page = 1;
     let hasMore = true;
@@ -191,26 +196,40 @@ class PaperlessService {
             page_size: 100
           }
         });
+
+        // Überprüfe die API-Antwort auf Gültigkeit
+        if (!response || !response.data) {
+          console.error(`Invalid API response on page ${page}:`, response);
+          break;
+        }
+
+        // Überprüfe, ob results ein Array ist
+        if (!Array.isArray(response.data.results)) {
+          console.error(`Invalid results format on page ${page}. Expected array, got:`, typeof response.data.results);
+          break;
+        }
         
         let pageDocuments = response.data.results;
 
         // Filter nach Tags, wenn aktiviert
-        if (shouldFilterByTags) {
+        if (shouldFilterByTags && pageDocuments.length > 0) {
           // Verarbeite Dokumente parallel für bessere Performance
           const filteredDocuments = await Promise.all(
             pageDocuments.map(async doc => {
+              if (!doc || !Array.isArray(doc.tags)) return null;
+
               // Prüfe Tags des Dokuments
-              if (!doc.tags || doc.tags.length === 0) return null;
+              if (doc.tags.length === 0) return null;
 
               // Hole alle Tag-Namen für die Tag-IDs des Dokuments
               const docTagNames = await Promise.all(
                 doc.tags.map(async tagId => {
-                  // Versuche zuerst im Cache nachzusehen
-                  for (const [tagName, tagData] of this.tagCache) {
-                    if (tagData.id === tagId) return tagName;
-                  }
-                  // Wenn nicht im Cache, hole von API
                   try {
+                    // Versuche zuerst im Cache nachzusehen
+                    for (const [tagName, tagData] of this.tagCache) {
+                      if (tagData.id === tagId) return tagName;
+                    }
+                    // Wenn nicht im Cache, hole von API
                     const tagText = await this.getTagTextFromId(tagId);
                     return tagText ? tagText.toLowerCase() : null;
                   } catch (error) {
@@ -244,10 +263,18 @@ class PaperlessService {
           `${shouldFilterByTags ? 'matching ' : ''}documents. ` +
           `Total so far: ${documents.length}`
         );
+
+        // Optional: Füge eine kleine Verzögerung ein, um die API nicht zu überlasten
+        await new Promise(resolve => setTimeout(resolve, 100));
         
       } catch (error) {
         console.error(`Error fetching documents page ${page}:`, error.message);
-        throw error;
+        if (error.response) {
+          console.error('Response data:', error.response.data);
+          console.error('Response status:', error.response.status);
+        }
+        // Bei einem Fehler brechen wir die Schleife ab und geben die bisher gesammelten Dokumente zurück
+        break;
       }
     }
 
