@@ -53,7 +53,7 @@ class OllamaService {
       }
     }
 
-  _buildPrompt(content, existingTags) {
+  _buildPrompt(content) {
     return process.env.SYSTEM_PROMPT + '\n\n' + JSON.stringify(content);
   }
   
