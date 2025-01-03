@@ -27,7 +27,6 @@ router.use(async (req, res, next) => {
 // const base64Encode = (str) => Buffer.from(str).toString('base64');
 
 router.get('/setup', async (req, res) => {
-
   // Helper function to properly handle multiline strings
   const processSystemPrompt = (prompt) => {
     if (!prompt) return '';
@@ -37,7 +36,7 @@ router.get('/setup', async (req, res) => {
 
   const isConfigured = await setupService.isConfigured();
   let config = {
-    PAPERLESS_API_URL: process.env.PAPERLESS_API_URL || 'http://localhost:8000',
+    PAPERLESS_API_URL: (process.env.PAPERLESS_API_URL || 'http://localhost:8000').replace(/\/api$/, ''),
     PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN || '',
     AI_PROVIDER: process.env.AI_PROVIDER || 'openai',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
@@ -52,6 +51,10 @@ router.get('/setup', async (req, res) => {
   
   if (isConfigured) {
     const savedConfig = await setupService.loadConfig();
+    // Remove /api from saved config URL if present
+    if (savedConfig.PAPERLESS_API_URL) {
+      savedConfig.PAPERLESS_API_URL = savedConfig.PAPERLESS_API_URL.replace(/\/api$/, '');
+    }
     config = { ...config, ...savedConfig };
   }
   
