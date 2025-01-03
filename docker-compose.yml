@@ -4,6 +4,8 @@ services:
   paperless-ai:
     build: .
     container_name: paperless-ai
+    # Volumes are used to persist data. The data directory is mounted to the container.
+    # Please keep in mind that the data is copied to the container when it is started.
     volumes:
       - ./data:/app/data
       - ./config:/app/config
