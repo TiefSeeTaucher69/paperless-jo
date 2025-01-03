@@ -42,7 +42,7 @@ router.get('/setup', async (req, res) => {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
     OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     OLLAMA_API_URL: process.env.OLLAMA_API_URL || 'http://localhost:11434',
-    OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'llama2',
+    OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'llama3.2',
     SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
     SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
     PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
