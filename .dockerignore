@@ -14,3 +14,4 @@ data_*/
 preview.png
 .env.bak
 data bak/
+.env*

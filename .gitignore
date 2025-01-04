@@ -9,3 +9,4 @@ prompt.bak
 data bak/
 data_bak/
 data_*/
+.env*
