@@ -46,6 +46,7 @@ docker run -d -p 3000:3000 -v ./data:/app/data clusterzx/paperless-ai
 ```bash
 git clone https://github.com/clusterzx/paperless-ai.git
 cd paperless-ai
+npm install
 ```
 
 2. Start the container:
