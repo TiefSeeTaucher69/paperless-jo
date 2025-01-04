@@ -54,7 +54,14 @@ class OllamaService {
     }
 
   _buildPrompt(content) {
-    return process.env.SYSTEM_PROMPT + '\n\n' + JSON.stringify(content);
+    if(process.env.USE_PROMPT_TAGS === 'yes') {
+      //get tags from PROMPT_TAGS (comma separated)
+      promptTags = process.env.PROMPT_TAGS;
+      systemPrompt = config.specialPromptPreDefinedTags;
+      return systemPrompt + '\n\n' + JSON.stringify(content);
+    }else{
+      return process.env.SYSTEM_PROMPT + '\n\n' + JSON.stringify(content);
+    }
   }
   
   _parseResponse(response) {

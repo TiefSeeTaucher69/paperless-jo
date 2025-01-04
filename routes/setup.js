@@ -27,11 +27,16 @@ router.use(async (req, res, next) => {
 // const base64Encode = (str) => Buffer.from(str).toString('base64');
 
 router.get('/setup', async (req, res) => {
-  // Helper function to properly handle multiline strings
   const processSystemPrompt = (prompt) => {
     if (!prompt) return '';
-    // Replace escaped newlines with actual newlines
     return prompt.replace(/\\n/g, '\n');
+  };
+
+  const normalizeArray = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
+    return [];
   };
 
   const isConfigured = await setupService.isConfigured();
@@ -46,17 +51,30 @@ router.get('/setup', async (req, res) => {
     SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
     SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
     PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
-    TAGS: process.env.TAGS ? process.env.TAGS.split(',') : []
+    TAGS: normalizeArray(process.env.TAGS),
+    // Neue Konfigurationsoptionen
+    ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
+    AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
+    USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
+    PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS)
   };
   
   if (isConfigured) {
     const savedConfig = await setupService.loadConfig();
-    // Remove /api from saved config URL if present
     if (savedConfig.PAPERLESS_API_URL) {
       savedConfig.PAPERLESS_API_URL = savedConfig.PAPERLESS_API_URL.replace(/\/api$/, '');
     }
+
+    // Normalisiere die Arrays in der gespeicherten Konfiguration
+    savedConfig.TAGS = normalizeArray(savedConfig.TAGS);
+    savedConfig.PROMPT_TAGS = normalizeArray(savedConfig.PROMPT_TAGS);
+
     config = { ...config, ...savedConfig };
   }
+
+  // Debug-Ausgabe
+  console.log('Current config TAGS:', config.TAGS);
+  console.log('Current config PROMPT_TAGS:', config.PROMPT_TAGS);
   
   res.render('setup', { 
     config,
@@ -260,11 +278,24 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
       scanInterval,
       systemPrompt,
       showTags,
-      tags
+      tags,
+      aiProcessedTag,
+      aiTagName,
+      usePromptTags,
+      promptTags
     } = req.body;
 
-    // Process system prompt - replace line breaks with \n
-    const processedPrompt = systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
+    const normalizeArray = (value) => {
+      if (!value) return [];
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
+      return [];
+    };
+
+    // Sicheres Verarbeiten des systemPrompt
+    const processedPrompt = systemPrompt 
+      ? systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n')
+      : '';
 
     // Validate Paperless config
     const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
@@ -280,11 +311,19 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
       PAPERLESS_API_URL: paperlessUrl + '/api',
       PAPERLESS_API_TOKEN: paperlessToken,
       AI_PROVIDER: aiProvider,
-      SCAN_INTERVAL: scanInterval,
-      SYSTEM_PROMPT: processedPrompt, // Use the processed prompt
-      PROCESS_PREDEFINED_DOCUMENTS: showTags,
-      TAGS: tags.split(',').map(tag => tag.trim())
+      SCAN_INTERVAL: scanInterval || '*/30 * * * *', // Default-Wert hinzugefügt
+      SYSTEM_PROMPT: processedPrompt,
+      PROCESS_PREDEFINED_DOCUMENTS: showTags || 'no',
+      TAGS: normalizeArray(tags),
+      ADD_AI_PROCESSED_TAG: aiProcessedTag || 'no',
+      AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
+      USE_PROMPT_TAGS: usePromptTags || 'no',
+      PROMPT_TAGS: normalizeArray(promptTags)
     };
+
+    // Debug-Ausgabe
+    console.log('Saving config TAGS:', config.TAGS);
+    console.log('Saving config PROMPT_TAGS:', config.PROMPT_TAGS);
 
     // Validate AI provider config
     if (aiProvider === 'openai') {
@@ -296,7 +335,7 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
         });
       }
       config.OPENAI_API_KEY = openaiKey;
-      config.OPENAI_MODEL = openaiModel;
+      config.OPENAI_MODEL = openaiModel || 'gpt-4o-mini';
     } else if (aiProvider === 'ollama') {
       const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
       if (!isOllamaValid) {
@@ -305,8 +344,8 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
           config: req.body
         });
       }
-      config.OLLAMA_API_URL = ollamaUrl;
-      config.OLLAMA_MODEL = ollamaModel;
+      config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
+      config.OLLAMA_MODEL = ollamaModel || 'llama3.2';
     }
 
     // Save configuration
@@ -320,7 +359,7 @@ router.post('/setup', express.urlencoded({ extended: true }), async (req, res) =
 
     // Trigger application restart
     setTimeout(() => {
-      process.exit(0);  // PM2 will restart the application
+      process.exit(0);
     }, 1000);
 
   } catch (error) {

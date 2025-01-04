@@ -22,7 +22,7 @@ RUN npm install
 COPY . .
 
 # Create volume mount points
-VOLUME ["/app/data", "/app/config"]
+VOLUME ["/app/data"]
 
 # Expose port
 EXPOSE 3000

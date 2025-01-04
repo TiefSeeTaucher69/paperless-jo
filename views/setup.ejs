@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/setup.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="h-full">
     <button id="themeToggle" class="theme-toggle material-button-2">
@@ -201,19 +202,81 @@
                                             </button>
                                         </div>
                                         <div id="tagsContainer" class="tags-container">
-                                            <% if (config.TAGS && config.TAGS.length > 0) { %>
+                                            <% if (config.TAGS && Array.isArray(config.TAGS) && config.TAGS.length > 0) { %>
                                                 <% config.TAGS.forEach(tag => { %>
                                                     <div class="modern-tag fade-in">
-                                                        <span><%= tag.trim() %></span>
+                                                        <span><%= tag %></span>
                                                         <button type="button"><i class="fas fa-times"></i></button>
                                                     </div>
                                                 <% }); %>
                                             <% } %>
                                         </div>
-                                        <input type="hidden" id="tags" name="tags" value="<%= config.TAGS ? config.TAGS.join(',') : '' %>">
+                                        <input type="hidden" id="tags" name="tags" value="<%= Array.isArray(config.TAGS) ? config.TAGS.join(',') : '' %>">
                                     </div>
                                 </div>
+                                <!-- AI Tag identification -->
+                                <hr/>
+                                <div class="form-group">
+                                    <label for="aiProcessedTag">Add AI-processed tag to documents?</label>
+                                    <select id="aiProcessedTag" 
+                                            name="aiProcessedTag" 
+                                            class="modern-input">
+                                        <option value="no" <%= config.ADD_AI_PROCESSED_TAG === 'no' ? 'selected' : '' %>>No</option>
+                                        <option value="yes" <%= config.ADD_AI_PROCESSED_TAG === 'yes' ? 'selected' : '' %>>Yes</option>
+                                    </select>
+                                </div>
+                                <div id="aiTagNameSection" class="<%= config.ADD_AI_PROCESSED_TAG === 'yes' ? '' : 'hidden' %>">
+                                    <div class="form-group">
+                                        <label for="aiTagName">AI-processed Tag Name</label>
+                                        <input type="text" 
+                                            id="aiTagName" 
+                                            name="aiTagName"
+                                            value="<%= config.AI_PROCESSED_TAG_NAME || 'ai-processed' %>"
+                                            class="modern-input"
+                                            placeholder="ai-processed">
+                                        <p class="help-text">This tag will be added to documents after AI processing</p>
+                                    </div>
+                                </div>
+                                <hr/>
+                                <div class="form-group">
+                                    <label for="usePromptTags">Use specific tags in prompt?</label>
+                                    <select id="usePromptTags" 
+                                            name="usePromptTags" 
+                                            class="modern-input">
+                                        <option value="no" <%= config.USE_PROMPT_TAGS === 'no' ? 'selected' : '' %>>No</option>
+                                        <option value="yes" <%= config.USE_PROMPT_TAGS === 'yes' ? 'selected' : '' %>>Yes</option>
+                                    </select>
+                                </div>
 
+                                <div id="promptTagsSection" class="<%= config.USE_PROMPT_TAGS === 'yes' ? '' : 'hidden' %>">
+                                    <div class="form-group">
+                                        <label for="promptTagInput">Prompt Tags</label>
+                                        <div class="tag-input-container">
+                                            <input type="text" 
+                                                id="promptTagInput" 
+                                                class="modern-input"
+                                                placeholder="Enter a tag and press Enter">
+                                            <button type="button" 
+                                                    class="material-button add-prompt-tag-btn">
+                                                <i class="fas fa-plus"></i>
+                                                Add
+                                            </button>
+                                        </div>
+                                        <div id="promptTagsContainer" class="tags-container">
+                                            <% if (config.PROMPT_TAGS && Array.isArray(config.PROMPT_TAGS) && config.PROMPT_TAGS.length > 0) { %>
+                                                <% config.PROMPT_TAGS.forEach(tag => { %>
+                                                    <div class="modern-tag fade-in">
+                                                        <span><%= tag %></span>
+                                                        <button type="button"><i class="fas fa-times"></i></button>
+                                                    </div>
+                                                <% }); %>
+                                            <% } %>
+                                        </div>
+                                        <input type="hidden" id="promptTags" name="promptTags" value="<%= Array.isArray(config.PROMPT_TAGS) ? config.PROMPT_TAGS.join(',') : '' %>">
+                                        <p class="help-text">These tags will be exclusively used in the AI prompt</p>
+                                    </div>
+                                </div>
+                                <hr/>
                                 <!-- System Prompt -->
                                 <div class="form-group">
                                     <label for="systemPrompt">Prompt Description</label>
@@ -223,7 +286,7 @@
                                                   rows="8"
                                                   class="modern-input"
                                                   placeholder="Describe how the AI should analyze your documents..."><%= config.SYSTEM_PROMPT %></textarea>
-                                        <button type="button" 
+                                        <button id="systemPromptBtn" type="button" 
                                                 class="material-button example-btn">
                                             <i class="fas fa-lightbulb"></i>
                                             Example

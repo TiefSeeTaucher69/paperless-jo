@@ -28,8 +28,15 @@ class OpenAIService {
         .map(tag => tag.name)
         .join(', ');
       
-      const systemPrompt = process.env.SYSTEM_PROMPT;
+      let systemPrompt = process.env.SYSTEM_PROMPT;
       const model = process.env.OPENAI_MODEL;
+      let promptTags = ''; // Geändert von const zu let
+
+      if(process.env.USE_PROMPT_TAGS === 'yes') {
+        //get tags from PROMPT_TAGS (comma separated)
+        promptTags = process.env.PROMPT_TAGS;
+        systemPrompt = config.specialPromptPreDefinedTags;
+      }
 
       const response = await this.client.chat.completions.create({
         model: model,

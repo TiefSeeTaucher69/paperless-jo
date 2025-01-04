@@ -36,6 +36,10 @@ class FormManager {
         this.form = document.getElementById('setupForm');
         this.aiProvider = document.getElementById('aiProvider');
         this.showTags = document.getElementById('showTags');
+        this.aiProcessedTag = document.getElementById('aiProcessedTag');
+        this.usePromptTags = document.getElementById('usePromptTags');
+        this.systemPrompt = document.getElementById('systemPrompt');
+        this.systemPromptBtn = document.getElementById('systemPromptBtn');
         this.initialize();
     }
 
@@ -49,9 +53,20 @@ class FormManager {
         // Add event listeners
         this.aiProvider.addEventListener('change', () => this.toggleProviderSettings());
         this.showTags.addEventListener('change', () => this.toggleTagsInput());
+        this.aiProcessedTag.addEventListener('change', () => this.toggleAiTagInput());
+        this.usePromptTags.addEventListener('change', () => this.togglePromptTagsInput());
         
         // Initialize password toggles
         this.initializePasswordToggles();
+
+        // Initial state for prompt elements based on usePromptTags
+        if (this.usePromptTags.value === 'yes') {
+            this.disablePromptElements();
+        }
+        
+        // Initialize new sections
+        this.toggleAiTagInput();
+        this.togglePromptTagsInput();
     }
 
     toggleProviderSettings() {
@@ -86,6 +101,44 @@ class FormManager {
         } else {
             tagsInputSection.classList.add('hidden');
         }
+    }
+
+    toggleAiTagInput() {
+        const showAiTag = this.aiProcessedTag.value;
+        const aiTagNameSection = document.getElementById('aiTagNameSection');
+        
+        if (showAiTag === 'yes') {
+            aiTagNameSection.classList.remove('hidden');
+        } else {
+            aiTagNameSection.classList.add('hidden');
+        }
+    }
+
+    togglePromptTagsInput() {
+        const usePromptTags = this.usePromptTags.value;
+        const promptTagsSection = document.getElementById('promptTagsSection');
+        
+        if (usePromptTags === 'yes') {
+            promptTagsSection.classList.remove('hidden');
+            this.disablePromptElements();
+        } else {
+            promptTagsSection.classList.add('hidden');
+            this.enablePromptElements();
+        }
+    }
+
+    disablePromptElements() {
+        this.systemPrompt.disabled = true;
+        this.systemPromptBtn.disabled = true;
+        this.systemPrompt.classList.add('disabled');
+        this.systemPromptBtn.classList.add('disabled');
+    }
+
+    enablePromptElements() {
+        this.systemPrompt.disabled = false;
+        this.systemPromptBtn.disabled = false;
+        this.systemPrompt.classList.remove('disabled');
+        this.systemPromptBtn.classList.remove('disabled');
     }
 
     initializePasswordToggles() {
@@ -124,9 +177,25 @@ class TagsManager {
         
         // Initialize existing tags with click handlers
         document.querySelectorAll('.modern-tag button').forEach(button => {
-            button.addEventListener('click', () => {
-                button.closest('.modern-tag').remove();
-                this.updateHiddenInput();
+            button.addEventListener('click', async () => {
+                const result = await Swal.fire({
+                    title: 'Remove Tag',
+                    text: 'Are you sure you want to remove this tag?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, remove it',
+                    cancelButtonText: 'Cancel',
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    customClass: {
+                        container: 'my-swal'
+                    }
+                });
+
+                if (result.isConfirmed) {
+                    button.closest('.modern-tag').remove();
+                    this.updateHiddenInput();
+                }
             });
         });
     }
@@ -142,9 +211,22 @@ class TagsManager {
         });
     }
 
-    addTag() {
+    async addTag() {
         const tagText = this.tagInput.value.trim();
-        
+        const specialChars = /[,;:\n\r\\/]/;
+        if (specialChars.test(tagText)) {
+            await Swal.fire({
+                title: 'Invalid Characters',
+                text: 'Tags cannot contain commas, semi-colons, colons, or line breaks.',
+                icon: 'warning',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#3085d6',
+                customClass: {
+                    container: 'my-swal'
+                }
+            });
+            return;
+        }
         if (tagText) {
             const tag = this.createTagElement(tagText);
             this.tagsContainer.appendChild(tag);
@@ -163,9 +245,138 @@ class TagsManager {
         const removeButton = document.createElement('button');
         removeButton.type = 'button';
         removeButton.innerHTML = '<i class="fas fa-times"></i>';
-        removeButton.addEventListener('click', () => {
-            tag.remove();
+        removeButton.addEventListener('click', async () => {
+            const result = await Swal.fire({
+                title: 'Remove Tag',
+                text: 'Are you sure you want to remove this tag?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, remove it',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                customClass: {
+                    container: 'my-swal'
+                }
+            });
+
+            if (result.isConfirmed) {
+                tag.remove();
+                this.updateHiddenInput();
+            }
+        });
+
+        tag.appendChild(tagText);
+        tag.appendChild(removeButton);
+        
+        return tag;
+    }
+
+    updateHiddenInput() {
+        const tags = Array.from(this.tagsContainer.children)
+            .map(tag => tag.querySelector('span').textContent);
+        this.tagsHiddenInput.value = tags.join(',');
+    }
+}
+
+// Prompt Tags Management
+class PromptTagsManager {
+    constructor() {
+        this.tagInput = document.getElementById('promptTagInput');
+        this.tagsContainer = document.getElementById('promptTagsContainer');
+        this.tagsHiddenInput = document.getElementById('promptTags');
+        this.addTagButton = document.querySelector('.add-prompt-tag-btn');
+        this.initialize();
+        
+        // Initialize existing tags with click handlers
+        document.querySelectorAll('#promptTagsContainer .modern-tag button').forEach(button => {
+            button.addEventListener('click', async () => {
+                const result = await Swal.fire({
+                    title: 'Remove Tag',
+                    text: 'Are you sure you want to remove this tag?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, remove it',
+                    cancelButtonText: 'Cancel',
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    customClass: {
+                        container: 'my-swal'
+                    }
+                });
+
+                if (result.isConfirmed) {
+                    button.closest('.modern-tag').remove();
+                    this.updateHiddenInput();
+                }
+            });
+        });
+    }
+
+    initialize() {
+        // Add event listeners
+        this.addTagButton.addEventListener('click', () => this.addTag());
+        this.tagInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.addTag();
+            }
+        });
+    }
+
+    async addTag() {
+        const tagText = this.tagInput.value.trim();
+        const specialChars = /[,;:\n\r\\/]/;
+        if (specialChars.test(tagText)) {
+            await Swal.fire({
+                title: 'Invalid Characters',
+                text: 'Tags cannot contain commas, semi-colons, colons, or line breaks.',
+                icon: 'warning',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#3085d6',
+                customClass: {
+                    container: 'my-swal'
+                }
+            });
+            return;
+        }
+        if (tagText) {
+            const tag = this.createTagElement(tagText);
+            this.tagsContainer.appendChild(tag);
             this.updateHiddenInput();
+            this.tagInput.value = '';
+        }
+    }
+
+    createTagElement(text) {
+        const tag = document.createElement('div');
+        tag.className = 'modern-tag fade-in';
+        
+        const tagText = document.createElement('span');
+        tagText.textContent = text;
+        
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.innerHTML = '<i class="fas fa-times"></i>';
+        removeButton.addEventListener('click', async () => {
+            const result = await Swal.fire({
+                title: 'Remove Tag',
+                text: 'Are you sure you want to remove this tag?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, remove it',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                customClass: {
+                    container: 'my-swal'
+                }
+            });
+
+            if (result.isConfirmed) {
+                tag.remove();
+                this.updateHiddenInput();
+            }
         });
 
         tag.appendChild(tagText);
@@ -185,7 +396,7 @@ class TagsManager {
 class PromptManager {
     constructor() {
         this.systemPrompt = document.getElementById('systemPrompt');
-        this.exampleButton = document.querySelector('.example-btn');
+        this.exampleButton = document.getElementById('systemPromptBtn');
         this.initialize();
     }
 
@@ -243,6 +454,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const themeManager = new ThemeManager();
     const formManager = new FormManager();
     const tagsManager = new TagsManager();
+    const promptTagsManager = new PromptTagsManager();
     const promptManager = new PromptManager();
     /* eslint-enable no-unused-vars */
+});
+
+// Initialize textarea newlines
+document.addEventListener('DOMContentLoaded', (event) => {
+    const systemPromptTextarea = document.getElementById('systemPrompt');
+    systemPromptTextarea.value = systemPromptTextarea.value.replace(/\\n/g, '\n');
 });

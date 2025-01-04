@@ -164,6 +164,37 @@ h1, h2, h3, h4, h5, h6 {
     transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
+.my-swal {
+    z-index: 9999;
+}
+
+/* Optional: Custom styling for SweetAlert */
+.swal2-popup {
+    font-size: 0.9rem !important;
+    border-radius: 0.5rem !important;
+}
+
+.swal2-title {
+    font-size: 1.25rem !important;
+}
+
+.modern-input.disabled,
+.material-button.disabled {
+    background-color: #f3f4f6;
+    color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.material-button.disabled {
+    border-color: #d1d5db;
+}
+
+textarea.disabled {
+    resize: none;
+}
+
 .material-button-2 {
     background: var(--accent-primary);
     color: rgb(23, 87, 236);

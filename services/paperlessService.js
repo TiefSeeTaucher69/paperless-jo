@@ -113,6 +113,7 @@ class PaperlessService {
     const errors = [];
     const processedTags = new Set(); // Verhindert Duplikate
 
+    // Verarbeite zuerst die normalen Tags
     for (const tagName of tagNames) {
       if (!tagName || typeof tagName !== 'string') {
         console.warn(`Skipping invalid tag name: ${tagName}`);
@@ -143,6 +144,25 @@ class PaperlessService {
       } catch (error) {
         console.error(`Error processing tag "${tagName}":`, error.message);
         errors.push({ tagName, error: error.message });
+      }
+    }
+
+    // Füge AI-Processed Tag hinzu, wenn aktiviert
+    if (process.env.ADD_AI_PROCESSED_TAG === 'yes' && process.env.AI_PROCESSED_TAG_NAME) {
+      try {
+        const aiTagName = process.env.AI_PROCESSED_TAG_NAME;
+        let aiTag = await this.findExistingTag(aiTagName);
+        
+        if (!aiTag) {
+          aiTag = await this.createTagSafely(aiTagName);
+        }
+
+        if (aiTag && aiTag.id) {
+          tagIds.push(aiTag.id);
+        }
+      } catch (error) {
+        console.error(`Error processing AI tag "${process.env.AI_PROCESSED_TAG_NAME}":`, error.message);
+        errors.push({ tagName: process.env.AI_PROCESSED_TAG_NAME, error: error.message });
       }
     }
 
@@ -327,6 +347,8 @@ class PaperlessService {
   
       // Wenn nicht gefunden, erstelle neuen Korrespondenten
       try {
+        // remove spaces from name and fill with - to get a valid name, remove . and , as well
+        name = name.replace(/ /g, '-').replace(/\./g, '').replace(/,/g, '');
         const createResponse = await this.client.post('/correspondents/', { name });
         console.log(`Created new correspondent "${name}" with ID ${createResponse.data.id}`);
         return createResponse.data;
