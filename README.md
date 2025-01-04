@@ -2,7 +2,7 @@
 
 
 
-# Paperless-Ai
+# Paperless-AI
 
 An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mistral, llama, phi 3, gemma 2) to automatically analyze and tag your documents.
 
