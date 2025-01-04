@@ -298,7 +298,7 @@
 
                         <!-- Submit Button -->
                         <div class="pt-6">
-                            <button type="submit" class="material-button submit-btn">
+                            <button type="submit" class="material-button submit-btn" onclick="sanitizeURL();">
                                 <i class="fas fa-save"></i>
                                 Save Configuration
                             </button>
@@ -308,12 +308,77 @@
             </div>
         </main>
     </div>
+    <script src="js/setup.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        let isShowingError = false;
+    
+        document.getElementById('paperlessUrl').addEventListener('blur', validateURL);
+    
+        function validateURL() {
+            const paperlessUrl = document.getElementById('paperlessUrl');
+    
+            if (isShowingError) return;
+    
+            try {
+                if (!paperlessUrl.value) return;
+    
+                const url = new URL(paperlessUrl.value);
+    
+                if (!['http:', 'https:'].includes(url.protocol)) {
+                    throw new Error('The URL must start with http:// or https://');
+                }
+    
+                const hasInvalidPath = url.pathname !== '/' || url.search || url.hash;
+                if (hasInvalidPath) {
+                    throw new Error('The URL must only contain protocol, host, and port (e.g., http://your-host:8000).');
+                }
+            } catch (error) {
+                isShowingError = true;
+    
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Invalid URL',
+                    text: error.message,
+                    showCancelButton: true,
+                    confirmButtonText: 'Confirm anyway',
+                    cancelButtonText: 'Fix it'
+                }).then((result) => {
+                    isShowingError = false;
+                    if (result.isDismissed) {
+                        try {
+                            const url = new URL(paperlessUrl.value);
+                            const formattedURL = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+                            paperlessUrl.value = formattedURL;
+                        } catch (formatError) {
+                            console.error('Error while formatting URL:', formatError);
+                        }
+                    }
+                });
+            }
+        }
+    </script>
+    <script>
+    function sanitizeURL() {
+        const paperlessUrl = document.getElementById('paperlessUrl');
+            try {
+                if (!paperlessUrl.value) return;
+                const url = new URL(paperlessUrl.value);
+                paperlessUrl.value = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+            } catch (error) {
+                event.preventDefault();
+                console.error('Wrong URL:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid URL',
+                    text: 'Please enter a valid URL. ( http[s]://your-paperless-instance:8000 )',
+                });
+            }
+        }
         document.addEventListener('DOMContentLoaded', (event) => {
             const systemPromptTextarea = document.getElementById('systemPrompt');
             systemPromptTextarea.value = systemPromptTextarea.value.replace(/\\n/g, '\n');
         });
     </script>
-    <script src="js/setup.js"></script>
 </body>
 </html>
