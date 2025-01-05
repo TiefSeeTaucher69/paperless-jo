@@ -49,7 +49,7 @@ const initializeDataDirectory = async () => {
 };
 
 // Main scanning function
-async function scanDocuments() {
+async function scanInital() {
   try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
@@ -57,6 +57,62 @@ async function scanDocuments() {
       return;
     }
 
+    const existingTags = await paperlessService.getTags();
+    const documents = await paperlessService.getDocuments();
+    
+    for (const doc of documents) {
+      const isProcessed = await documentModel.isDocumentProcessed(doc.id);
+      
+      if (!isProcessed) {
+        console.log(`Processing new document: ${doc.title}`);
+        
+        const content = await paperlessService.getDocumentContent(doc.id);
+        const aiService = AIServiceFactory.getService();
+        const analysis = await aiService.analyzeDocument(content, existingTags);
+
+        const { tagIds, errors } = await paperlessService.processTags(analysis.tags);
+        
+        if (errors.length > 0) {
+          console.warn('Some tags could not be processed:', errors);
+        }
+
+        let updateData = { 
+          tags: tagIds,
+          title: analysis.title || doc.title,
+          created: analysis.document_date || doc.created,
+        };
+        
+        if (analysis.correspondent) {
+          try {
+            const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.correspondent);
+            if (correspondent) {
+              updateData.correspondent = correspondent.id;
+            }
+          } catch (error) {
+            console.error(`Error processing correspondent "${analysis.correspondent}":`, error.message);
+          }
+        }
+
+        if (analysis.language) {
+          updateData.language = analysis.language;
+        }
+
+        try {
+          await paperlessService.updateDocument(doc.id, updateData);
+          await documentModel.addProcessedDocument(doc.id, updateData.title);
+        } catch (error) {
+          console.error(`Error processing document: ${error}`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error during document scan:', error);
+  }
+}
+
+// Main scanning function
+async function scanDocuments() {
+  try {
     const existingTags = await paperlessService.getTags();
     const documents = await paperlessService.getDocuments();
     
@@ -166,20 +222,30 @@ app.use((err, req, res, next) => {
 });
 
 // Schedule periodic scanning
-const startScanning = () => {
-  setupService.isConfigured().then(isConfigured => {
-    if (isConfigured) {
-      console.log('Running initial scan...');
-      scanDocuments();
-    } else {
-      console.log('Setup not completed. Visit /setup to complete setup.');
+const startScanning = async () => {
+  try {
+    const isConfigured = await setupService.isConfigured();
+    if (!isConfigured) {
+      console.log('Setup not completed. Visit http://your-ip-or-host.com:3000/setup to complete setup.');
+      return;
     }
-  });
 
-  // Schedule regular scans
-  cron.schedule(config.scanInterval, () => {
-    scanDocuments();
-  });
+    // Log the configured scan interval
+    console.log('Configured scan interval:', config.scanInterval);
+
+    // Initial scan
+    console.log(`Starting initial scan at ${new Date().toISOString()}`);
+    await scanInital();
+
+    // Schedule regular scans
+    cron.schedule(config.scanInterval, async () => {
+      console.log(`Starting scheduled scan at ${new Date().toISOString()}`);
+      await scanDocuments();
+    });
+
+  } catch (error) {
+    console.error('Error in startScanning:', error);
+  }
 };
 
 // Graceful shutdown

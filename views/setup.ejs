@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="css/setup.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css" />
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@latest"></script>
 </head>
 <body class="h-full">
     <button id="themeToggle" class="theme-toggle material-button-2">
@@ -23,7 +26,7 @@
                             <i class="fas fa-file-alt text-white text-xl"></i>
                         </div>
                         <div>
-                            <h1 class="text-2xl font-bold">Paperless-AI</h1>
+                            <h1 class="text-2xl font-bold">Paperless-AI <small><%= config.PAPERLESS_AI_VERSION %></small></h1>
                             <p class="text-sm text-secondary">Configuration Setup</p>
                         </div>
                     </div>
@@ -33,24 +36,9 @@
 
         <main class="py-10">
             <div class="mx-auto max-w-3xl px-6 lg:px-8">
-                <!-- Alert Messages -->
-                <% if (typeof error !== 'undefined' && error) { %>
-                    <div class="alert alert-error">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <p><%= error %></p>
-                    </div>
-                <% } %>
-
-                <% if (typeof success !== 'undefined' && success) { %>
-                    <div class="alert alert-success">
-                        <i class="fas fa-check-circle"></i>
-                        <p><%= success %></p>
-                    </div>
-                <% } %>
-
                 <!-- Main Form Card -->
                 <div class="material-card">
-                    <form id="setupForm" action="/setup" method="POST" class="space-y-12">
+                    <form id="setupForm" class="space-y-12">
                         <!-- Connection Section -->
                         <section>
                             <h2 class="section-title">
@@ -59,7 +47,14 @@
                             </h2>
                             <div class="space-y-6">
                                 <div class="form-group">
-                                    <label for="paperlessUrl">Paperless-ngx API URL</label>
+                                    <label for="paperlessUrl" class="flex items-center gap-2">
+                                        Paperless-ngx API URL
+                                        <button type="button" 
+                                                class="help-btn text-gray-400 hover:text-gray-600 focus:outline-none"
+                                                id="urlHelp">
+                                            <i class="fas fa-circle-question"></i>
+                                        </button>
+                                    </label>
                                     <input type="text" 
                                            id="paperlessUrl" 
                                            name="paperlessUrl"
@@ -214,6 +209,7 @@
                                         <input type="hidden" id="tags" name="tags" value="<%= Array.isArray(config.TAGS) ? config.TAGS.join(',') : '' %>">
                                     </div>
                                 </div>
+                                
                                 <!-- AI Tag identification -->
                                 <hr/>
                                 <div class="form-group">
@@ -237,6 +233,7 @@
                                         <p class="help-text">This tag will be added to documents after AI processing</p>
                                     </div>
                                 </div>
+                                
                                 <hr/>
                                 <div class="form-group">
                                     <label for="usePromptTags">Use specific tags in prompt?</label>
@@ -276,6 +273,7 @@
                                         <p class="help-text">These tags will be exclusively used in the AI prompt</p>
                                     </div>
                                 </div>
+                                
                                 <hr/>
                                 <!-- System Prompt -->
                                 <div class="form-group">
@@ -298,7 +296,7 @@
 
                         <!-- Submit Button -->
                         <div class="pt-6">
-                            <button type="submit" class="material-button submit-btn" onclick="sanitizeURL();">
+                            <button type="submit" class="material-button submit-btn">
                                 <i class="fas fa-save"></i>
                                 Save Configuration
                             </button>
@@ -306,79 +304,198 @@
                     </form>
                 </div>
             </div>
-        </main>
-    </div>
-    <script src="js/setup.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
-        let isShowingError = false;
-    
-        document.getElementById('paperlessUrl').addEventListener('blur', validateURL);
-    
-        function validateURL() {
-            const paperlessUrl = document.getElementById('paperlessUrl');
-    
-            if (isShowingError) return;
-    
+        </div>
+    </main>
+</div>
+
+<!-- Scripts -->
+<script src="js/setup.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+        const systemPromptTextarea = document.getElementById('systemPrompt');
+        systemPromptTextarea.value = systemPromptTextarea.value.replace(/\\n/g, '\n');
+
+        // Form submission handler
+        const setupForm = document.getElementById('setupForm');
+        setupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Show loading state
+            const submitBtn = setupForm.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
             try {
-                if (!paperlessUrl.value) return;
-    
-                const url = new URL(paperlessUrl.value);
-    
-                if (!['http:', 'https:'].includes(url.protocol)) {
-                    throw new Error('The URL must start with http:// or https://');
-                }
-    
-                const hasInvalidPath = url.pathname !== '/' || url.search || url.hash;
-                if (hasInvalidPath) {
-                    throw new Error('The URL must only contain protocol, host, and port (e.g., http://your-host:8000).');
+                const formData = new FormData(setupForm);
+                const response = await fetch('/setup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(Object.fromEntries(formData))
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: result.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+
+                    if (result.restart) {
+                        let countdown = 5;
+                        const countdownInterval = setInterval(() => {
+                            Swal.fire({
+                                title: 'Restarting...',
+                                text: `Application will restart in ${countdown} seconds`,
+                                icon: 'info',
+                                showConfirmButton: false
+                            });
+                            countdown--;
+                            if (countdown < 0) {
+                                clearInterval(countdownInterval);
+                                window.location.reload();
+                            }
+                        }, 1000);
+                    }
+                } else {
+                    throw new Error(result.error || 'An unknown error occurred');
                 }
             } catch (error) {
-                isShowingError = true;
-    
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Invalid URL',
-                    text: error.message,
-                    showCancelButton: true,
-                    confirmButtonText: 'Confirm anyway',
-                    cancelButtonText: 'Fix it'
-                }).then((result) => {
-                    isShowingError = false;
-                    if (result.isDismissed) {
-                        try {
-                            const url = new URL(paperlessUrl.value);
-                            const formattedURL = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-                            paperlessUrl.value = formattedURL;
-                        } catch (formatError) {
-                            console.error('Error while formatting URL:', formatError);
-                        }
-                    }
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: error.message
                 });
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
             }
+        });
+    });
+
+    // URL validation 
+    let isShowingError = false;
+    document.getElementById('paperlessUrl').addEventListener('blur', validateURL);
+
+    function validateURL() {
+        const paperlessUrl = document.getElementById('paperlessUrl');
+        if (isShowingError) return;
+
+        try {
+            if (!paperlessUrl.value) return;
+            const url = new URL(paperlessUrl.value);
+
+            if (!['http:', 'https:'].includes(url.protocol)) {
+                throw new Error('The URL must start with http:// or https://');
+            }
+
+            const hasInvalidPath = url.pathname !== '/' || url.search || url.hash;
+            if (hasInvalidPath) {
+                throw new Error('The URL must only contain protocol, host, and port (e.g., http://your-host:8000).');
+            }
+        } catch (error) {
+            isShowingError = true;
+            Swal.fire({
+                icon: 'warning',
+                title: 'Invalid URL',
+                text: error.message,
+                showCancelButton: true,
+                confirmButtonText: 'Confirm anyway',
+                cancelButtonText: 'Fix it'
+            }).then((result) => {
+                isShowingError = false;
+                if (result.isDismissed) {
+                    try {
+                        const url = new URL(paperlessUrl.value);
+                        const formattedURL = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+                        paperlessUrl.value = formattedURL;
+                    } catch (formatError) {
+                        console.error('Error while formatting URL:', formatError);
+                    }
+                }
+            });
         }
-    </script>
-    <script>
+    }
+
     function sanitizeURL() {
         const paperlessUrl = document.getElementById('paperlessUrl');
-            try {
-                if (!paperlessUrl.value) return;
-                const url = new URL(paperlessUrl.value);
-                paperlessUrl.value = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-            } catch (error) {
-                event.preventDefault();
-                console.error('Wrong URL:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Invalid URL',
-                    text: 'Please enter a valid URL. ( http[s]://your-paperless-instance:8000 )',
-                });
-            }
+        try {
+            if (!paperlessUrl.value) return;
+            const url = new URL(paperlessUrl.value);
+            paperlessUrl.value = `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        } catch (error) {
+            event.preventDefault();
+            console.error('Wrong URL:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Invalid URL',
+                text: 'Please enter a valid URL. ( http[s]://your-paperless-instance:8000 )',
+            });
         }
-        document.addEventListener('DOMContentLoaded', (event) => {
-            const systemPromptTextarea = document.getElementById('systemPrompt');
-            systemPromptTextarea.value = systemPromptTextarea.value.replace(/\\n/g, '\n');
-        });
-    </script>
+    }
+</script>
+<script>
+    function getTooltipPlacement() {
+        return window.innerWidth < 768 ? 'bottom' : 'right';
+    }
+    
+    let tooltipInstance = tippy('#urlHelp', {
+        content: `
+            <div class="tooltip-content p-2">
+                <h3 class="font-bold text-lg mb-2">API URL Configuration</h3>
+                <p class="mb-2">The URL should follow this format:</p>
+                <code class="block p-2 rounded mb-2">
+                    http://your-host:8000
+                </code>
+                
+                <p class="mb-2"><span class="font-semibold">Important Notes:</span></p>
+                <ul class="list-disc pl-4">
+                    <li class="mb-1">Must start with <u>http://</u> or <u>https://</u></li>
+                    <li class="mb-1">Contains <strong>host/IP</strong> and optionally a <strong>port</strong></li>
+                    <li class="mb-1">No additional paths or parameters</li>
+                </ul>
+
+                <div class="mt-4">
+                    <p class="font-semibold mb-1">Docker Network Configuration:</p>
+                    <ul class="list-disc pl-4">
+                        <li class="mb-1">Using <strong>localhost</strong> or <strong>127.0.0.1</strong> won't work in Docker bridge mode</li>
+                        <li class="mb-1">Use your machine's local IP (e.g., <code>192.168.1.x</code>) instead</li>
+                        <li class="mb-1">Or use the Docker container name if both services are in the same network</li>
+                    </ul>
+                </div>
+
+                <div class="mt-4">
+                    <p class="font-semibold mb-1">Examples:</p>
+                    <ul class="list-none space-y-1">
+                        <li>🔸 Local IP: <code>http://192.168.1.100:8000</code></li>
+                        <li>🔸 Container: <code>http://paperless-ngx:8000</code></li>
+                        <li>🔸 Remote: <code>http://paperless.domain.com</code></li>
+                    </ul>
+                </div>
+
+                <p class="mt-4 text-sm italic">The /api endpoint will be added automatically.</p>
+            </div>
+        `,
+        allowHTML: true,
+        placement: getTooltipPlacement(),
+        interactive: true,
+        theme: 'custom',
+        maxWidth: 450,
+        touch: 'hold',  // For mobile devices: show on long press
+        trigger: 'mouseenter click',  // Show on hover or click
+    });
+
+    // Update tooltip placement on window resize
+    window.addEventListener('resize', () => {
+        tooltipInstance[0].setProps({ placement: getTooltipPlacement() });
+    });
+</script>
 </body>
 </html>

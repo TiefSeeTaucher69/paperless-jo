@@ -380,3 +380,61 @@ textarea.disabled {
 .fade-in {
     animation: fadeIn 0.3s ease-in-out;
 }
+
+/* Tooltip Custom Theme */
+.tippy-box[data-theme~='custom'] {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+}
+
+.tippy-box[data-theme~='custom'] .tippy-content {
+    padding: 0;
+}
+
+.tippy-box[data-theme~='custom'] .tooltip-content {
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.tippy-box[data-theme~='custom'][data-placement^='right'] > .tippy-arrow::before {
+    border-right-color: var(--border-color);
+}
+
+.tippy-box[data-theme~='custom'] code {
+    font-family: monospace;
+    background-color: var(--input-bg);  /* Nutzt die Input-Hintergrundfarbe */
+    border: 1px solid var(--border-color);
+}
+
+/* Mobile adjustments for tooltip */
+@media (max-width: 768px) {
+    .tippy-box[data-theme~='custom'] {
+        max-width: 90vw !important;  /* Override default max-width on mobile */
+    }
+
+    .tippy-box[data-theme~='custom'][data-placement^='bottom'] > .tippy-arrow::before {
+        border-bottom-color: var(--border-color);
+    }
+
+    .tooltip-content {
+        font-size: 0.875rem !important;  /* Slightly smaller font on mobile */
+    }
+
+    .tooltip-content code {
+        word-break: break-all;  /* Break long URLs */
+    }
+
+    /* Adjust padding for better mobile display */
+    .tooltip-content .p-2 {
+        padding: 0.75rem !important;
+    }
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .tippy-box[data-theme~='custom'] {
+    background-color: var(--bg-secondary);
+}

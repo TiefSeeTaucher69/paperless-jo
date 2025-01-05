@@ -6,6 +6,7 @@ const openaiService = require('../services/openaiService.js');
 const ollamaService = require('../services/ollamaService.js');
 const documentModel = require('../models/document.js');
 const debugService = require('../services/debugService.js');
+const configFile = require('../config/config.js');
 
 // API endpoints that should not redirect
 const API_ENDPOINTS = ['/health', '/manual'];
@@ -52,11 +53,11 @@ router.get('/setup', async (req, res) => {
     SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
     PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
     TAGS: normalizeArray(process.env.TAGS),
-    // Neue Konfigurationsoptionen
     ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
     AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
     USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
-    PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS)
+    PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS),
+    PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' '
   };
   
   if (isConfigured) {
@@ -65,14 +66,13 @@ router.get('/setup', async (req, res) => {
       savedConfig.PAPERLESS_API_URL = savedConfig.PAPERLESS_API_URL.replace(/\/api$/, '');
     }
 
-    // Normalisiere die Arrays in der gespeicherten Konfiguration
     savedConfig.TAGS = normalizeArray(savedConfig.TAGS);
     savedConfig.PROMPT_TAGS = normalizeArray(savedConfig.PROMPT_TAGS);
 
     config = { ...config, ...savedConfig };
   }
 
-  // Debug-Ausgabe
+  // Debug-output
   console.log('Current config TAGS:', config.TAGS);
   console.log('Current config PROMPT_TAGS:', config.PROMPT_TAGS);
   
@@ -265,109 +265,101 @@ router.get('/health', async (req, res) => {
   }
 });
 
-router.post('/setup', express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/setup', express.json(), async (req, res) => {
   try {
-    const { 
-      paperlessUrl, 
-      paperlessToken, 
-      aiProvider,
-      openaiKey,
-      openaiModel,
-      ollamaUrl,
-      ollamaModel,
-      scanInterval,
-      systemPrompt,
-      showTags,
-      tags,
-      aiProcessedTag,
-      aiTagName,
-      usePromptTags,
-      promptTags
-    } = req.body;
+      const { 
+          paperlessUrl, 
+          paperlessToken, 
+          aiProvider,
+          openaiKey,
+          openaiModel,
+          ollamaUrl,
+          ollamaModel,
+          scanInterval,
+          systemPrompt,
+          showTags,
+          tags,
+          aiProcessedTag,
+          aiTagName,
+          usePromptTags,
+          promptTags
+      } = req.body;
 
-    const normalizeArray = (value) => {
-      if (!value) return [];
-      if (Array.isArray(value)) return value;
-      if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
-      return [];
-    };
+      const normalizeArray = (value) => {
+          if (!value) return [];
+          if (Array.isArray(value)) return value;
+          if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
+          return [];
+      };
 
-    // Sicheres Verarbeiten des systemPrompt
-    const processedPrompt = systemPrompt 
-      ? systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n')
-      : '';
+      const processedPrompt = systemPrompt 
+          ? systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n')
+          : '';
 
-    // Validate Paperless config
-    const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
-    if (!isPaperlessValid) {
-      return res.render('setup', { 
-        error: 'Paperless-ngx connection failed. Please check URL and Token.',
-        config: req.body
+      // Validate Paperless config
+      const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
+      if (!isPaperlessValid) {
+          return res.status(400).json({ 
+              error: 'Paperless-ngx connection failed. Please check URL and Token.'
+          });
+      }
+
+      // Prepare base config
+      const config = {
+          PAPERLESS_API_URL: paperlessUrl + '/api',
+          PAPERLESS_API_TOKEN: paperlessToken,
+          AI_PROVIDER: aiProvider,
+          SCAN_INTERVAL: scanInterval || '*/30 * * * *',
+          SYSTEM_PROMPT: processedPrompt,
+          PROCESS_PREDEFINED_DOCUMENTS: showTags || 'no',
+          TAGS: normalizeArray(tags),
+          ADD_AI_PROCESSED_TAG: aiProcessedTag || 'no',
+          AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
+          USE_PROMPT_TAGS: usePromptTags || 'no',
+          PROMPT_TAGS: normalizeArray(promptTags)
+      };
+
+      // Validate AI provider config
+      if (aiProvider === 'openai') {
+          const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
+          if (!isOpenAIValid) {
+              return res.status(400).json({ 
+                  error: 'OpenAI API Key is not valid. Please check the key.'
+              });
+          }
+          config.OPENAI_API_KEY = openaiKey;
+          config.OPENAI_MODEL = openaiModel || 'gpt-4o-mini';
+      } else if (aiProvider === 'ollama') {
+          const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
+          if (!isOllamaValid) {
+              return res.status(400).json({ 
+                  error: 'Ollama connection failed. Please check URL and Model.'
+              });
+          }
+          config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
+          config.OLLAMA_MODEL = ollamaModel || 'llama3.2';
+      }
+
+      // Save configuration
+      await setupService.saveConfig(config);
+
+      // Send success response
+      res.json({ 
+          success: true,
+          message: 'Configuration saved successfully.',
+          restart: true
       });
-    }
 
-    // Prepare base config
-    const config = {
-      PAPERLESS_API_URL: paperlessUrl + '/api',
-      PAPERLESS_API_TOKEN: paperlessToken,
-      AI_PROVIDER: aiProvider,
-      SCAN_INTERVAL: scanInterval || '*/30 * * * *', // Default-Wert hinzugefügt
-      SYSTEM_PROMPT: processedPrompt,
-      PROCESS_PREDEFINED_DOCUMENTS: showTags || 'no',
-      TAGS: normalizeArray(tags),
-      ADD_AI_PROCESSED_TAG: aiProcessedTag || 'no',
-      AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
-      USE_PROMPT_TAGS: usePromptTags || 'no',
-      PROMPT_TAGS: normalizeArray(promptTags)
-    };
-
-    // Debug-Ausgabe
-    console.log('Saving config TAGS:', config.TAGS);
-    console.log('Saving config PROMPT_TAGS:', config.PROMPT_TAGS);
-
-    // Validate AI provider config
-    if (aiProvider === 'openai') {
-      const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
-      if (!isOpenAIValid) {
-        return res.render('setup', { 
-          error: 'OpenAI API Key is not valid. Please check the key.',
-          config: req.body
-        });
-      }
-      config.OPENAI_API_KEY = openaiKey;
-      config.OPENAI_MODEL = openaiModel || 'gpt-4o-mini';
-    } else if (aiProvider === 'ollama') {
-      const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
-      if (!isOllamaValid) {
-        return res.render('setup', { 
-          error: 'Ollama connection failed. Please check URL and Model.',
-          config: req.body
-        });
-      }
-      config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
-      config.OLLAMA_MODEL = ollamaModel || 'llama3.2';
-    }
-
-    // Save configuration
-    await setupService.saveConfig(config);
-
-    // Send success response
-    res.render('setup', { 
-      success: 'Configuration saved successfully. The application will restart...',
-      config: req.body
-    });
-
-    // Trigger application restart
-    setTimeout(() => {
-      process.exit(0);
-    }, 1000);
+      // Trigger application restart
+      setTimeout(() => {
+          process.exit(0);
+      }, 5000);
 
   } catch (error) {
-    console.error('Setup error:', error);
-    res.render('setup', { 
-      error: 'An error occurred: ' + error.message,
-      config: req.body
-    });
+      console.error('Setup error:', error);
+      res.status(500).json({ 
+          error: 'An error occurred: ' + error.message
+      });
   }
 });
 

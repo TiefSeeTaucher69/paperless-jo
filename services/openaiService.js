@@ -17,7 +17,9 @@ class OpenAIService {
   async analyzeDocument(content, existingTags = []) {
     try {
       this.initialize();
-
+      const now = new Date();
+      const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+      console.log(`[DEBUG] [${timestamp}] OpenAI request sent`);
       if (!this.client) {
         console.error('OpenAI client not initialized - missing API key');
         return { tags: [], correspondent: null };

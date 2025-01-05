@@ -1,6 +1,6 @@
 module.exports = {
   apps: [{
-    name: 'paperless-assistant',
+    name: 'paperless-ai',
     script: 'server.js',
     instances: 1,
     autorestart: true,
