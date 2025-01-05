@@ -37,7 +37,7 @@ An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mi
 docker pull clusterzx/paperless-ai
 ```
 ```bash
-docker run -d -p 3000:3000 -v ./data:/app/data clusterzx/paperless-ai
+docker run -d -p 3000:3000 -v /data:/app/data clusterzx/paperless-ai
 ```
 
 ### Or you can do it manually by yourself:
