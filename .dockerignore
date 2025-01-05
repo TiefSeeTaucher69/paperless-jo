@@ -15,3 +15,4 @@ preview.png
 .env.bak
 data bak/
 .env*
+docker-compose-dev.yml

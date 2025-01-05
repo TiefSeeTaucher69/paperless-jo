@@ -1,7 +1,7 @@
-// server.js
 const express = require('express');
 const cron = require('node-cron');
 const path = require('path');
+const fs = require('fs').promises;
 const config = require('./config/config');
 const paperlessService = require('./services/paperlessService');
 const AIServiceFactory = require('./services/aiServiceFactory');
@@ -37,9 +37,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// Data directory initialization
+const initializeDataDirectory = async () => {
+  const dataDir = path.join(process.cwd(), 'data');
+  try {
+    await fs.access(dataDir);
+  } catch {
+    console.log('Creating data directory...');
+    await fs.mkdir(dataDir, { recursive: true });
+  }
+};
+
 // Main scanning function
 async function scanDocuments() {
-  console.log('Starting document scan...');
   try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
@@ -48,8 +58,6 @@ async function scanDocuments() {
     }
 
     const existingTags = await paperlessService.getTags();
-    console.log(`Found ${existingTags.length} existing tags`);
-    
     const documents = await paperlessService.getDocuments();
     
     for (const doc of documents) {
@@ -62,21 +70,18 @@ async function scanDocuments() {
         const aiService = AIServiceFactory.getService();
         const analysis = await aiService.analyzeDocument(content, existingTags);
 
-        // Verarbeite Tags
         const { tagIds, errors } = await paperlessService.processTags(analysis.tags);
         
         if (errors.length > 0) {
           console.warn('Some tags could not be processed:', errors);
         }
 
-        // Bereite Update-Daten vor
         let updateData = { 
           tags: tagIds,
-          title: analysis.title || doc.title, // Benutze den analysierten Titel oder behalte den bestehenden
-          created: analysis.document_date || doc.created, // Setze das Dokumentdatum wenn verfügbar
+          title: analysis.title || doc.title,
+          created: analysis.document_date || doc.created,
         };
         
-        // Verarbeite Korrespondent wenn vorhanden
         if (analysis.correspondent) {
           try {
             const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.correspondent);
@@ -88,19 +93,13 @@ async function scanDocuments() {
           }
         }
 
-        // Optional: Setze die Sprache wenn verfügbar
         if (analysis.language) {
           updateData.language = analysis.language;
         }
 
         try {
-          // Update Dokument
           await paperlessService.updateDocument(doc.id, updateData);
-          console.log(`Updated document ${doc.title} with:`, updateData);
-          
-          // Markiere als verarbeitet
           await documentModel.addProcessedDocument(doc.id, updateData.title);
-          console.log(`Document ${updateData.title} processing completed`);
         } catch (error) {
           console.error(`Error processing document: ${error}`);
         }
@@ -141,7 +140,6 @@ app.get('/health', async (req, res) => {
       });
     }
 
-    // Check database
     try {
       await documentModel.isDocumentProcessed(1);
     } catch (error) {
@@ -169,17 +167,16 @@ app.use((err, req, res, next) => {
 
 // Schedule periodic scanning
 const startScanning = () => {
-  // Initial scan wird nur durchgeführt, wenn Setup abgeschlossen
   setupService.isConfigured().then(isConfigured => {
     if (isConfigured) {
       console.log('Running initial scan...');
       scanDocuments();
     } else {
-      console.log('Setup not completed. Skipping initial scan. Visit http://your-domain-or-ip.com:3000/setup to complete setup.');
+      console.log('Setup not completed. Visit /setup to complete setup.');
     }
   });
 
-  // Plane regelmäßige Scans
+  // Schedule regular scans
   cron.schedule(config.scanInterval, () => {
     scanDocuments();
   });
@@ -188,12 +185,8 @@ const startScanning = () => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('Received SIGTERM. Starting graceful shutdown...');
-  
   try {
-    // Close database connection
     documentModel.closeDatabase();
-    
-    console.log('Graceful shutdown completed');
     process.exit(0);
   } catch (error) {
     console.error('Error during shutdown:', error);
@@ -213,8 +206,17 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  startScanning();
-});
+const startServer = async () => {
+  try {
+    await initializeDataDirectory();
+    app.listen(3000, () => {
+      console.log('Server running on port 3000');
+      startScanning();
+    });
+  } catch (error) {
+    console.error('Failed to initialize server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();

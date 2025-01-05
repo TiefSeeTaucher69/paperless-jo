@@ -5,7 +5,7 @@ const { OpenAI } = require('openai');
 
 class SetupService {
   constructor() {
-    this.envPath = path.join(process.cwd(), '.env');
+    this.envPath = path.join(process.cwd(), 'data', '.env');
   }
 
   async loadConfig() {
@@ -20,6 +20,7 @@ class SetupService {
       });
       return config;
     } catch (error) {
+      console.error('Error loading config:', error.message);
       return null;
     }
   }
@@ -42,7 +43,7 @@ class SetupService {
     try {
       const openai = new OpenAI({ apiKey });
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4",
         messages: [{ role: "user", content: "Test" }],
       });
       return response.choices && response.choices.length > 0;
@@ -54,9 +55,8 @@ class SetupService {
 
   async validateOllamaConfig(url, model) {
     try {
-      // Test connection to Ollama server
       const response = await axios.post(`${url}/api/generate`, {
-        model: model || 'llama3.2',
+        model: model || 'llama2',
         prompt: 'Test',
         stream: false
       });
@@ -100,9 +100,11 @@ class SetupService {
   }
 
   async saveConfig(config) {
-    // Validate the new configuration before saving
-    await this.validateConfig(config);
-    const JSON_STANDARD_PROMPT = `
+    try {
+      // Validate the new configuration before saving
+      await this.validateConfig(config);
+
+      const JSON_STANDARD_PROMPT = `
         Return the result EXCLUSIVELY as a JSON object. The Tags and Title MUST be in the language that is used in the document.:
         
         {
@@ -112,29 +114,53 @@ class SetupService {
           "document_date": "YYYY-MM-DD",
           "language": "en/de/es/..."
         }`;
-    const envContent = Object.entries(config)
-      .map(([key, value]) => {
-        if (key === "SYSTEM_PROMPT") {
-          return `${key}=\`${value}\n${JSON_STANDARD_PROMPT}\``;
-        }
-        return `${key}=${value}`;
-      })
-      .join('\n');
-    await fs.writeFile(this.envPath, envContent);
-    
-    // Reload environment variables
-    Object.entries(config).forEach(([key, value]) => {
-      process.env[key] = value;
-    });
+
+      // Ensure data directory exists
+      const dataDir = path.dirname(this.envPath);
+      await fs.mkdir(dataDir, { recursive: true });
+
+      const envContent = Object.entries(config)
+        .map(([key, value]) => {
+          if (key === "SYSTEM_PROMPT") {
+            return `${key}=\`${value}\n${JSON_STANDARD_PROMPT}\``;
+          }
+          return `${key}=${value}`;
+        })
+        .join('\n');
+
+      await fs.writeFile(this.envPath, envContent);
+      
+      // Reload environment variables
+      Object.entries(config).forEach(([key, value]) => {
+        process.env[key] = value;
+      });
+    } catch (error) {
+      console.error('Error saving config:', error.message);
+      throw error;
+    }
   }
 
   async isConfigured() {
     try {
-      await fs.access(this.envPath);
+      // Check data directory and .env file
+      const dataDir = path.dirname(this.envPath);
+      try {
+        await fs.access(dataDir, fs.constants.F_OK);
+      } catch (err) {
+        console.log('Creating data directory...');
+        await fs.mkdir(dataDir, { recursive: true });
+      }
+
+      // Check .env file
+      try {
+        await fs.access(this.envPath, fs.constants.F_OK);
+      } catch (err) {
+        return false;
+      }
+
       const config = await this.loadConfig();
       if (!config) return false;
       
-      // Validate all configurations
       try {
         await this.validateConfig(config);
         return true;
@@ -142,7 +168,8 @@ class SetupService {
         console.error('Configuration validation failed:', error.message);
         return false;
       }
-    } catch {
+    } catch (error) {
+      console.error('Error checking configuration:', error.message);
       return false;
     }
   }

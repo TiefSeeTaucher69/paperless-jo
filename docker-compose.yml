@@ -5,8 +5,7 @@ services:
     build: .
     container_name: paperless-ai
     volumes:
-      - ./data:/app/data
-      #- ./.env:/app/.env
+      - data:/app/data
     ports:
       - "3000:3000"
     healthcheck:
@@ -16,3 +15,6 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+
+volumes:
+  data:

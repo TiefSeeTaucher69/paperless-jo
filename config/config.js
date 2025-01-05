@@ -1,4 +1,14 @@
-require('dotenv').config();
+const path = require('path');
+const currentDir = decodeURIComponent(process.cwd());
+const envPath = path.join(currentDir, 'data', '.env');
+console.log('Loading .env from:', envPath); // Debug log
+require('dotenv').config({ path: envPath });
+
+
+console.log('Loaded environment variables:', {
+  PAPERLESS_API_URL: process.env.PAPERLESS_API_URL,
+  PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN,
+});
 
 module.exports = {
   paperless: {
