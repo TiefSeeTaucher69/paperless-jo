@@ -93,17 +93,10 @@ Preview:
 
 ## Configuration Options
 
-The application can be configured through environment variables:
+The application can be configured through the Webinterface on the ```/setup``` Route.
+You dont need/can't set the environment vars through docker.
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| PAPERLESS_API_URL | URL to your Paperless-ngx API | - |
-| PAPERLESS_API_TOKEN | API Token from Paperless-ngx | - |
-| AI_PROVIDER | AI provider to use (openai or ollama) | openai |
-| OPENAI_API_KEY | Your OpenAI API key (required if using openai) | - |
-| OLLAMA_API_URL | URL to your Ollama instance | http://localhost:11434 |
-| OLLAMA_MODEL | Ollama model to use (e.g. llama2, mistral) | llama2 |
-| SCAN_INTERVAL | Cron expression for scan interval | */30 * * * * |
+![Setup Image](./setup.png)
 
 ## Docker Support
 
