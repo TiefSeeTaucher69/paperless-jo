@@ -85,8 +85,8 @@ http://localhost:3000
 You can now manually analyze your files by hand with the help of AI in a beautiful Webinterface.
 Reachable via the ```/manual``` endpoint from the webinterface.
 
-Preview:
-![Preview Image](./preview.png)
+## NEW Dashboard:
+![Dashboard Image](./dashboard.png)
 
 ## Configuration Options
 
