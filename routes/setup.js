@@ -7,6 +7,7 @@ const ollamaService = require('../services/ollamaService.js');
 const documentModel = require('../models/document.js');
 const debugService = require('../services/debugService.js');
 const configFile = require('../config/config.js');
+const ChatService = require('../services/chatService.js');
 
 // API endpoints that should not redirect
 const API_ENDPOINTS = ['/health', '/manual'];
@@ -25,6 +26,46 @@ router.use(async (req, res, next) => {
 });
 
 // const base64Encode = (str) => Buffer.from(str).toString('base64');
+
+
+// Hauptseite mit Dokumentenliste
+router.get('/chat', async (req, res) => {
+  try {
+    const documents = await paperlessService.getDocuments();
+    res.render('chat', { documents });
+  } catch (error) {
+    console.error('Error loading documents:', error);
+    res.status(500).send('Error loading documents');
+  }
+});
+
+// Chat initialisieren
+router.get('/chat/init', async (req, res) => {
+  const documentId = req.query.documentId;
+  const result = await ChatService.initializeChat(documentId);
+  res.json(result);
+});
+
+// Nachricht senden
+router.post('/chat/message', async (req, res) => {
+  const { documentId, message } = req.body;
+  const response = await ChatService.sendMessage(documentId, message);
+  res.json(response);
+});
+
+router.get('/chat/init/:documentId', async (req, res) => {
+  try {
+      const { documentId } = req.params;
+      if (!documentId) {
+          return res.status(400).json({ error: 'Document ID is required' });
+      }
+      const result = await ChatService.initializeChat(documentId);
+      res.json(result);
+  } catch (error) {
+      console.error('Error initializing chat:', error);
+      res.status(500).json({ error: 'Failed to initialize chat' });
+  }
+});
 
 router.get('/setup', async (req, res) => {
   const processSystemPrompt = (prompt) => {
