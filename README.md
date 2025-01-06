@@ -17,6 +17,7 @@ An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mi
     - THIS WILL DISABLE THE PROMPT DIALOG!
   - ✔️ Choose if you want to assign a special tag (you name it) to documents that were processed by AI. 🆕
 - 🔨 Manual mode to do analysing by hand with help of AI. 🆕
+##### - 💬 NEW! Document Chat function (only OpenAI right now). 🆕
 - 🚀 Easy setup through web interface
 - 📊 Document processing dashboard
 - 🔄 Automatic restart and health monitoring
