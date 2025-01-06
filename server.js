@@ -70,7 +70,7 @@ async function scanInital() {
         const aiService = AIServiceFactory.getService();
         const analysis = await aiService.analyzeDocument(content, existingTags);
 
-        const { tagIds, errors } = await paperlessService.processTags(analysis.tags);
+        const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags);
         
         if (errors.length > 0) {
           console.warn('Some tags could not be processed:', errors);
@@ -78,28 +78,29 @@ async function scanInital() {
 
         let updateData = { 
           tags: tagIds,
-          title: analysis.title || doc.title,
-          created: analysis.document_date || doc.created,
+          title: analysis.document.title || doc.title,
+          created: analysis.document.document_date || doc.created,
         };
         
-        if (analysis.correspondent) {
+        if (analysis.document.correspondent) {
           try {
-            const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.correspondent);
+            const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.document.correspondent);
             if (correspondent) {
               updateData.correspondent = correspondent.id;
             }
           } catch (error) {
-            console.error(`Error processing correspondent "${analysis.correspondent}":`, error.message);
+            console.error(`Error processing correspondent "${analysis.document.correspondent}":`, error.message);
           }
         }
 
-        if (analysis.language) {
-          updateData.language = analysis.language;
+        if (analysis.document.language) {
+          updateData.language = analysis.document.language;
         }
 
         try {
           await paperlessService.updateDocument(doc.id, updateData);
           await documentModel.addProcessedDocument(doc.id, updateData.title);
+          await documentModel.addOpenAIMetrics(doc.id, analysis.metrics.promptTokens, analysis.metrics.completionTokens, analysis.metrics.totalTokens);
         } catch (error) {
           console.error(`Error processing document: ${error}`);
         }

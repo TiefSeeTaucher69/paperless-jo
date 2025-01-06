@@ -1,150 +1,133 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full" data-theme="light">
+<html lang="en" class="h-full bg-gray-100">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paperless-AI Dashboard</title>
+    <title>Paperless Document Review</title>
     <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/dashboard.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
 </head>
 <body class="h-full">
-    <button id="themeToggle" class="theme-toggle">
-        <i class="fas fa-moon dark:fas fa-sun"></i>
-    </button>
-
-    <div class="layout-container">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="brand-icon">
-                    <i class="fas fa-file-alt"></i>
+    <div class="min-h-full">
+        <!-- Navigation -->
+        <nav class="bg-blue-600">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-file-alt text-white text-2xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <h1 class="text-white text-xl font-semibold">Document Review</h1>
+                        </div>
+                    </div>
                 </div>
-                <h1 class="brand-title">Paperless-AI</h1>
             </div>
-
-            <nav class="sidebar-nav">
-                <ul>
-                    <li>
-                        <a href="/dashboard" class="sidebar-link">
-                            <i class="fas fa-home"></i>
-                            <span>Dashboard</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/manual" class="sidebar-link active">
-                            <i class="fas fa-file-alt"></i>
-                            <span>Manual</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="#" class="sidebar-link">
-                            <i class="fas fa-chart-line"></i>
-                            <span>Playground (coming soon)</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/settings" class="sidebar-link">
-                            <i class="fas fa-cog"></i>
-                            <span>Settings</span>
-                        </a>
-                    </li>
-                </ul>
-            </nav>
-        </aside>
+        </nav>
 
         <!-- Main Content -->
-        <main class="main-content">
-            <div class="content-wrapper">
+        <main class="py-6">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <!-- Message Area -->
                 <div id="messageArea" class="mb-6 hidden">
                     <!-- Messages will be inserted here -->
                 </div>
-        
+
                 <!-- Document Selection -->
-                <div class="material-card mb-6">
-                    <h2 class="card-title">Select Document</h2>
-                    <select id="documentSelect" class="w-full rounded-md border-border-color bg-bg-primary text-text-primary p-2 focus:border-accent-primary focus:ring-accent-primary">
+                <div class="mb-6">
+                    <label for="documentSelect" class="block text-sm font-medium text-gray-700">Select Document</label>
+                    <select id="documentSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         <option value="">Choose a document...</option>
                     </select>
                 </div>
-        
+
                 <!-- Main Grid -->
-                <div class="card-grid">
-                    <!-- Document Preview Card -->
-                    <div class="material-card col-span-2">
-                        <h2 class="card-title">Document Preview</h2>
-                        <!-- Correspondent Info -->
-                        <div id="correspondentInfo" class="stat-box mb-4 hidden">
-                            <h3 class="text-sm font-medium">Correspondent:</h3>
-                            <p id="correspondentName"></p>
-                        </div>
-                        <div id="titleInfo" class="stat-box mb-4 hidden">
-                            <h3 class="text-sm font-medium">Title:</h3>
-                            <p id="titleName"></p>
-                        </div>
-                        <div class="stat-box">
-                            <div id="documentPreview" class="min-h-[600px] bg-bg-primary rounded border border-border-color p-4">
-                                <div id="contentPreview" class="h-[600px] overflow-y-auto font-mono text-sm whitespace-pre-wrap"></div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Document Preview -->
+                    <div class="lg:col-span-2">
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-4 border-b border-gray-200">
+                                <h2 class="text-lg font-medium text-gray-900">Document Preview</h2>
+                            </div>
+                            <div class="p-4">
+                                <!-- Correspondent Info -->
+                                <div id="correspondentInfo" class="mb-4 p-3 bg-gray-50 rounded-md hidden">
+                                    <h3 class="text-sm font-medium text-gray-700 mb-2">Correspondent:</h3>
+                                    <p id="correspondentName" class="text-gray-900"></p>
+                                </div>
+                                <div id="documentPreview" class="min-h-[600px] bg-white rounded border border-gray-200 p-4">
+                                    <div id="contentPreview" class="w-full h-[600px] overflow-y-auto font-mono text-sm whitespace-pre-wrap"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-        
-                    <!-- AI and Tags Section -->
-                    <div class="col-span-2">
-                        <!-- AI Analysis Card -->
-                        <div class="material-card mb-6">
-                            <h2 class="card-title">AI Analysis</h2>
-                            <button id="analyzeBtn" 
-                                    class="w-full flex justify-center items-center px-4 py-2 border border-border-color rounded-md shadow-sm text-sm font-medium text-text-primary bg-bg-primary hover:bg-hover-bg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-primary transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" 
-                                    disabled>
+
+                    <!-- Tags and AI Section -->
+                    <div class="lg:col-span-1">
+                        <!-- AI Analysis Section -->
+                        <div class="bg-white rounded-lg shadow mb-6">
+                            <div class="p-4 border-b border-gray-200">
+                                <h2 class="text-lg font-medium text-gray-900">AI Analysis</h2>
+                            </div>
+                            <div class="p-4">
+                                <button id="analyzeBtn" 
+                                        class="w-full flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" 
+                                        disabled>
                                     <i class="fas fa-robot mr-2"></i>
                                     Analyze with AI
-                            </button>
-                            <div id="aiStatus" class="mt-4 hidden">
-                                <div class="flex items-center">
-                                    <div class="mr-3">
-                                        <i class="fas fa-spinner fa-spin text-accent-primary"></i>
-                                    </div>
-                                    <div class="text-sm text-text-secondary">
-                                        AI is analyzing the document...
+                                </button>
+                                <div id="aiStatus" class="mt-4 hidden">
+                                    <div class="flex items-center">
+                                        <div class="mr-3">
+                                            <i class="fas fa-spinner fa-spin text-blue-500"></i>
+                                        </div>
+                                        <div class="text-sm text-gray-500">
+                                            AI is analyzing the document...
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-        
-                        <!-- Tags Card -->
-                        <div class="material-card">
-                            <h2 class="card-title">Tags</h2>
-                            <!-- AI Suggested Tags -->
-                            <div class="mb-4">
-                                <h3 class="text-sm font-medium text-text-secondary mb-2">AI Suggestions</h3>
-                                <div id="suggestedTags" class="flex flex-wrap gap-2"></div>
+
+                        <!-- Tags Section -->
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-4 border-b border-gray-200">
+                                <h2 class="text-lg font-medium text-gray-900">Tags</h2>
                             </div>
-        
-                            <!-- Current Tags -->
-                            <div class="mb-4">
-                                <div class="flex justify-between items-center mb-2">
-                                    <h3 class="text-sm font-medium text-text-secondary">Current Tags</h3>
-                                    <button id="saveTagsBtn" 
-                                            class="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200">
-                                        Save Tags
-                                    </button>
+                            <div class="p-4">
+                                <!-- AI Suggested Tags -->
+                                <div class="mb-4">
+                                    <h3 class="text-sm font-medium text-gray-700 mb-2">AI Suggestions</h3>
+                                    <div id="suggestedTags" class="flex flex-wrap gap-2">
+                                        <!-- Tags will be populated here -->
+                                    </div>
                                 </div>
-                                <div id="currentTags" class="flex flex-wrap gap-2"></div>
-                            </div>
-        
-                            <!-- Add New Tag -->
-                            <div>
-                                <h3 class="text-sm font-medium text-text-secondary mb-2">Add New Tag</h3>
-                                <div class="flex space-x-2">
-                                    <select id="newTagSelect" class="flex-1 rounded-md border-border-color bg-bg-primary text-text-primary focus:border-accent-primary focus:ring-accent-primary">
-                                        <option value="">Select a tag...</option>
-                                    </select>
-                                    <button id="addTagBtn" class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent-primary hover:bg-accent-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-primary transition-all duration-200">
-                                        <i class="fas fa-plus"></i>
-                                    </button>
+
+                                <!-- Current Tags -->
+                                <div class="mb-4">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h3 class="text-sm font-medium text-gray-700">Current Tags</h3>
+                                        <button id="saveTagsBtn" 
+                                                class="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                            Save Tags
+                                        </button>
+                                    </div>
+                                    <div id="currentTags" class="flex flex-wrap gap-2">
+                                        <!-- Tags will be populated here -->
+                                    </div>
+                                </div>
+
+                                <!-- Add New Tag -->
+                                <div>
+                                    <h3 class="text-sm font-medium text-gray-700 mb-2">Add New Tag</h3>
+                                    <div class="flex space-x-2">
+                                        <select id="newTagSelect" class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                            <option value="">Select a tag...</option>
+                                        </select>
+                                        <button id="addTagBtn" class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -153,6 +136,7 @@
             </div>
         </main>
     </div>
+
     <script>
         // Global Variables
         let availableTags = [];
@@ -246,18 +230,6 @@
             } else {
                 correspondentInfo.classList.add('hidden');
                 currentCorrespondent = null;
-            }
-        }
-
-        function updateTitleDisplay(title) {
-            const titleInfo = document.getElementById('titleInfo');
-            const titleName = document.getElementById('titleName');
-            
-            if (title) {
-                titleName.textContent = title.name || title;
-                titleInfo.classList.remove('hidden');
-            } else {
-                titleInfo.classList.add('hidden');
             }
         }
 
@@ -370,7 +342,6 @@
 
                 // Update correspondent information
                 updateCorrespondentDisplay(data.correspondent);
-                updateTitleDisplay(data.title);
             } catch (error) {
                 showMessage('Error loading document content: ' + error.message);
             }
@@ -415,23 +386,30 @@
 
                 const result = await response.json();
 
-            // Process suggested tags
-            let suggestedTags = [];
-            if (result.document && result.document.tags) {
-                // Direkt die Tags aus dem document-Objekt verwenden
-                suggestedTags = result.document.tags.map(tag => ({
-                    id: tag,
-                    name: tag
-                }));
-            }
+                // Process suggested tags
+                let suggestedTags;
+                if (Array.isArray(result)) {
+                    suggestedTags = result;
+                } else if (result.suggestedTags) {
+                    suggestedTags = result.suggestedTags;
+                } else if (result.tags) {
+                    suggestedTags = result.tags;
+                } else if (typeof result === 'object') {
+                    suggestedTags = Object.entries(result).map(([name, value]) => ({
+                        name: name,
+                        id: name
+                    }));
+                } else {
+                    suggestedTags = [];
+                }
 
-            updateSuggestedTags(suggestedTags);
+                updateSuggestedTags(suggestedTags);
 
-            // Update correspondent if returned from analysis
-            if (result.document && result.document.correspondent) {
-                updateCorrespondentDisplay(result.document.correspondent);
-                updateTitleDisplay(result.document.title);
-            }
+                // Update correspondent if returned from analysis
+                if (result.correspondent) {
+                    updateCorrespondentDisplay(result.correspondent);
+                }
+
                 showMessage('Analysis completed successfully', 'success');
             } catch (error) {
                 showMessage('Error during analysis: ' + error.message);
@@ -447,7 +425,6 @@
 
             isUpdating = true;
             try {
-                const titleValue = document.getElementById('titleName').textContent;
                 const currentTagElements = document.getElementById('currentTags').children;
                 const tagIds = Array.from(currentTagElements)
                     .map(el => el.dataset.tagId)
@@ -461,8 +438,7 @@
                     body: JSON.stringify({
                         documentId: currentDocument,
                         tags: tagIds,
-                        correspondent: currentCorrespondent,
-                        title: titleValue
+                        correspondent: currentCorrespondent
                     })
                 });
 
@@ -516,6 +492,5 @@
             fetchDocuments();
         });
     </script>
-    <script src="js/dashboard.js"></script>
 </body>
 </html>

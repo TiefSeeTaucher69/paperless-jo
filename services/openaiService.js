@@ -55,6 +55,14 @@ class OpenAIService {
         temperature: 0.3,
       });
 
+      const usage = response.usage;
+      const mappedUsage = {
+        promptTokens: usage.prompt_tokens,
+        completionTokens: usage.completion_tokens,
+        totalTokens: usage.total_tokens
+      };
+      
+
       let jsonContent = response.choices[0].message.content;
       jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       
@@ -64,7 +72,7 @@ class OpenAIService {
         throw new Error('Invalid response structure');
       }
       
-      return parsedResponse;
+      return { document: parsedResponse, metrics: mappedUsage };
     } catch (error) {
       console.error('Failed to analyze document:', error);
       return { tags: [], correspondent: null };

@@ -183,6 +183,79 @@ class PaperlessService {
     }
   }
 
+  async getTagCount() {
+    this.initialize();
+    try {
+      const response = await this.client.get('/tags/', {
+        params: { count: true }
+      });
+      return response.data.count;
+    } catch (error) {
+      console.error('Error fetching tag count:', error.message);
+      return 0;
+    }
+  }
+
+  async getCorrespondentCount() {
+    this.initialize();
+    try {
+      const response = await this.client.get('/correspondents/', {
+        params: { count: true }
+      });
+      return response.data.count;
+    } catch (error) {
+      console.error('Error fetching correspondent count:', error.message);
+      return 0;
+    }
+  }
+
+  async getDocumentCount() {
+    this.initialize();
+    try {
+      const response = await this.client.get('/documents/', {
+        params: { count: true }
+      });
+      return response.data.count;
+    } catch (error) {
+      console.error('Error fetching document count:', error.message);
+      return 0;
+    }
+  }
+
+  async listCorrespondentsNames() {
+    //list correspondent names and how many documents are tagged with it
+    this.initialize();
+    try {
+      const response = await this.client.get('/correspondents/', {
+        params: { fields: 'name', count: true }
+      });
+      return response.data.results.map(correspondent => ({
+        name: correspondent.name,
+        document_count: correspondent.document_count
+      }));
+    } catch (error) {
+      console.error('Error fetching correspondent names:', error.message);
+      return [];
+    }
+  }
+
+  async listTagNames() {
+    //list tag names and how many documents are tagged with it
+    this.initialize();
+    try {
+      const response = await this.client.get('/tags/', {
+        params: { fields: 'name', count: true }
+      });
+      return response.data.results.map(tag => ({
+        name: tag.name,
+        document_count: tag.document_count
+      }));
+    } catch (error) {
+      console.error('Error fetching tag names:', error.message);
+      return [];
+    }
+  }
+  
   async getAllDocuments() {
     this.initialize();
     if (!this.client) {
@@ -213,10 +286,10 @@ class PaperlessService {
         const response = await this.client.get('/documents/', {
           params: {
             page: page,
-            page_size: 100
+            page_size: 100,
+            fields: 'id,title,created,created_date,added,tags,correspondent'
           }
         });
-
         // Überprüfe die API-Antwort auf Gültigkeit
         if (!response || !response.data) {
           console.error(`Invalid API response on page ${page}:`, response);
@@ -328,55 +401,58 @@ class PaperlessService {
 
   async getOrCreateCorrespondent(name) {
     this.initialize();
-    const normalizedName = name.toLowerCase();
+    
+    // Entferne nur Sonderzeichen, behalte Leerzeichen
+    const sanitizedName = name.replace(/[.,]/g, '').trim();
+    const normalizedName = sanitizedName.toLowerCase();
   
     try {
-      // Zuerst versuchen, den Korrespondenten zu finden
-      const response = await this.client.get('/correspondents/', {
-        params: { name: name }
-      });
-  
-      const existingCorrespondent = response.data.results.find(
-        c => c.name.toLowerCase() === normalizedName
-      );
-  
-      if (existingCorrespondent) {
-        console.log(`Found existing correspondent "${name}" with ID ${existingCorrespondent.id}`);
-        return existingCorrespondent;
-      }
-  
-      // Wenn nicht gefunden, erstelle neuen Korrespondenten
-      try {
-        // remove spaces from name and fill with - to get a valid name, remove . and , as well
-        name = name.replace(/ /g, '-').replace(/\./g, '').replace(/,/g, '');
-        const createResponse = await this.client.post('/correspondents/', { name });
-        console.log(`Created new correspondent "${name}" with ID ${createResponse.data.id}`);
-        return createResponse.data;
-      } catch (createError) {
-        if (createError.response?.status === 400 && 
-            createError.response?.data?.error?.includes('unique constraint')) {
-          
-          // Falls der Korrespondent in der Zwischenzeit erstellt wurde
-          const retryResponse = await this.client.get('/correspondents/', {
-            params: { name: name }
-          });
-          
-          const justCreatedCorrespondent = retryResponse.data.results.find(
+        // Suche mit dem bereinigten Namen
+        const response = await this.client.get('/correspondents/', {
+            params: { name: sanitizedName }
+        });
+    
+        const existingCorrespondent = response.data.results.find(
             c => c.name.toLowerCase() === normalizedName
-          );
-          
-          if (justCreatedCorrespondent) {
-            console.log(`Retrieved correspondent "${name}" after constraint error with ID ${justCreatedCorrespondent.id}`);
-            return justCreatedCorrespondent;
-          }
+        );
+    
+        if (existingCorrespondent) {
+            console.log(`Found existing correspondent "${sanitizedName}" with ID ${existingCorrespondent.id}`);
+            return existingCorrespondent;
         }
-        throw createError;
-      }
+    
+        // Erstelle neuen Korrespondenten
+        try {
+            const createResponse = await this.client.post('/correspondents/', { 
+                name: sanitizedName 
+            });
+            console.log(`Created new correspondent "${sanitizedName}" with ID ${createResponse.data.id}`);
+            return createResponse.data;
+        } catch (createError) {
+            if (createError.response?.status === 400 && 
+                createError.response?.data?.error?.includes('unique constraint')) {
+              
+                // Race condition check
+                const retryResponse = await this.client.get('/correspondents/', {
+                    params: { name: sanitizedName }
+                });
+              
+                const justCreatedCorrespondent = retryResponse.data.results.find(
+                    c => c.name.toLowerCase() === normalizedName
+                );
+              
+                if (justCreatedCorrespondent) {
+                    console.log(`Retrieved correspondent "${sanitizedName}" after constraint error with ID ${justCreatedCorrespondent.id}`);
+                    return justCreatedCorrespondent;
+                }
+            }
+            throw createError;
+        }
     } catch (error) {
-      console.error(`Failed to process correspondent "${name}":`, error.message);
-      throw error;
+        console.error(`Failed to process correspondent "${sanitizedName}":`, error.message);
+        throw error;
     }
-  }
+}
 
   async removeUnusedTagsFromDocument(documentId, keepTagIds) {
     this.initialize();

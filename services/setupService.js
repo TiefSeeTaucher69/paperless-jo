@@ -6,6 +6,7 @@ const { OpenAI } = require('openai');
 class SetupService {
   constructor() {
     this.envPath = path.join(process.cwd(), 'data', '.env');
+    this.configured = null; // Variable to store the configuration status
   }
 
   async loadConfig() {
@@ -144,6 +145,10 @@ class SetupService {
   }
 
   async isConfigured() {
+    if (this.configured !== null) {
+      return this.configured;
+    }
+
     try {
       // Check data directory and .env file
       const dataDir = path.dirname(this.envPath);
@@ -158,21 +163,28 @@ class SetupService {
       try {
         await fs.access(this.envPath, fs.constants.F_OK);
       } catch (err) {
+        this.configured = false;
         return false;
       }
 
       const config = await this.loadConfig();
-      if (!config) return false;
-      
+      if (!config) {
+        this.configured = false;
+        return false;
+      }
+
       try {
         await this.validateConfig(config);
+        this.configured = true;
         return true;
       } catch (error) {
         console.error('Configuration validation failed:', error.message);
+        this.configured = false;
         return false;
       }
     } catch (error) {
       console.error('Error checking configuration:', error.message);
+      this.configured = false;
       return false;
     }
   }

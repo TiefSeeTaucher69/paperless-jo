@@ -360,7 +360,8 @@
                             countdown--;
                             if (countdown < 0) {
                                 clearInterval(countdownInterval);
-                                window.location.reload();
+                                //redirect to /dashboard
+                                window.location.href = '/dashboard';
                             }
                         }, 1000);
                     }

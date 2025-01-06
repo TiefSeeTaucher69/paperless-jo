@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paperless-AI Dashboard</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+</head>
+<body class="h-full">
+    <button id="themeToggle" class="theme-toggle">
+        <i class="fas fa-moon dark:fas fa-sun"></i>
+    </button>
+
+    <div class="layout-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <h1 class="brand-title">Paperless-AI</h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="/dashboard" class="sidebar-link active">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/manual" class="sidebar-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Manual</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="sidebar-link">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Playground (coming soon)</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/settings" class="sidebar-link">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-wrapper">
+                <div class="content-header">
+                    <h2 class="content-title">Dashboard Overview</h2>
+                </div>
+
+                <!-- Top Cards -->
+                <div class="card-grid">
+                    <!-- Document Chart -->
+                    <div class="material-card col-span-2">
+                        <h3 class="card-title">Document Processing Status</h3>
+                        <div class="flex items-center">
+                            <div class="w-1/2">
+                                <canvas id="documentChart" height="200"></canvas>
+                            </div>
+                            <div class="w-1/2 pl-6">
+                                <div class="stats-legend">
+                                    <div class="stat-item">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center">
+                                                <div class="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
+                                                <span>AI Processed</span>
+                                            </div>
+                                            <span class="font-semibold"><%= paperless_data.processedDocumentCount %></span>
+                                        </div>
+                                    </div>
+                                    <div class="stat-item mt-4">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center">
+                                                <div class="w-3 h-3 rounded-full bg-gray-200 mr-2"></div>
+                                                <span>Unprocessed</span>
+                                            </div>
+                                            <span class="font-semibold"><%= paperless_data.documentCount - paperless_data.processedDocumentCount %></span>
+                                        </div>
+                                    </div>
+                                    <div class="total-stats mt-6 pt-4 border-t">
+                                        <div class="text-sm text-gray-600">Total Documents</div>
+                                        <div class="text-2xl font-bold"><%= paperless_data.documentCount %></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Statistics Card -->
+                    <div class="material-card">
+                        <h3 class="card-title">System Statistics</h3>
+                        <div class="space-y-6">
+                            <div class="stat-box cursor-pointer hover:shadow-lg transition-all" onclick="showTagDetails()">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
+                                            <i class="fas fa-tags text-blue-500"></i>
+                                        </div>
+                                        <div>
+                                            <div class="text-sm text-gray-600">Total Tags</div>
+                                            <div class="text-xl font-bold"><%= paperless_data.tagCount %></div>
+                                        </div>
+                                    </div>
+                                    <i class="fas fa-chevron-right text-gray-400"></i>
+                                </div>
+                            </div>
+                            <div class="stat-box cursor-pointer hover:shadow-lg transition-all" onclick="showCorrespondentDetails()">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center mr-3">
+                                            <i class="fas fa-building text-purple-500"></i>
+                                        </div>
+                                        <div>
+                                            <div class="text-sm text-gray-600">Correspondents</div>
+                                            <div class="text-xl font-bold"><%= paperless_data.correspondentCount %></div>
+                                        </div>
+                                    </div>
+                                    <i class="fas fa-chevron-right text-gray-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modal Template -->
+                    <div id="detailsModal" class="modal hidden">
+                        <div class="modal-overlay"></div>
+                        <div class="modal-container">
+                            <div class="modal-header">
+                                <h3 class="modal-title"></h3>
+                                <button class="modal-close">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="modal-content">
+                                <div class="modal-loader hidden">
+                                    <div class="loader"></div>
+                                </div>
+                                <div class="modal-data"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Token Usage Card -->
+                    <div class="material-card">
+                        <h3 class="card-title">AI Token Usage</h3>
+                        <div class="space-y-4">
+                            <div class="p-4 bg-blue-50 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm text-gray-600">Average Token Usage per Document</span>
+                                </div>
+                                <div class="mt-2 text-sm">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span>Prompt Tokens:</span>
+                                        <span class="font-semibold"><%= Math.round(openai_data.averagePromptTokens) %></span>
+                                    </div>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span>Completion Tokens:</span>
+                                        <span class="font-semibold"><%= Math.round(openai_data.averageCompletionTokens) %></span>
+                                    </div>
+                                    <div class="flex items-center justify-between pt-2 border-t">
+                                        <span class="font-medium">Average Total:</span>
+                                        <span class="font-semibold"><%= Math.round(openai_data.averageTotalTokens) %></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div class="p-4 bg-gray-50 rounded-lg">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="text-sm text-gray-600">Total Tokens Used</div>
+                                            <div class="text-xl font-bold"><%= openai_data.tokensOverall.toLocaleString() %></div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-sm text-gray-600">Documents Processed</div>
+                                            <div class="text-xl font-bold"><%= paperless_data.processedDocumentCount.toLocaleString() %></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Pass data to JavaScript -->
+    <script>
+        window.dashboardData = {
+            documentCount: <%= paperless_data.documentCount %>,
+            processedCount: <%= paperless_data.processedDocumentCount %>
+        };
+    </script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>

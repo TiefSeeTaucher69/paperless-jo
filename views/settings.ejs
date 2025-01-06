@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paperless-AI Dashboard</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css" />
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="h-full">
+    <button id="themeToggle" class="theme-toggle">
+        <i class="fas fa-moon dark:fas fa-sun"></i>
+    </button>
+
+    <div class="layout-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <h1 class="brand-title">Paperless-AI</h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="/dashboard" class="sidebar-link">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/manual" class="sidebar-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Manual</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="sidebar-link">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Playground (coming soon)</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/settings" class="sidebar-link active">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-wrapper">
+                <div class="content-header">
+                    <h2 class="content-title">Configuration</h2>
+                </div>
+        
+                <!-- Main Form Card -->
+                <div class="material-card">
+                    <form id="setupForm" class="space-y-8">
+                        <!-- Connection Section -->
+                        <section class="space-y-6">
+                            <h2 class="text-xl font-bold flex items-center gap-2 text-primary mb-4">
+                                <i class="fas fa-link"></i>
+                                Connection Settings
+                            </h2>
+                            <div class="space-y-4">
+                                <div class="space-y-2">
+                                    <label for="paperlessUrl" class="flex items-center gap-2 text-sm font-medium">
+                                        Paperless-ngx API URL
+                                        <button type="button" class="text-gray-400 hover:text-gray-600 focus:outline-none" id="urlHelp">
+                                            <i class="fas fa-circle-question"></i>
+                                        </button>
+                                    </label>
+                                    <input type="text" 
+                                           id="paperlessUrl" 
+                                           name="paperlessUrl"
+                                           value="<%= config.PAPERLESS_API_URL %>"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                           placeholder="http://your-paperless-instance:8000"
+                                           required>
+                                </div>
+        
+                                <div class="space-y-2">
+                                    <label for="paperlessToken" class="text-sm font-medium">API Token</label>
+                                    <div class="relative">
+                                        <input type="password" 
+                                               id="paperlessToken" 
+                                               name="paperlessToken"
+                                               value="<%= config.PAPERLESS_API_TOKEN %>"
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                               required>
+                                        <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" data-input="paperlessToken">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+        
+                        <!-- AI Configuration Section -->
+                        <section class="space-y-6">
+                            <h2 class="text-xl font-bold flex items-center gap-2 text-primary mb-4">
+                                <i class="fas fa-robot"></i>
+                                AI Configuration
+                            </h2>
+                            <div class="space-y-4">
+                                <div class="space-y-2">
+                                    <label for="aiProvider" class="text-sm font-medium">AI Provider</label>
+                                    <select id="aiProvider" 
+                                            name="aiProvider"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="openai" <%= config.AI_PROVIDER === 'openai' ? 'selected' : '' %>>OpenAI (ChatGPT)</option>
+                                        <option value="ollama" <%= config.AI_PROVIDER === 'ollama' ? 'selected' : '' %>>Ollama (Local LLM)</option>
+                                    </select>
+                                </div>
+        
+                                <!-- OpenAI Settings -->
+                                <div id="openaiSettings" class="space-y-4">
+                                    <div class="space-y-2">
+                                        <label for="openaiKey" class="text-sm font-medium">OpenAI API Key</label>
+                                        <div class="relative">
+                                            <input type="password" 
+                                                   id="openaiKey" 
+                                                   name="openaiKey"
+                                                   value="<%= config.OPENAI_API_KEY %>"
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" data-input="openaiKey">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="space-y-2">
+                                        <label for="openaiModel" class="text-sm font-medium">OpenAI Model</label>
+                                        <select id="openaiModel" 
+                                                name="openaiModel"
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            <option value="gpt-3.5-turbo-0125" <%= config.OPENAI_MODEL === 'gpt-3.5-turbo-0125' ? 'selected' : '' %>>GPT-3.5 Turbo</option>
+                                            <option value="gpt-4o" <%= config.OPENAI_MODEL === 'gpt-4o' ? 'selected' : '' %>>GPT-4o</option>
+                                            <option value="gpt-4o-mini" <%= config.OPENAI_MODEL === 'gpt-4o-mini' ? 'selected' : '' %>>GPT-4o-mini (Best value)</option>
+                                        </select>
+                                    </div>
+                                </div>
+        
+                                <!-- Ollama Settings -->
+                                <div id="ollamaSettings" class="space-y-4">
+                                    <div class="space-y-2">
+                                        <label for="ollamaUrl" class="text-sm font-medium">Ollama API URL</label>
+                                        <input type="text" 
+                                               id="ollamaUrl" 
+                                               name="ollamaUrl"
+                                               value="<%= config.OLLAMA_API_URL %>"
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                    
+                                    <div class="space-y-2">
+                                        <label for="ollamaModel" class="text-sm font-medium">Ollama Model</label>
+                                        <input type="text" 
+                                               id="ollamaModel" 
+                                               name="ollamaModel"
+                                               value="<%= config.OLLAMA_MODEL %>"
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+        
+                        <!-- Advanced Settings Section -->
+                        <section class="space-y-6">
+                            <h2 class="text-xl font-bold flex items-center gap-2 text-primary mb-4">
+                                <i class="fas fa-cog"></i>
+                                Advanced Settings
+                            </h2>
+                            <div class="space-y-4">
+                                <div class="space-y-2">
+                                    <label for="scanInterval" class="text-sm font-medium">Scan Interval (Cron Format)</label>
+                                    <input type="text" 
+                                           id="scanInterval" 
+                                           name="scanInterval"
+                                           value="<%= config.SCAN_INTERVAL %>"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                           required>
+                                    <p class="text-sm text-gray-500">Default: every 30 minutes</p>
+                                </div>
+        
+                                <!-- Tags Section -->
+                                <div class="space-y-4">
+                                    <div class="space-y-2">
+                                        <label for="showTags" class="text-sm font-medium">Process only specific pre tagged documents?</label>
+                                        <select id="showTags" 
+                                                name="showTags" 
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            <option value="no" <%= config.PROCESS_PREDEFINED_DOCUMENTS === 'no' ? 'selected' : '' %>>No</option>
+                                            <option value="yes" <%= config.PROCESS_PREDEFINED_DOCUMENTS === 'yes' ? 'selected' : '' %>>Yes</option>
+                                        </select>
+                                    </div>
+        
+                                    <div id="tagsInputSection" class="<%= config.PROCESS_PREDEFINED_DOCUMENTS === 'yes' ? '' : 'hidden' %> space-y-4">
+                                        <div class="space-y-2">
+                                            <label for="tagInput" class="text-sm font-medium">Tags</label>
+                                            <div class="flex gap-2">
+                                                <input type="text" 
+                                                    id="tagInput" 
+                                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    placeholder="Enter a tag and press Enter">
+                                                <button type="button" 
+                                                        class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                                    <i class="fas fa-plus mr-2"></i>
+                                                    Add
+                                                </button>
+                                            </div>
+                                            <div id="tagsContainer" class="flex flex-wrap gap-2 mt-2">
+                                                <% if (config.TAGS && Array.isArray(config.TAGS) && config.TAGS.length > 0) { %>
+                                                    <% config.TAGS.forEach(tag => { %>
+                                                        <div class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center gap-2">
+                                                            <span><%= tag %></span>
+                                                            <button type="button" class="hover:text-blue-600"><i class="fas fa-times"></i></button>
+                                                        </div>
+                                                    <% }); %>
+                                                <% } %>
+                                            </div>
+                                            <input type="hidden" id="tags" name="tags" value="<%= Array.isArray(config.TAGS) ? config.TAGS.join(',') : '' %>">
+                                        </div>
+                                    </div>
+                                </div>
+        
+                                <!-- AI Tag Section -->
+                                <div class="border-t pt-4 space-y-4">
+                                    <div class="space-y-2">
+                                        <label for="aiProcessedTag" class="text-sm font-medium">Add AI-processed tag to documents?</label>
+                                        <select id="aiProcessedTag" 
+                                                name="aiProcessedTag" 
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            <option value="no" <%= config.ADD_AI_PROCESSED_TAG === 'no' ? 'selected' : '' %>>No</option>
+                                            <option value="yes" <%= config.ADD_AI_PROCESSED_TAG === 'yes' ? 'selected' : '' %>>Yes</option>
+                                        </select>
+                                    </div>
+        
+                                    <div id="aiTagNameSection" class="<%= config.ADD_AI_PROCESSED_TAG === 'yes' ? '' : 'hidden' %> space-y-2">
+                                        <label for="aiTagName" class="text-sm font-medium">AI-processed Tag Name</label>
+                                        <input type="text" 
+                                            id="aiTagName" 
+                                            name="aiTagName"
+                                            value="<%= config.AI_PROCESSED_TAG_NAME || 'ai-processed' %>"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            placeholder="ai-processed">
+                                        <p class="text-sm text-gray-500">This tag will be added to documents after AI processing</p>
+                                    </div>
+                                </div>
+        
+                                <!-- Prompt Tags Section -->
+                                <div class="border-t pt-4 space-y-4">
+                                    <div class="space-y-2">
+                                        <label for="usePromptTags" class="text-sm font-medium">Use specific tags in prompt?</label>
+                                        <select id="usePromptTags" 
+                                                name="usePromptTags" 
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            <option value="no" <%= config.USE_PROMPT_TAGS === 'no' ? 'selected' : '' %>>No</option>
+                                            <option value="yes" <%= config.USE_PROMPT_TAGS === 'yes' ? 'selected' : '' %>>Yes</option>
+                                        </select>
+                                    </div>
+        
+                                    <div id="promptTagsSection" class="<%= config.USE_PROMPT_TAGS === 'yes' ? '' : 'hidden' %> space-y-4">
+                                        <div class="space-y-2">
+                                            <label for="promptTagInput" class="text-sm font-medium">Prompt Tags</label>
+                                            <div class="flex gap-2">
+                                                <input type="text" 
+                                                    id="promptTagInput" 
+                                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    placeholder="Enter a tag and press Enter">
+                                                <button type="button" 
+                                                        class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                                    <i class="fas fa-plus mr-2"></i>
+                                                    Add
+                                                </button>
+                                            </div>
+                                            <div id="promptTagsContainer" class="flex flex-wrap gap-2 mt-2">
+                                                <% if (config.PROMPT_TAGS && Array.isArray(config.PROMPT_TAGS) && config.PROMPT_TAGS.length > 0) { %>
+                                                    <% config.PROMPT_TAGS.forEach(tag => { %>
+                                                        <div class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center gap-2">
+                                                            <span><%= tag %></span>
+                                                            <button type="button" class="hover:text-blue-600"><i class="fas fa-times"></i></button>
+                                                        </div>
+                                                    <% }); %>
+                                                <% } %>
+                                            </div>
+                                            <input type="hidden" id="promptTags" name="promptTags" value="<%= Array.isArray(config.PROMPT_TAGS) ? config.PROMPT_TAGS.join(',') : '' %>">
+                                            <p class="text-sm text-gray-500">These tags will be exclusively used in the AI prompt</p>
+                                        </div>
+                                    </div>
+                                </div>
+        
+                                <!-- System Prompt Section -->
+                                <div class="border-t pt-4 space-y-4">
+                                    <div class="space-y-2">
+                                        <label for="systemPrompt" class="text-sm font-medium">Prompt Description</label>
+                                        <div class="space-y-2">
+                                            <textarea id="systemPrompt" 
+                                                      name="systemPrompt"
+                                                      rows="8"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                      placeholder="Describe how the AI should analyze your documents..."><%= config.SYSTEM_PROMPT %></textarea>
+                                            <button id="systemPromptBtn" type="button" 
+                                                    class="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
+                                                <i class="fas fa-lightbulb mr-2"></i>
+                                                Example
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+        
+                        <!-- Submit Button -->
+                        <div class="border-t pt-6">
+                            <button type="submit" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center gap-2">
+                                <i class="fas fa-save"></i>
+                                Save Configuration
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+
+    </script>
+    <script src="js/settings.js"></script>
+</body>
+</html>

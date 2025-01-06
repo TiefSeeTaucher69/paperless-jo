@@ -16,7 +16,6 @@ router.use(async (req, res, next) => {
   if (API_ENDPOINTS.includes(req.path) || req.path === '/setup') {
     return next();
   }
-  
   const isConfigured = await setupService.isConfigured();
   if (!isConfigured) {
     return res.redirect('/setup');
@@ -137,15 +136,95 @@ router.get('/manual/documents', async (req, res) => {
   res.json(getDocuments);
 });
 
-router.get('/debug', async (req, res) => {
+router.get('/api/correspondentsCount', async (req, res) => {
+  const correspondents = await paperlessService.listCorrespondentsNames();
+  res.json(correspondents);
+});
+
+router.get('/api/tagsCount', async (req, res) => {
+  const tags = await paperlessService.listTagNames();
+  res.json(tags);
+});
+
+router.get('/dashboard', async (req, res) => {
+  const tagCount = await paperlessService.getTagCount();
+  const correspondentCount = await paperlessService.getCorrespondentCount();
+  const documentCount = await paperlessService.getDocumentCount();
+  const processedDocumentCount = await documentModel.getProcessedDocumentsCount();
+  const metrics = await documentModel.getMetrics();
+  const averagePromptTokens = metrics.length > 0 ? Math.round(metrics.reduce((acc, cur) => acc + cur.promptTokens, 0) / metrics.length) : 0;
+  const averageCompletionTokens = metrics.length > 0 ? Math.round(metrics.reduce((acc, cur) => acc + cur.completionTokens, 0) / metrics.length) : 0;
+  const averageTotalTokens = metrics.length > 0 ? Math.round(metrics.reduce((acc, cur) => acc + cur.totalTokens, 0) / metrics.length) : 0;
+  const tokensOverall = metrics.length > 0 ? metrics.reduce((acc, cur) => acc + cur.totalTokens, 0) : 0;
+
+  console.log(tagCount);
+  console.log(correspondentCount);
+  res.render('dashboard', { paperless_data: { tagCount, correspondentCount, documentCount, processedDocumentCount }, openai_data: { averagePromptTokens, averageCompletionTokens, averageTotalTokens, tokensOverall } });
+});
+
+router.get('/settings', async (req, res) => {
+  const processSystemPrompt = (prompt) => {
+    if (!prompt) return '';
+    return prompt.replace(/\\n/g, '\n');
+  };
+
+  const normalizeArray = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
+    return [];
+  };
+
   const isConfigured = await setupService.isConfigured();
-  if (!isConfigured) {
-    return res.status(503).json({ 
-      status: 'not_configured',
-      message: 'Application setup not completed'
-    });
+  let config = {
+    PAPERLESS_API_URL: (process.env.PAPERLESS_API_URL || 'http://localhost:8000').replace(/\/api$/, ''),
+    PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN || '',
+    AI_PROVIDER: process.env.AI_PROVIDER || 'openai',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    OLLAMA_API_URL: process.env.OLLAMA_API_URL || 'http://localhost:11434',
+    OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'llama3.2',
+    SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
+    SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
+    PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
+    TAGS: normalizeArray(process.env.TAGS),
+    ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
+    AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
+    USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
+    PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS),
+    PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' '
+  };
+  
+  if (isConfigured) {
+    const savedConfig = await setupService.loadConfig();
+    if (savedConfig.PAPERLESS_API_URL) {
+      savedConfig.PAPERLESS_API_URL = savedConfig.PAPERLESS_API_URL.replace(/\/api$/, '');
+    }
+
+    savedConfig.TAGS = normalizeArray(savedConfig.TAGS);
+    savedConfig.PROMPT_TAGS = normalizeArray(savedConfig.PROMPT_TAGS);
+
+    config = { ...config, ...savedConfig };
   }
 
+  // Debug-output
+  console.log('Current config TAGS:', config.TAGS);
+  console.log('Current config PROMPT_TAGS:', config.PROMPT_TAGS);
+  
+  res.render('settings', { 
+    config,
+    success: isConfigured ? 'The application is already configured. You can update the configuration below.' : undefined
+  });
+});
+
+router.get('/debug', async (req, res) => {
+  //const isConfigured = await setupService.isConfigured();
+  //if (!isConfigured) {
+  //   return res.status(503).json({ 
+  //     status: 'not_configured',
+  //     message: 'Application setup not completed'
+  //   });
+  // }
   res.render('debug');
 });
 
@@ -190,7 +269,7 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
 
 router.post('/manual/updateDocument', express.json(), async (req, res) => {
   try {
-    var { documentId, tags, correspondent } = req.body;
+    var { documentId, tags, correspondent, title } = req.body;
     
     // Convert all tags to names if they are IDs
     tags = await Promise.all(tags.map(async tag => {
@@ -221,7 +300,8 @@ router.post('/manual/updateDocument', express.json(), async (req, res) => {
     // Then update with new tags (this will only add new ones since we already removed unused ones)
     const updateData = {
       tags: tagIds,
-      correspondent: correspondentData ? correspondentData.id : null
+      correspondent: correspondentData ? correspondentData.id : null,
+      title: title ? title : null
     };
 
     const updateDocument = await paperlessService.updateDocument(documentId, updateData);
@@ -238,14 +318,13 @@ router.post('/manual/updateDocument', express.json(), async (req, res) => {
 
 router.get('/health', async (req, res) => {
   try {
-    const isConfigured = await setupService.isConfigured();
-    if (!isConfigured) {
-      return res.status(503).json({ 
-        status: 'not_configured',
-        message: 'Application setup not completed'
-      });
-    }
-
+    // const isConfigured = await setupService.isConfigured();
+    // if (!isConfigured) {
+    //   return res.status(503).json({ 
+    //     status: 'not_configured',
+    //     message: 'Application setup not completed'
+    //   });
+    // }
     try {
       await documentModel.isDocumentProcessed(1);
     } catch (error) {
