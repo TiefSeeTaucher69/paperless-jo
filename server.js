@@ -173,13 +173,14 @@ app.use('/', setupRoutes);
 // Main route with setup check
 app.get('/', async (req, res) => {
   try {
-    const isConfigured = await setupService.isConfigured();
-    if (!isConfigured) {
-      return res.redirect('/setup');
-    }
+    // const isConfigured = await setupService.isConfigured();
+    // if (!isConfigured) {
+    //   return res.redirect('/setup');
+    // }
 
-    const documents = await paperlessService.getDocuments();
-    res.render('index', { documents });
+    // const documents = await paperlessService.getDocuments();
+    // res.render('index', { documents });
+    res.redirect('/dashboard');
   } catch (error) {
     console.error('Error fetching documents:', error);
     res.status(500).send('Error fetching documents');

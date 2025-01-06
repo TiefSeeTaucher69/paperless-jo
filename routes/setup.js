@@ -116,10 +116,12 @@ router.get('/manual/preview/:id', async (req, res) => {
 
 
 router.get('/manual', async (req, res) => {
+  const version = configFile.PAPERLESS_AI_VERSION || ' ';
   res.render('manual', {
     title: 'Document Review',
     error: null,
     success: null,
+    version,
     paperlessUrl: process.env.PAPERLESS_API_URL,
     paperlessToken: process.env.PAPERLESS_API_TOKEN,
     config: {}
@@ -156,10 +158,10 @@ router.get('/dashboard', async (req, res) => {
   const averageCompletionTokens = metrics.length > 0 ? Math.round(metrics.reduce((acc, cur) => acc + cur.completionTokens, 0) / metrics.length) : 0;
   const averageTotalTokens = metrics.length > 0 ? Math.round(metrics.reduce((acc, cur) => acc + cur.totalTokens, 0) / metrics.length) : 0;
   const tokensOverall = metrics.length > 0 ? metrics.reduce((acc, cur) => acc + cur.totalTokens, 0) : 0;
-
+  const version = configFile.PAPERLESS_AI_VERSION || ' ';
   console.log(tagCount);
   console.log(correspondentCount);
-  res.render('dashboard', { paperless_data: { tagCount, correspondentCount, documentCount, processedDocumentCount }, openai_data: { averagePromptTokens, averageCompletionTokens, averageTotalTokens, tokensOverall } });
+  res.render('dashboard', { paperless_data: { tagCount, correspondentCount, documentCount, processedDocumentCount }, openai_data: { averagePromptTokens, averageCompletionTokens, averageTotalTokens, tokensOverall }, version });
 });
 
 router.get('/settings', async (req, res) => {
@@ -210,8 +212,9 @@ router.get('/settings', async (req, res) => {
   // Debug-output
   console.log('Current config TAGS:', config.TAGS);
   console.log('Current config PROMPT_TAGS:', config.PROMPT_TAGS);
-  
+  const version = configFile.PAPERLESS_AI_VERSION || ' ';
   res.render('settings', { 
+    version,
     config,
     success: isConfigured ? 'The application is already configured. You can update the configuration below.' : undefined
   });
