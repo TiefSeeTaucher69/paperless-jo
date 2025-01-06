@@ -32,37 +32,11 @@ An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mi
 
 ## Installation
 
-### You can use the easy way
-```bash
-docker run -d --name paperless-ai --network bridge -v paperless-ai_data:/app/data -p 3000:3000 --restart unless-stopped clusterzx/paperless-ai
-```
-
-### Or you can do it manually by yourself:
-
-1. Clone the repository:
-```bash
-git clone https://github.com/clusterzx/paperless-ai.git
-cd paperless-ai
-npm install
-```
-
-2. Start the container:
-```bash
-docker-compose up -d
-```
-
-3. Open your browser and navigate to:
-```
-http://localhost:3000
-```
-
-4. Complete the setup by providing:
-- Paperless-ngx API URL
-- Paperless-ngx API Token
-- Ollama API Data
-    OR
-- OpenAI API Key
-- Scan interval (default: every 30 minutes)
+Visit the Wiki for installation:\
+[Click here for Installation](https://github.com/clusterzx/paperless-ai/wiki/Installation)
+-------------------------------------------
+\
+\
 
 ## How it Works
 
