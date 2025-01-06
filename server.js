@@ -69,7 +69,11 @@ async function scanInital() {
         const content = await paperlessService.getDocumentContent(doc.id);
         const aiService = AIServiceFactory.getService();
         const analysis = await aiService.analyzeDocument(content, existingTags);
-
+        if (analysis.error) {
+          console.error('Document analysis failed:', result.error);
+          // Handle error appropriately
+          return;
+        }
         const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags);
         
         if (errors.length > 0) {

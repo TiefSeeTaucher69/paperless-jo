@@ -104,72 +104,95 @@ class PaperlessService {
     }
   }
 
-  // Hauptfunktion für die Tag-Verarbeitung
   async processTags(tagNames) {
-    this.initialize();
-    await this.ensureTagCache();
-
-    const tagIds = [];
-    const errors = [];
-    const processedTags = new Set(); // Verhindert Duplikate
-
-    // Verarbeite zuerst die normalen Tags
-    for (const tagName of tagNames) {
-      if (!tagName || typeof tagName !== 'string') {
-        console.warn(`Skipping invalid tag name: ${tagName}`);
-        continue;
+    try {
+      this.initialize();
+      await this.ensureTagCache();
+  
+      // Input validation
+      if (!tagNames) {
+        console.warn('No tags provided to processTags');
+        return { tagIds: [], errors: [] };
       }
 
-      const normalizedName = tagName.toLowerCase().trim();
-      
-      // Überspringe leere oder bereits verarbeitete Tags
-      if (!normalizedName || processedTags.has(normalizedName)) {
-        continue;
-      }
+      // Convert to array if string is passed
+      const tagsArray = typeof tagNames === 'string' 
+        ? [tagNames]
+        : Array.isArray(tagNames) 
+          ? tagNames 
+          : [];
 
-      try {
-        // Suche zuerst nach existierendem Tag
-        let tag = await this.findExistingTag(tagName);
+      if (tagsArray.length === 0) {
+        console.warn('No valid tags to process');
+        return { tagIds: [], errors: [] };
+      }
+  
+      const tagIds = [];
+      const errors = [];
+      const processedTags = new Set(); // Prevent duplicates
+  
+      // Process regular tags
+      for (const tagName of tagsArray) {
+        if (!tagName || typeof tagName !== 'string') {
+          console.warn(`Skipping invalid tag name: ${tagName}`);
+          errors.push({ tagName, error: 'Invalid tag name' });
+          continue;
+        }
+  
+        const normalizedName = tagName.toLowerCase().trim();
         
-        // Wenn kein existierender Tag gefunden wurde, erstelle einen neuen
-        if (!tag) {
-          tag = await this.createTagSafely(tagName);
+        // Skip empty or already processed tags
+        if (!normalizedName || processedTags.has(normalizedName)) {
+          continue;
         }
-
-        if (tag && tag.id) {
-          tagIds.push(tag.id);
-          processedTags.add(normalizedName);
+  
+        try {
+          // Search for existing tag first
+          let tag = await this.findExistingTag(tagName);
+          
+          // If no existing tag found, create new one
+          if (!tag) {
+            tag = await this.createTagSafely(tagName);
+          }
+  
+          if (tag && tag.id) {
+            tagIds.push(tag.id);
+            processedTags.add(normalizedName);
+          }
+  
+        } catch (error) {
+          console.error(`Error processing tag "${tagName}":`, error.message);
+          errors.push({ tagName, error: error.message });
         }
-
-      } catch (error) {
-        console.error(`Error processing tag "${tagName}":`, error.message);
-        errors.push({ tagName, error: error.message });
       }
-    }
-
-    // Füge AI-Processed Tag hinzu, wenn aktiviert
-    if (process.env.ADD_AI_PROCESSED_TAG === 'yes' && process.env.AI_PROCESSED_TAG_NAME) {
-      try {
-        const aiTagName = process.env.AI_PROCESSED_TAG_NAME;
-        let aiTag = await this.findExistingTag(aiTagName);
-        
-        if (!aiTag) {
-          aiTag = await this.createTagSafely(aiTagName);
+  
+      // Add AI-Processed tag if enabled
+      if (process.env.ADD_AI_PROCESSED_TAG === 'yes' && process.env.AI_PROCESSED_TAG_NAME) {
+        try {
+          const aiTagName = process.env.AI_PROCESSED_TAG_NAME;
+          let aiTag = await this.findExistingTag(aiTagName);
+          
+          if (!aiTag) {
+            aiTag = await this.createTagSafely(aiTagName);
+          }
+  
+          if (aiTag && aiTag.id) {
+            tagIds.push(aiTag.id);
+          }
+        } catch (error) {
+          console.error(`Error processing AI tag "${process.env.AI_PROCESSED_TAG_NAME}":`, error.message);
+          errors.push({ tagName: process.env.AI_PROCESSED_TAG_NAME, error: error.message });
         }
-
-        if (aiTag && aiTag.id) {
-          tagIds.push(aiTag.id);
-        }
-      } catch (error) {
-        console.error(`Error processing AI tag "${process.env.AI_PROCESSED_TAG_NAME}":`, error.message);
-        errors.push({ tagName: process.env.AI_PROCESSED_TAG_NAME, error: error.message });
       }
+  
+      return { 
+        tagIds: [...new Set(tagIds)], // Remove any duplicates
+        errors 
+      };      
+    } catch (error) {
+      console.error('Error in processTags:', error);
+      throw new Error(`Failed to process tags: ${error.message}`);
     }
-
-    return { 
-      tagIds: [...new Set(tagIds)], // Entferne eventuelle Duplikate
-      errors 
-    };
   }
 
   async getTags() {
