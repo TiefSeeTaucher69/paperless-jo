@@ -7,6 +7,14 @@
 An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mistral, llama, phi 3, gemma 2) to automatically analyze and tag your documents. \
 It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query your documents with AI, a modern and intuitive Webinterface. 
 
+
+# Disclaimer: /
+paperless-ai makes changes to the documents in your productive paperlessNGX instance that cannot be easily undone.
+Do the configuration carefully and think twice. 
+Please test the results beforehand in a separate development environment and be sure to back up your documents and metadata beforehand. 
+
+
+
 ## We exploded! 💥
 💚 Thank you for all your support, bug submit, feature requests 💚
 <picture>
