@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paperless-AI Documents</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <script src="js/playground-analyzer.js"></script>
+    <style>
+        .document-card {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        #messageArea {
+            position: relative;
+            z-index: 100;
+        }
+        
+        #analysisPrompt {
+            font-family: monospace;
+        }
+        
+        #analyzeButton:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        </style>
+</head>
+<body class="h-full">
+    <button id="themeToggle" class="theme-toggle">
+        <i class="fas fa-moon dark:fas fa-sun"></i>
+    </button>
+
+    <div class="layout-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <h1 class="brand-title">Paperless-AI<small style="display: block;"><%= version %></small></h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="/dashboard" class="sidebar-link">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/manual" class="sidebar-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Manual</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/chat" class="sidebar-link">
+                            <i class="fa-solid fa-comment"></i>
+                            <span>Chat (beta)</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/playground" class="sidebar-link active">
+                            <i class="fa-solid fa-flask-vial"></i>
+                            <span>Playground</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/settings" class="sidebar-link">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+         
+        <main class="main-content p-6">
+            <div class="mb-6">
+                <h1 class="text-2xl font-bold mb-4">Documents</h1>
+                <!-- Analysis Section -->
+                <div class="material-card mb-8">
+                    <h2 class="card-title">Document Analysis</h2>
+                    <div class="space-y-4">
+                        <textarea 
+                            id="analysisPrompt"
+                            placeholder="Enter your analysis prompt here..."
+                            style="width: 100%; min-height: 128px; padding: 1rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; resize: vertical;"
+                        ></textarea>
+                        <button 
+                            id="analyzeButton"
+                            style="padding: 0.75rem 1.5rem; background: var(--accent-primary); color: white; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s ease;"
+                            onmouseover="this.style.background = 'var(--accent-secondary)'"
+                            onmouseout="this.style.background = 'var(--accent-primary)'"
+                        >
+                            Analyze Documents
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">            
+                    <input type="text" 
+                           placeholder="Search documents..." 
+                           id="searchInput"
+                           style="padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.5rem; width: 16rem; background: var(--bg-primary); color: var(--text-primary);">
+                    
+                    <select id="sortSelect"
+                            style="padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.5rem; width: 12rem; background: var(--bg-primary); color: var(--text-primary);">
+                        <option value="created_desc">Newest First</option>
+                        <option value="created_asc">Oldest First</option>
+                        <option value="title_asc">Title A-Z</option>
+                        <option value="title_desc">Title Z-A</option>
+                    </select>
+                </div>
+
+                <!-- Documents Grid -->
+                <div class="grid grid-cols-4 gap-4" id="documentsGrid">
+                    <% documents.forEach(function(doc) { %>
+                        <div class="material-card document-card" data-document-id="<%= doc.id %>">
+                            <!-- Thumbnail -->
+                            <div class="relative aspect-[3/4]">
+                                <img src="/thumb/<%= doc.id %>" 
+                                     alt="<%= doc.title %>"
+                                     class="w-full h-full object-cover rounded-lg">
+                                
+                                <!-- Tags Container -->
+                                <div class="tags-container absolute top-2 left-2 right-2 flex flex-wrap gap-1">
+                                    <% doc.tags.forEach(function(tagId) { %>
+                                    <span class="tag text-xs px-2 py-1 rounded-full bg-blue-600 text-white" 
+                                          data-tag-id="<%= tagId %>">
+                                        <%= tagNames[tagId] || 'Unknown' %>
+                                    </span>
+                                    <% }); %>
+                                </div>
+                            </div>
+                            
+                            <!-- Document Info -->
+                            <div class="document-info">
+                                <div class="info-container">
+                                    <div class="info-item">
+                                        <h3 class="text-sm font-medium truncate"><%= doc.title %></h3>
+                                    </div>
+                                    
+                                    <div class="info-item">
+                                        <p class="text-xs text-gray-600 truncate">
+                                            <%= new Date(doc.created).toLocaleDateString() %>
+                                        </p>
+                                        
+                                        <% if (doc.correspondent) { %>
+                                        <p class="text-xs text-gray-600 truncate" 
+                                           data-correspondent="<%= doc.correspondent %>">
+                                            <%= correspondentNames[doc.correspondent] || 'Unknown' %>
+                                        </p>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal -->
+    <div id="detailsModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title"></h3>
+                <button class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-content">
+                <div class="modal-loader hidden">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Loading...
+                </div>
+                <div class="modal-data"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/playground.js"></script>
+</body>
+</html>

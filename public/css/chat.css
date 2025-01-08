@@ -14,6 +14,7 @@
     --chat-user-text: #ffffff;
     --chat-assistant-text: #0f172a;
     --shadow-color: rgba(0, 0, 0, 0.1);
+    --code-bg: #f8f9fa;
 }
 
 :root[data-theme="dark"] {
@@ -31,7 +32,9 @@
     --chat-user-text: #ffffff;
     --chat-assistant-text: #f8fafc;
     --shadow-color: rgba(0, 0, 0, 0.3);
+    --code-bg: #2d2d2d;
 }
+
 
 /* Base Styles */
 * {
@@ -292,6 +295,97 @@ body {
         top: 0.75rem;
         right: 0.75rem;
     }
+}
+
+.message.assistant pre {
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+}
+
+.message.assistant code {
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.message.assistant p {
+    margin: 0.5rem 0;
+}
+
+.message.assistant ul, 
+.message.assistant ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.message.assistant blockquote {
+    border-left: 3px solid var(--accent-primary);
+    margin: 0.5rem 0;
+    padding-left: 1rem;
+    color: var(--text-secondary);
+}
+
+.message.assistant table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5rem 0;
+}
+
+.message.assistant th,
+.message.assistant td {
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+}
+
+.message.assistant img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 0.5rem 0;
+}
+
+.message.assistant table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: 0.9em;
+}
+
+.message.assistant th,
+.message.assistant td {
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+    text-align: left;
+}
+
+.message.assistant th {
+    background-color: var(--bg-secondary);
+    font-weight: 600;
+}
+
+.message.assistant tr:nth-child(even) {
+    background-color: var(--bg-secondary);
+}
+
+.message.assistant tr:hover {
+    background-color: var(--hover-bg);
+}
+
+/* Verbesserte Darstellung für Mobile */
+@media (max-width: 768px) {
+    .message.assistant table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
+
+/* Dark mode specific code highlighting */
+[data-theme="dark"] .hljs {
+    background: var(--code-bg);
+    color: var(--text-primary);
 }
 
 /* Dark Mode Input Fixes */

@@ -65,7 +65,7 @@ module.exports = {
       // Bei UNIQUE constraint failure wird der existierende Eintrag aktualisiert
       const result = insertDocument.run(documentId, title, documentId);
       if (result.changes > 0) {
-        console.log(`Document ${documentId} ${result.lastInsertRowid ? 'added to' : 'updated in'} processed_documents`);
+        console.log(`Document ${title} ${result.lastInsertRowid ? 'added to' : 'updated in'} processed_documents`);
         return true;
       }
       return false;

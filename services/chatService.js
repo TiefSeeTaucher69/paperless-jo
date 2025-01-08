@@ -126,12 +126,24 @@ class ChatService {
         content: userMessage
       });
 
+      let response = null;
       // Send to OpenAI
-      const response = await OpenAIService.client.chat.completions.create({
-        model: process.env.OPENAI_MODEL || "gpt-4-turbo-preview",
-        messages: chatData.messages,
-        temperature: 0.7,
-      });
+      if(process.env.AI_PROVIDER === 'openai') {  
+        response = await OpenAIService.client.chat.completions.create({
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          messages: chatData.messages,
+          temperature: 0.7,
+        });
+      }else if(process.env.AI_PROVIDER === 'ollama') {
+        console.log('Using Ollama AI provider');
+        response = await OpenAIService.client.chat.completions.create({
+          model: process.env.OLLAMA_MODEL,
+          messages: chatData.messages,
+          temperature: 0.7,
+        });
+      }else{
+        throw new Error('AI Provider not found');
+      }
 
       // Add assistant's response to history
       const assistantMessage = response.choices[0].message;

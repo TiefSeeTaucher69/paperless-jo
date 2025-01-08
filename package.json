@@ -13,6 +13,9 @@
     "artificial",
     "intelligence"
   ],
+  "nodemonConfig": {
+    "ignore": ["test/*", "docs/*", "node_modules/*", ".git/*", "*.log", "public/*", "views/*", "document.json" ]
+  },
   "author": "Clusterzx",
   "license": "MIT",
   "dependencies": {

@@ -8,6 +8,9 @@ const documentModel = require('../models/document.js');
 const debugService = require('../services/debugService.js');
 const configFile = require('../config/config.js');
 const ChatService = require('../services/chatService.js');
+const documentsService = require('../services/documentsService.js');
+const fs = require('fs').promises;
+const path = require('path');
 
 // API endpoints that should not redirect
 const API_ENDPOINTS = ['/health', '/manual'];
@@ -27,12 +30,102 @@ router.use(async (req, res, next) => {
 
 // const base64Encode = (str) => Buffer.from(str).toString('base64');
 
+// router.get('/sampleData', async (req, res) => {
+//   try {
+//     const document = await paperlessService.getDocument(70)
+//     res.json({ document });
+//   } catch (error) {
+//     console.error('Error loading sample data:', error);
+//     res.status(500).json({ error: 'Error loading sample data' });
+//   }
+// });
+
+router.get('/sampleData/:id', async (req, res) => {
+  try {
+    //get all correspondents from one document by id
+    const document = await paperlessService.getDocument(req.params.id);
+    const correspondents = await paperlessService.getCorrespondentsFromDocument(document.id);
+
+  } catch (error) {
+    console.error('Error loading sample data:', error);
+    res.status(500).json({ error: 'Error loading sample data' });
+  }
+});
+
+// Documents view route
+router.get('/playground', async (req, res) => {
+  try {
+    const {
+      documents,
+      tagNames,
+      correspondentNames,
+      paperlessUrl
+    } = await documentsService.getDocumentsWithMetadata();
+
+    //limit documents to 16 items
+    documents.length = 16;
+
+    res.render('playground', {
+      documents,
+      tagNames,
+      correspondentNames,
+      paperlessUrl,
+      version: configFile.PAPERLESS_AI_VERSION || ' '
+    });
+  } catch (error) {
+    console.error('Error loading documents view:', error);
+    res.status(500).send('Error loading documents');
+  }
+});
+
+router.get('/thumb/:documentId', async (req, res) => {
+  const cachePath = path.join('./public/images', `${req.params.documentId}.png`);
+
+  try {
+    // Prüfe ob das Bild bereits im Cache existiert
+    try {
+      await fs.access(cachePath);
+      console.log('Serving cached thumbnail');
+      
+      // Wenn ja, sende direkt das gecachte Bild
+      res.setHeader('Content-Type', 'image/png');
+      return res.sendFile(path.resolve(cachePath));
+      
+    } catch (err) {
+      // File existiert nicht im Cache, hole es von Paperless
+      console.log('Thumbnail not cached, fetching from Paperless');
+      
+      const thumbnailData = await paperlessService.getThumbnailImage(req.params.documentId);
+      
+      if (!thumbnailData) {
+        return res.status(404).send('Thumbnail nicht gefunden');
+      }
+
+      // Speichere im Cache
+      await fs.mkdir(path.dirname(cachePath), { recursive: true }); // Erstelle Verzeichnis falls nicht existiert
+      await fs.writeFile(cachePath, thumbnailData);
+
+      // Sende das Bild
+      res.setHeader('Content-Type', 'image/png');
+      res.send(thumbnailData);
+    }
+
+  } catch (error) {
+    console.error('Fehler beim Abrufen des Thumbnails:', error);
+    res.status(500).send('Fehler beim Laden des Thumbnails');
+  }
+});
 
 // Hauptseite mit Dokumentenliste
 router.get('/chat', async (req, res) => {
   try {
-    const documents = await paperlessService.getDocuments();
-    res.render('chat', { documents });
+    if(process.env.AI_PROVIDER === 'openai') {
+      const documents = await paperlessService.getDocuments();
+      res.render('chat', { documents });
+    }else{
+      const documents = await paperlessService.getDocuments();
+      res.render('chat', { documents });
+    }
   } catch (error) {
     console.error('Error loading documents:', error);
     res.status(500).send('Error loading documents');
@@ -97,7 +190,8 @@ router.get('/setup', async (req, res) => {
     AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
     USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
     PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS),
-    PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' '
+    PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' ',
+    PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || 'yes'
   };
   
   if (isConfigured) {
@@ -272,6 +366,13 @@ router.get('/debug', async (req, res) => {
   res.render('debug');
 });
 
+// router.get('/test/:correspondent', async (req, res) => {
+//   //create a const for the correspondent that is base64 encoded and decode it
+//   const correspondentx = Buffer.from(req.params.correspondent, 'base64').toString('ascii');
+//   const correspondent = await paperlessService.searchForExistingCorrespondent(correspondentx);
+//   res.send(correspondent);
+// });
+
 router.get('/debug/tags', async (req, res) => {
   const tags = await debugService.getTags();
   res.json(tags);
@@ -311,10 +412,34 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
   }
 });
 
+router.post('/manual/playground', express.json(), async (req, res) => {
+  try {
+    const { content, existingTags, prompt } = req.body;
+    
+    if (!content || typeof content !== 'string') {
+      console.log('Invalid content received:', content);
+      return res.status(400).json({ error: 'Valid content string is required' });
+    }
+
+    if (process.env.AI_PROVIDER === 'openai') {
+      const analyzeDocument = await openaiService.analyzePlayground(content, prompt);
+      return res.json(analyzeDocument);
+    } else if (process.env.AI_PROVIDER === 'ollama') {
+      const analyzeDocument = await ollamaService.analyzePlayground(content, prompt);
+      return res.json(analyzeDocument);
+    } else {
+      return res.status(500).json({ error: 'AI provider not configured' });
+    }
+  } catch (error) {
+    console.error('Analysis error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/manual/updateDocument', express.json(), async (req, res) => {
   try {
     var { documentId, tags, correspondent, title } = req.body;
-    
+    console.log("TITLE: ", title);
     // Convert all tags to names if they are IDs
     tags = await Promise.all(tags.map(async tag => {
       console.log('Processing tag:', tag);
@@ -338,7 +463,7 @@ router.post('/manual/updateDocument', express.json(), async (req, res) => {
     // Process correspondent if provided
     const correspondentData = correspondent ? await paperlessService.getOrCreateCorrespondent(correspondent) : null;
 
-    // First, remove all unused tags
+
     await paperlessService.removeUnusedTagsFromDocument(documentId, tagIds);
     
     // Then update with new tags (this will only add new ones since we already removed unused ones)
@@ -348,10 +473,13 @@ router.post('/manual/updateDocument', express.json(), async (req, res) => {
       title: title ? title : null
     };
 
+    if(updateData.tags === null && updateData.correspondent === null && updateData.title === null) {
+      return res.status(400).json({ error: 'No changes provided' });
+    }
     const updateDocument = await paperlessService.updateDocument(documentId, updateData);
     
     // Mark document as processed
-    await documentModel.addProcessedDocument(documentId, updateDocument.title);
+    await documentModel.addProcessedDocument(documentId, updateData.title);
 
     res.json(updateDocument);
   } catch (error) {

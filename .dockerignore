@@ -16,3 +16,6 @@ preview.png
 data bak/
 .env*
 docker-compose-dev.yml
+public/images/
+delete_all.js
+documents.json

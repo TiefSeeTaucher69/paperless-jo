@@ -11,6 +11,9 @@ const setupRoutes = require('./routes/setup');
 
 const app = express();
 
+// running task true or false
+let runningTask = false;
+
 // EJS setup
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -50,6 +53,7 @@ const initializeDataDirectory = async () => {
 
 // Main scanning function
 async function scanInital() {
+  config.CONFIGURED = false;
   try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
@@ -57,8 +61,11 @@ async function scanInital() {
       return;
     }
 
+    config.CONFIGURED = true;
+
+
     const existingTags = await paperlessService.getTags();
-    const documents = await paperlessService.getDocuments();
+    const documents = await paperlessService.getAllDocuments();
     
     for (const doc of documents) {
       const isProcessed = await documentModel.isDocumentProcessed(doc.id);
@@ -68,7 +75,7 @@ async function scanInital() {
         
         const content = await paperlessService.getDocumentContent(doc.id);
         const aiService = AIServiceFactory.getService();
-        const analysis = await aiService.analyzeDocument(content, existingTags);
+        const analysis = await aiService.analyzeDocument(content, existingTags, doc.id);
         if (analysis.error) {
           console.error('Document analysis failed:', result.error);
           // Handle error appropriately
@@ -117,9 +124,14 @@ async function scanInital() {
 
 // Main scanning function
 async function scanDocuments() {
+  if (runningTask) {
+    console.log('Task already running');
+    return;
+  }
   try {
+    runningTask = true;
     const existingTags = await paperlessService.getTags();
-    const documents = await paperlessService.getDocuments();
+    const documents = await paperlessService.getAllDocuments();
     
     for (const doc of documents) {
       const isProcessed = await documentModel.isDocumentProcessed(doc.id);
@@ -169,6 +181,8 @@ async function scanDocuments() {
   } catch (error) {
     console.error('Error during document scan:', error);
   }
+  runningTask = false;
+  console.log('[INFO] Task completed');
 }
 
 // Setup route handling

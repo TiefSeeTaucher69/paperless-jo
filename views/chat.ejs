@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Paperless Chat</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    
+    <!-- Custom Styles -->
     <link rel="stylesheet" href="css/chat.css">
 </head>
 <body data-theme="light">
@@ -38,7 +45,7 @@
                     id="messageInput"
                     name="message" 
                     class="message-input"
-                    placeholder="Type your message..."
+                    placeholder="Type your message... (Shift + Enter for new line)"
                     rows="1"
                     required></textarea>
                 <button type="submit" class="send-button">
@@ -48,7 +55,7 @@
         </div>
     </div>
 
-    <!-- Theme Toggle Button -->
+    <!-- Theme Toggle -->
     <button class="theme-toggle" onclick="toggleTheme()">
         <svg id="lightIcon" class="theme-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -60,6 +67,7 @@
         </svg>
     </button>
 
+    <!-- Custom Scripts -->
     <script src="js/chat.js"></script>
 </body>
 </html>
