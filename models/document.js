@@ -5,7 +5,7 @@ const fs = require('fs');
 const { get } = require('http');
 
 // Ensure data directory exists
-const dataDir = path.join(__dirname, '..', 'data');
+const dataDir = path.join(process.cwd(), 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
