@@ -9,7 +9,7 @@ class PaperlessService {
     this.client = null;
     this.tagCache = new Map();
     this.lastTagRefresh = 0;
-    this.CACHE_LIFETIME = 30000; // 30 Sekunden
+    this.CACHE_LIFETIME = 3000; // 3 Sekunden
   }
 
   initialize() {

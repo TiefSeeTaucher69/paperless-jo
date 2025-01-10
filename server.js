@@ -64,6 +64,11 @@ async function processDocument(doc, existingTags, ownUserId) {
     paperlessService.getDocument(doc.id)
   ]);
 
+  if (!content || !content.length >= 10) {
+    console.log(`[DEBUG] Document ${doc.id} has no content, skipping analysis`);
+    return null;
+  }
+
   const aiService = AIServiceFactory.getService();
   const analysis = await aiService.analyzeDocument(content, existingTags, doc.id);
   
