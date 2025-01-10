@@ -250,61 +250,91 @@ router.get('/chat/init/:documentId', async (req, res) => {
   }
 });
 
-router.get('/setup', async (req, res) => {
-
-  const normalizeArray = (value) => {
-    if (!value) return [];
-    if (Array.isArray(value)) return value;
-    if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
-    return [];
-  };
-
-  const isConfigured = await setupService.isConfigured();
-  let config = {
-    PAPERLESS_API_URL: (process.env.PAPERLESS_API_URL || 'http://localhost:8000').replace(/\/api$/, ''),
-    PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN || '',
-    AI_PROVIDER: process.env.AI_PROVIDER || 'openai',
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-    OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-    OLLAMA_API_URL: process.env.OLLAMA_API_URL || 'http://localhost:11434',
-    OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'llama3.2',
-    SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
-    SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
-    PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
-    TAGS: normalizeArray(process.env.TAGS),
-    ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
-    AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
-    USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
-    PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS),
-    PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' ',
-    PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || 'yes'
-  };
-  
-  if (isConfigured) {
-    // redirect to dashboard if already configured
-    return res.redirect('/dashboard');
+const normalizeArray = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    return value.split(',').map(item => item.trim()).filter(Boolean);
   }
+  return [];
+};
 
-  // if (isConfigured) {
-  //   const savedConfig = await setupService.loadConfig();
-  //   if (savedConfig.PAPERLESS_API_URL) {
-  //     savedConfig.PAPERLESS_API_URL = savedConfig.PAPERLESS_API_URL.replace(/\/api$/, '');
-  //   }
+router.get('/setup', async (req, res) => {
+  try {
+    // Base configuration object - load this FIRST, before any checks
+    let config = {
+      PAPERLESS_API_URL: (process.env.PAPERLESS_API_URL || 'http://localhost:8000').replace(/\/api$/, ''),
+      PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN || '',
+      AI_PROVIDER: process.env.AI_PROVIDER || 'openai',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+      OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      OLLAMA_API_URL: process.env.OLLAMA_API_URL || 'http://localhost:11434',
+      OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'llama3.2',
+      SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
+      SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
+      PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
+      TAGS: normalizeArray(process.env.TAGS),
+      ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
+      AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
+      USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
+      PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS),
+      PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' ',
+      PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || 'yes'
+    };
 
-  //   savedConfig.TAGS = normalizeArray(savedConfig.TAGS);
-  //   savedConfig.PROMPT_TAGS = normalizeArray(savedConfig.PROMPT_TAGS);
+    // Check both configuration and users
+    const [isEnvConfigured, users] = await Promise.all([
+      setupService.isConfigured(),
+      documentModel.getUsers()
+    ]);
 
-  //   config = { ...config, ...savedConfig };
-  // }
+    // Load saved config if it exists
+    if (isEnvConfigured) {
+      const savedConfig = await setupService.loadConfig();
+      if (savedConfig.PAPERLESS_API_URL) {
+        savedConfig.PAPERLESS_API_URL = savedConfig.PAPERLESS_API_URL.replace(/\/api$/, '');
+      }
 
-  // Debug-output
-  console.log('Current config TAGS:', config.TAGS);
-  console.log('Current config PROMPT_TAGS:', config.PROMPT_TAGS);
-  
-  res.render('setup', { 
-    config,
-    success: isConfigured ? 'The application is already configured. You can update the configuration below.' : undefined
-  });
+      savedConfig.TAGS = normalizeArray(savedConfig.TAGS);
+      savedConfig.PROMPT_TAGS = normalizeArray(savedConfig.PROMPT_TAGS);
+
+      config = { ...config, ...savedConfig };
+    }
+
+    // Debug output
+    console.log('Current config TAGS:', config.TAGS);
+    console.log('Current config PROMPT_TAGS:', config.PROMPT_TAGS);
+
+    // Check if system is fully configured
+    const hasUsers = Array.isArray(users) && users.length > 0;
+    const isFullyConfigured = isEnvConfigured && hasUsers;
+
+    // Generate appropriate success message
+    let successMessage;
+    if (isEnvConfigured && !hasUsers) {
+      successMessage = 'Environment is configured, but no users exist. Please create at least one user.';
+    } else if (isEnvConfigured) {
+      successMessage = 'The application is already configured. You can update the configuration below.';
+    }
+
+    // If everything is configured and we have users, redirect to dashboard
+    // BUT only after we've loaded all the config
+    if (isFullyConfigured) {
+      return res.redirect('/dashboard');
+    }
+
+    // Render setup page with config and appropriate message
+    res.render('setup', {
+      config,
+      success: successMessage
+    });
+  } catch (error) {
+    console.error('Setup route error:', error);
+    res.status(500).render('setup', {
+      config: {},
+      error: 'An error occurred while loading the setup page.'
+    });
+  }
 });
 
 router.get('/manual/preview/:id', async (req, res) => {

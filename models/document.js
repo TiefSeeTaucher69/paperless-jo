@@ -278,6 +278,15 @@ module.exports = {
     }
   },
 
+  async getUsers() {
+    try {
+      return db.prepare('SELECT * FROM users').all();
+    } catch (error) {
+      console.error('[ERROR] getting users:', error);
+      return [];
+    }
+  },
+
 
   // Utility method to close the database connection
   closeDatabase() {
