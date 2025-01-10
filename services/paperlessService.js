@@ -848,9 +848,13 @@ class PaperlessService {
         });
         
         if (response.data.results && response.data.results.length > 0) {
-            const userId = response.data.results[0].id;
-            console.log('[DEBUG] Own user ID:', userId);
-            return userId;
+            const userInfo = response.data.results;
+            //filter for username by process.env.PAPERLESS_USERNAME
+            const user = userInfo.find(user => user.username === process.env.PAPERLESS_USERNAME);
+            if (user) {
+                console.log(`[DEBUG] Found own user ID: ${user.id}`);
+                return user.id;
+            }
         }
         return null;
     } catch (error) {

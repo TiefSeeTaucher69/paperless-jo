@@ -73,7 +73,7 @@ async function processDocument(doc, existingTags, ownUserId) {
   const analysis = await aiService.analyzeDocument(content, existingTags, doc.id);
   
   if (analysis.error) {
-    throw new Error(`Document analysis failed: ${analysis.error}`);
+    throw new Error(`[ERROR] Document analysis failed: ${analysis.error}`);
   }
 
   return { analysis, originalData };
@@ -82,7 +82,7 @@ async function processDocument(doc, existingTags, ownUserId) {
 async function buildUpdateData(analysis, doc) {
   const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags);
   if (errors.length > 0) {
-    console.warn('Some tags could not be processed:', errors);
+    console.warn('[ERROR] Some tags could not be processed:', errors);
   }
 
   const updateData = {
@@ -98,7 +98,7 @@ async function buildUpdateData(analysis, doc) {
         updateData.correspondent = correspondent.id;
       }
     } catch (error) {
-      console.error(`Error processing correspondent:`, error);
+      console.error(`[ERROR] Error processing correspondent:`, error);
     }
   }
 
@@ -131,7 +131,7 @@ async function scanInitial() {
   try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
-      console.log('Setup not completed. Skipping document scan.');
+      console.log('[ERROR] Setup not completed. Skipping document scan.');
       return;
     }
 
@@ -150,7 +150,7 @@ async function scanInitial() {
         const updateData = await buildUpdateData(analysis, doc);
         await saveDocumentChanges(doc.id, updateData, analysis, originalData);
       } catch (error) {
-        console.error(`Error processing document ${doc.id}:`, error);
+        console.error(`[ERROR] processing document ${doc.id}:`, error);
       }
     }
   } catch (error) {
@@ -160,7 +160,7 @@ async function scanInitial() {
 
 async function scanDocuments() {
   if (runningTask) {
-    console.log('Task already running');
+    console.log('[DEBUG] Task already running');
     return;
   }
 
@@ -260,16 +260,18 @@ async function startScanning() {
 }
 
 // Error handlers
-process.on('SIGTERM', async () => {
-  console.log('Received SIGTERM. Starting graceful shutdown...');
-  try {
-    await documentModel.closeDatabase();
-    process.exit(0);
-  } catch (error) {
-    console.error('[ERROR] during shutdown:', error);
-    process.exit(1);
-  }
-});
+// process.on('SIGTERM', async () => {
+//   console.log('Received SIGTERM. Starting graceful shutdown...');
+//   try {
+//     console.log('Closing database...');
+//     await documentModel.closeDatabase(); // Jetzt warten wir wirklich auf den Close
+//     console.log('Database closed successfully');
+//     process.exit(0);
+//   } catch (error) {
+//     console.error('[ERROR] during shutdown:', error);
+//     process.exit(1);
+//   }
+// });
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
@@ -280,6 +282,23 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
+
+async function gracefulShutdown(signal) {
+  console.log(`[DEBUG] Received ${signal} signal. Starting graceful shutdown...`);
+  try {
+    console.log('[DEBUG] Closing database...');
+    await documentModel.closeDatabase();
+    console.log('[DEBUG] Database closed successfully');
+    process.exit(0);
+  } catch (error) {
+    console.error(`[ERROR] during ${signal} shutdown:`, error);
+    process.exit(1);
+  }
+}
+
+// Handle both SIGTERM and SIGINT
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start server
 async function startServer() {

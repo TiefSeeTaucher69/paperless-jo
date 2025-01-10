@@ -290,10 +290,15 @@ module.exports = {
 
   // Utility method to close the database connection
   closeDatabase() {
-    try {
-      db.close();
-    } catch (error) {
-      console.error('[ERROR] closing database:', error);
-    }
+    return new Promise((resolve, reject) => {
+      try {
+        db.close();
+        console.log('[DEBUG] Database closed successfully');
+        resolve();
+      } catch (error) {
+        console.error('[ERROR] closing database:', error);
+        reject(error);
+      }
+    });
   }
 };

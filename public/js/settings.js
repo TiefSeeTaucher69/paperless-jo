@@ -376,7 +376,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
         try {
             const formData = new FormData(setupForm);
-            const response = await fetch('/setup', {
+            const response = await fetch('/settings', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

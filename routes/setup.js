@@ -91,45 +91,45 @@ router.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
   try {
+    console.log('Login attempt for user:', username);   
     // Get user data - returns a single user object
     const user = await documentModel.getUser(username);
     
     // Check if user was found and has required fields
     if (!user || !user.password) {
-      console.log('User not found or invalid data:', username);
+      console.log('[FAILED LOGIN] User not found or invalid data:', username);
       return res.render('login', { error: 'Invalid credentials' });
     }
 
     // Compare passwords
     const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      console.log('Invalid password for user:', username);
-      return res.render('login', { error: 'Invalid credentials' });
+    console.log('Password validation result:', isValidPassword);
+
+    if (isValidPassword) {
+      const token = jwt.sign(
+        { 
+          id: user.id, 
+          username: user.username 
+        },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+      res.cookie('jwt', token, {
+        httpOnly: true,
+        secure: false,  
+        sameSite: 'lax', 
+        path: '/',
+        maxAge: 24 * 60 * 60 * 1000 
+      });
+
+      return res.redirect('/dashboard');
     }
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        id: user.id, 
-        username: user.username 
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    // Set JWT as cookie
-    res.cookie('jwt', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    });
-
-    res.redirect('/dashboard');
   } catch (error) {
     console.error('Login error:', error);
     res.render('login', { error: 'An error occurred during login' });
   }
 });
+
 
 // Logout route
 router.get('/logout', (req, res) => {
@@ -272,6 +272,7 @@ router.get('/setup', async (req, res) => {
     let config = {
       PAPERLESS_API_URL: (process.env.PAPERLESS_API_URL || 'http://localhost:8000').replace(/\/api$/, ''),
       PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN || '',
+      PAPERLESS_USERNAME: process.env.PAPERLESS_USERNAME || '',
       AI_PROVIDER: process.env.AI_PROVIDER || 'openai',
       OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
       OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
@@ -444,6 +445,7 @@ router.get('/settings', async (req, res) => {
   let config = {
     PAPERLESS_API_URL: (process.env.PAPERLESS_API_URL || 'http://localhost:8000').replace(/\/api$/, ''),
     PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN || '',
+    PAPERLESS_USERNAME: process.env.PAPERLESS_USERNAME || '',
     AI_PROVIDER: process.env.AI_PROVIDER || 'openai',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
     OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
@@ -457,7 +459,8 @@ router.get('/settings', async (req, res) => {
     AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
     USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
     PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS),
-    PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' '
+    PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' ',
+    PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || ' '
   };
   
   if (isConfigured) {
@@ -663,7 +666,8 @@ router.post('/setup', express.json(), async (req, res) => {
           usePromptTags,
           promptTags,
           username,
-          password
+          password,
+          paperlessUsername
       } = req.body;
 
       const normalizeArray = (value) => {
@@ -689,6 +693,7 @@ router.post('/setup', express.json(), async (req, res) => {
       const config = {
           PAPERLESS_API_URL: paperlessUrl + '/api',
           PAPERLESS_API_TOKEN: paperlessToken,
+          PAPERLESS_USERNAME: paperlessUsername,
           AI_PROVIDER: aiProvider,
           SCAN_INTERVAL: scanInterval || '*/30 * * * *',
           SYSTEM_PROMPT: processedPrompt,
@@ -725,6 +730,105 @@ router.post('/setup', express.json(), async (req, res) => {
       await setupService.saveConfig(config);
       const hashedPassword = await bcrypt.hash(password, 15);
       await documentModel.addUser(username, hashedPassword);
+      // Send success response
+      res.json({ 
+          success: true,
+          message: 'Configuration saved successfully.',
+          restart: true
+      });
+
+      // Trigger application restart
+      setTimeout(() => {
+          process.exit(0);
+      }, 5000);
+
+  } catch (error) {
+      console.error('Setup error:', error);
+      res.status(500).json({ 
+          error: 'An error occurred: ' + error.message
+      });
+  }
+});
+
+router.post('/settings', express.json(), async (req, res) => {
+  try {
+      const { 
+          paperlessUrl, 
+          paperlessToken, 
+          aiProvider,
+          openaiKey,
+          openaiModel,
+          ollamaUrl,
+          ollamaModel,
+          scanInterval,
+          systemPrompt,
+          showTags,
+          tags,
+          aiProcessedTag,
+          aiTagName,
+          usePromptTags,
+          promptTags,
+          paperlessUsername
+      } = req.body;
+
+      const normalizeArray = (value) => {
+          if (!value) return [];
+          if (Array.isArray(value)) return value;
+          if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
+          return [];
+      };
+
+      const processedPrompt = systemPrompt 
+          ? systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n')
+          : '';
+
+      // Validate Paperless config
+      const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
+      if (!isPaperlessValid) {
+          return res.status(400).json({ 
+              error: 'Paperless-ngx connection failed. Please check URL and Token.'
+          });
+      }
+
+      // Prepare base config
+      const config = {
+          PAPERLESS_API_URL: paperlessUrl + '/api',
+          PAPERLESS_API_TOKEN: paperlessToken,
+          PAPERLESS_USERNAME: paperlessUsername,
+          AI_PROVIDER: aiProvider,
+          SCAN_INTERVAL: scanInterval || '*/30 * * * *',
+          SYSTEM_PROMPT: processedPrompt,
+          PROCESS_PREDEFINED_DOCUMENTS: showTags || 'no',
+          TAGS: normalizeArray(tags),
+          ADD_AI_PROCESSED_TAG: aiProcessedTag || 'no',
+          AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
+          USE_PROMPT_TAGS: usePromptTags || 'no',
+          PROMPT_TAGS: normalizeArray(promptTags)
+      };
+
+      // Validate AI provider config
+      if (aiProvider === 'openai') {
+          const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
+          if (!isOpenAIValid) {
+              return res.status(400).json({ 
+                  error: 'OpenAI API Key is not valid. Please check the key.'
+              });
+          }
+          config.OPENAI_API_KEY = openaiKey;
+          config.OPENAI_MODEL = openaiModel || 'gpt-4o-mini';
+      } else if (aiProvider === 'ollama') {
+          const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
+          if (!isOllamaValid) {
+              return res.status(400).json({ 
+                  error: 'Ollama connection failed. Please check URL and Model.'
+              });
+          }
+          config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
+          config.OLLAMA_MODEL = ollamaModel || 'llama3.2';
+      }
+
+      // Save configuration
+      await setupService.saveConfig(config);
       // Send success response
       res.json({ 
           success: true,
