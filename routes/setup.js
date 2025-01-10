@@ -76,7 +76,14 @@ const protectApiRoute = (req, res, next) => {
 };
 
 router.get('/login', (req, res) => {
-  res.render('login', { error: null });
+  //check if a user exists beforehand
+  documentModel.getUsers().then((users) => {
+    if(users.length === 0) {
+      res.redirect('setup');
+    } else {
+      res.render('login', { error: null });
+    }
+  });
 });
 
 // Login page route
