@@ -36,7 +36,11 @@ Please test the results beforehand in a separate development environment and be 
   />
 </picture>
 
-## Features
+## IMPORTANT:
+If you upgrade from 1.x to 2.1.x or later:
+1. You are now forced to setup a user as the Webapp now requires authentication. I know many of you only use it in secured and encapsulated networks and don't care for authentication. But I think we all do good when we secure out data as much as possible.
+2. You have to set the username the token key belongs to. There were so many bugs and issues that were traced back to Documents having other user/access rights then the api key could provide.
+3. Thanks for listening, love ya!
 
 ## Features
 
