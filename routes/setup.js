@@ -11,34 +11,124 @@ const ChatService = require('../services/chatService.js');
 const documentsService = require('../services/documentsService.js');
 const fs = require('fs').promises;
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const cookieParser = require('cookie-parser');
+const { authenticateJWT, isAuthenticated } = require('./auth.js');
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
 
 // API endpoints that should not redirect
-const API_ENDPOINTS = ['/health', '/manual'];
+const API_ENDPOINTS = ['/health'];
+// Routes that don't require authentication
+let PUBLIC_ROUTES = [
+  '/health',
+  '/login',
+  '/logout',
+  '/setup'
+];
 
-// Setup middleware to check if app is configured
+// Combined middleware to check authentication and setup
 router.use(async (req, res, next) => {
-  if (API_ENDPOINTS.includes(req.path) || req.path === '/setup') {
+  // Check if route is public
+  if (PUBLIC_ROUTES.some(route => req.path.startsWith(route))) {
     return next();
   }
+
+  // First check authentication
+  const token = req.cookies.jwt || req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.redirect('/login');
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+  } catch (error) {
+    res.clearCookie('jwt');
+    return res.redirect('/login');
+  }
+
+  // Then check if setup is completed
   const isConfigured = await setupService.isConfigured();
-  if (!isConfigured) {
+  if (!isConfigured && !req.path.startsWith('/setup')) {
     return res.redirect('/setup');
   }
   
   next();
 });
 
-// const base64Encode = (str) => Buffer.from(str).toString('base64');
+// Protected route middleware for API endpoints
+const protectApiRoute = (req, res, next) => {
+  const token = req.cookies.jwt || req.headers.authorization?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
 
-// router.get('/sampleData', async (req, res) => {
-//   try {
-//     const document = await paperlessService.getDocument(70)
-//     res.json({ document });
-//   } catch (error) {
-//     console.error('Error loading sample data:', error);
-//     res.status(500).json({ error: 'Error loading sample data' });
-//   }
-// });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({ message: 'Invalid or expired token' });
+  }
+};
+
+router.get('/login', (req, res) => {
+  res.render('login', { error: null });
+});
+
+// Login page route
+router.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    // Get user data - returns a single user object
+    const user = await documentModel.getUser(username);
+    
+    // Check if user was found and has required fields
+    if (!user || !user.password) {
+      console.log('User not found or invalid data:', username);
+      return res.render('login', { error: 'Invalid credentials' });
+    }
+
+    // Compare passwords
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      console.log('Invalid password for user:', username);
+      return res.render('login', { error: 'Invalid credentials' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        username: user.username 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Set JWT as cookie
+    res.cookie('jwt', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+
+    res.redirect('/dashboard');
+  } catch (error) {
+    console.error('Login error:', error);
+    res.render('login', { error: 'An error occurred during login' });
+  }
+});
+
+// Logout route
+router.get('/logout', (req, res) => {
+  res.clearCookie('jwt');
+  res.redirect('/login');
+});
 
 router.get('/sampleData/:id', async (req, res) => {
   try {
@@ -47,13 +137,13 @@ router.get('/sampleData/:id', async (req, res) => {
     const correspondents = await paperlessService.getCorrespondentsFromDocument(document.id);
 
   } catch (error) {
-    console.error('Error loading sample data:', error);
+    console.error('[ERRO] loading sample data:', error);
     res.status(500).json({ error: 'Error loading sample data' });
   }
 });
 
 // Documents view route
-router.get('/playground', async (req, res) => {
+router.get('/playground', protectApiRoute, async (req, res) => {
   try {
     const {
       documents,
@@ -73,7 +163,7 @@ router.get('/playground', async (req, res) => {
       version: configFile.PAPERLESS_AI_VERSION || ' '
     });
   } catch (error) {
-    console.error('Error loading documents view:', error);
+    console.error('[ERRO] loading documents view:', error);
     res.status(500).send('Error loading documents');
   }
 });
@@ -127,7 +217,7 @@ router.get('/chat', async (req, res) => {
       res.render('chat', { documents });
     }
   } catch (error) {
-    console.error('Error loading documents:', error);
+    console.error('[ERRO] loading documents:', error);
     res.status(500).send('Error loading documents');
   }
 });
@@ -155,16 +245,12 @@ router.get('/chat/init/:documentId', async (req, res) => {
       const result = await ChatService.initializeChat(documentId);
       res.json(result);
   } catch (error) {
-      console.error('Error initializing chat:', error);
+      console.error('[ERRO] initializing chat:', error);
       res.status(500).json({ error: 'Failed to initialize chat' });
   }
 });
 
 router.get('/setup', async (req, res) => {
-  const processSystemPrompt = (prompt) => {
-    if (!prompt) return '';
-    return prompt.replace(/\\n/g, '\n');
-  };
 
   const normalizeArray = (value) => {
     if (!value) return [];
@@ -195,16 +281,21 @@ router.get('/setup', async (req, res) => {
   };
   
   if (isConfigured) {
-    const savedConfig = await setupService.loadConfig();
-    if (savedConfig.PAPERLESS_API_URL) {
-      savedConfig.PAPERLESS_API_URL = savedConfig.PAPERLESS_API_URL.replace(/\/api$/, '');
-    }
-
-    savedConfig.TAGS = normalizeArray(savedConfig.TAGS);
-    savedConfig.PROMPT_TAGS = normalizeArray(savedConfig.PROMPT_TAGS);
-
-    config = { ...config, ...savedConfig };
+    // redirect to dashboard if already configured
+    return res.redirect('/dashboard');
   }
+
+  // if (isConfigured) {
+  //   const savedConfig = await setupService.loadConfig();
+  //   if (savedConfig.PAPERLESS_API_URL) {
+  //     savedConfig.PAPERLESS_API_URL = savedConfig.PAPERLESS_API_URL.replace(/\/api$/, '');
+  //   }
+
+  //   savedConfig.TAGS = normalizeArray(savedConfig.TAGS);
+  //   savedConfig.PROMPT_TAGS = normalizeArray(savedConfig.PROMPT_TAGS);
+
+  //   config = { ...config, ...savedConfig };
+  // }
 
   // Debug-output
   console.log('Current config TAGS:', config.TAGS);
@@ -533,7 +624,9 @@ router.post('/setup', express.json(), async (req, res) => {
           aiProcessedTag,
           aiTagName,
           usePromptTags,
-          promptTags
+          promptTags,
+          username,
+          password
       } = req.body;
 
       const normalizeArray = (value) => {
@@ -593,7 +686,8 @@ router.post('/setup', express.json(), async (req, res) => {
 
       // Save configuration
       await setupService.saveConfig(config);
-
+      const hashedPassword = await bcrypt.hash(password, 15);
+      await documentModel.addUser(username, hashedPassword);
       // Send success response
       res.json({ 
           success: true,
