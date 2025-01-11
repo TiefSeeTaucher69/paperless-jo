@@ -54,7 +54,8 @@ async function processDocument(doc, existingTags, ownUserId) {
   if (isProcessed) return null;
 
   const documentOwnerId = await paperlessService.getOwnerOfDocument(doc.id);
-  if (documentOwnerId !== ownUserId) {
+  if (documentOwnerId !== ownUserId && documentOwnerId !== null) {
+    console.log(`[DEBUG] Document belongs to: ${documentOwnerId}, skipping analysis`);
     console.log(`[DEBUG] Document ${doc.id} not owned by user, skipping analysis`);
     return null;
   }
