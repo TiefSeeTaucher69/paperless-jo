@@ -13,6 +13,7 @@ console.log('Loaded environment variables:', {
 module.exports = {
   PAPERLESS_AI_VERSION: '2.1.2',
   CONFIGURED: false,
+  predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
   paperless: {
     apiUrl: process.env.PAPERLESS_API_URL,
     apiToken: process.env.PAPERLESS_API_TOKEN

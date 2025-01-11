@@ -108,6 +108,17 @@ const insertUser = db.prepare(`
   VALUES (?, ?)
 `);
 
+// Add these prepared statements with your other ones at the top
+const getHistoryDocumentsCount = db.prepare(`
+  SELECT COUNT(*) as count FROM history_documents
+`);
+
+const getPaginatedHistoryDocuments = db.prepare(`
+  SELECT * FROM history_documents 
+  ORDER BY created_at DESC
+  LIMIT ? OFFSET ?
+`);
+
 
 
 module.exports = {
@@ -254,6 +265,100 @@ module.exports = {
       }
     }
   },
+
+  async getAllOriginalData() {
+    try {
+      return db.prepare('SELECT * FROM original_documents').all();
+    } catch (error) {
+      console.error('[ERROR] getting original data:', error);
+      return [];
+    }
+  },
+
+  async getAllHistory() {
+    try {
+      return db.prepare('SELECT * FROM history_documents').all();
+    } catch (error) {
+      console.error('[ERROR] getting history:', error);
+      return [];
+    }
+  },
+
+  async getHistoryDocumentsCount() {
+    try {
+      const result = getHistoryDocumentsCount.get();
+      return result.count;
+    } catch (error) {
+      console.error('[ERROR] getting history documents count:', error);
+      return 0;
+    }
+  },
+  
+  async getPaginatedHistory(limit, offset) {
+    try {
+      return getPaginatedHistoryDocuments.all(limit, offset);
+    } catch (error) {
+      console.error('[ERROR] getting paginated history:', error);
+      return [];
+    }
+  },
+
+  async deleteAllDocuments() {
+    try {
+      db.prepare('DELETE FROM processed_documents').run();
+      console.log('[DEBUG] All processed_documents deleted');
+      db.prepare('DELETE FROM history_documents').run();
+      console.log('[DEBUG] All history_documents deleted');
+      db.prepare('DELETE FROM original_documents').run();
+      console.log('[DEBUG] All original_documents deleted');
+      return true;
+    } catch (error) {
+      console.error('[ERROR] deleting documents:', error);
+      return false;
+    }
+  },
+
+  async deleteDocumentsIdList(idList) {
+    try {
+      console.log('[DEBUG] Received idList:', idList);
+  
+      const ids = Array.isArray(idList) ? idList : (idList?.ids || []);
+  
+      if (!Array.isArray(ids) || ids.length === 0) {
+        console.error('[ERROR] Invalid input: must provide an array of ids');
+        return false;
+      }
+  
+      // Convert string IDs to integers
+      const numericIds = ids.map(id => parseInt(id, 10));
+  
+      const placeholders = numericIds.map(() => '?').join(', ');
+      const query = `DELETE FROM processed_documents WHERE document_id IN (${placeholders})`;
+      const query2 = `DELETE FROM history_documents WHERE document_id IN (${placeholders})`;
+      const query3 = `DELETE FROM original_documents WHERE document_id IN (${placeholders})`;
+      console.log('[DEBUG] Executing SQL query:', query);
+      console.log('[DEBUG] Executing SQL query:', query2);
+      console.log('[DEBUG] Executing SQL query:', query3);
+      console.log('[DEBUG] With parameters:', numericIds);
+  
+      const stmt = db.prepare(query);
+      const stmt2 = db.prepare(query2);
+      const stmt3 = db.prepare(query3);
+      const result = stmt.run(numericIds);
+      const result2 = stmt2.run(numericIds);
+      const result3 = stmt3.run(numericIds);
+
+      console.log('[DEBUG] SQL result:', result);
+      console.log('[DEBUG] SQL result:', result2);
+      console.log('[DEBUG] SQL result:', result3);
+      console.log(`[DEBUG] Documents with IDs ${numericIds.join(', ')} deleted`);
+      return true;
+    } catch (error) {
+      console.error('[ERROR] deleting documents:', error);
+      return false;
+    }
+  },
+
 
   async addUser(username, password) {
     try {

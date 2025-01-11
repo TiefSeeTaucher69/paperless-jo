@@ -257,6 +257,93 @@ router.get('/chat/init/:documentId', async (req, res) => {
   }
 });
 
+router.get('/history', async (req, res) => {
+  try {
+    // Get all documents and tags
+    const historyDocuments = await documentModel.getAllHistory();
+    const allTags = await paperlessService.getTags();
+
+    // Create a map of tag IDs to tag objects for quick lookup
+    const tagMap = new Map(allTags.map(tag => [tag.id, tag]));
+
+    // Format documents with resolved tags
+    const actual = historyDocuments.map(doc => {
+      // Parse tag IDs and map them to full tag objects
+      const tagIds = doc.tags === '[]' ? [] : JSON.parse(doc.tags || '[]');
+      const resolvedTags = tagIds.map(id => tagMap.get(parseInt(id))).filter(Boolean);
+
+      return {
+        document_id: doc.document_id,
+        title: doc.title || 'Modified: Invalid Date',
+        created_at: doc.created_at,
+        tags: resolvedTags, // Now contains full tag objects instead of just IDs
+        correspondent: doc.correspondent || 'Not assigned'
+      };
+    });
+
+    // Get unique correspondents
+    const allCorrespondents = [...new Set(actual.map(doc => doc.correspondent))].filter(Boolean).sort();
+
+    // Calculate pagination values
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const totalDocuments = actual.length;
+    const totalPages = Math.ceil(totalDocuments / limit);
+
+    // Get paginated subset of documents
+    const paginatedDocuments = actual.slice(offset, offset + limit);
+
+    // Render the page
+    res.render('history', {
+      version: configFile.PAPERLESS_AI_VERSION,
+      actual: paginatedDocuments,
+      filters: {
+        allTags: allTags,
+        allCorrespondents: allCorrespondents
+      },
+      pagination: {
+        current: page,
+        pages: totalPages,
+        limit: limit,
+        total: totalDocuments
+      }
+    });
+
+  } catch (error) {
+    console.error('[ERROR] loading documents:', error);
+    res.status(500).send('Error loading documents');
+  }
+});
+
+router.post('/api/reset-all-documents', async (req, res) => {
+  try {
+    await documentModel.deleteAllDocuments();
+    res.json({ success: true });
+  }
+  catch (error) {
+    console.error('[ERROR] resetting documents:', error);
+    res.status(500).json({ error: 'Error resetting documents' });
+  }
+});
+
+router.post('/api/reset-documents', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return res.status(400).json({ error: 'Invalid document IDs' });
+    }
+
+    await documentModel.deleteDocumentsIdList(ids);
+    res.json({ success: true });
+  }
+  catch (error) {
+    console.error('[ERROR] resetting documents:', error);
+    res.status(500).json({ error: 'Error resetting documents' });
+  }
+});
+
+
 const normalizeArray = (value) => {
   if (!value) return [];
   if (Array.isArray(value)) return value;

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modified Documents - Paperless-AI</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body class="h-full">
+    <button id="themeToggle" class="theme-toggle">
+        <i class="fas fa-moon dark:fas fa-sun"></i>
+    </button>
+
+    <div class="layout-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <h1 class="brand-title">Paperless-AI<small style="display: block;"><%= version %></small></h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="/dashboard" class="sidebar-link">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/manual" class="sidebar-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Manual</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/chat" class="sidebar-link">
+                            <i class="fa-solid fa-comment"></i>
+                            <span>Chat (beta)</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/playground" class="sidebar-link">
+                            <i class="fa-solid fa-flask-vial"></i>
+                            <span>Playground</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/history" class="sidebar-link active">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <span>History</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/settings" class="sidebar-link">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/logout" class="sidebar-link">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            <span>Logout</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content modified-documents-page">
+            <div class="content-wrapper">
+                <div class="content-header flex justify-between items-center mb-6">
+                    <h1 class="content-title">Modified Documents</h1>
+                    <div class="flex gap-4">
+                        <button id="resetSelectedBtn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                            Reset Selected
+                        </button>
+                        <button id="resetAllBtn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                            Reset All
+                        </button>
+                    </div>
+                </div>
+            
+                <!-- Search and Filters -->
+                <div class="flex flex-wrap gap-4 mb-6">
+                    <div class="flex-1 min-w-[200px]">
+                        <input type="text" 
+                               id="searchInput" 
+                               placeholder="Search documents..." 
+                               value="<%= filters.search %>"
+                               class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    
+                    <div class="min-w-[200px]">
+                        <select id="tagFilter" 
+                                class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">All Tags</option>
+                            <% filters.allTags.forEach(function(tag) { %>
+                                <option value="<%= tag.id %>" <%= filters.tag === tag.id ? 'selected' : '' %>>
+                                    <%= tag.name %>
+                                </option>
+                            <% }); %>
+                        </select>
+                    </div>
+                    
+                    <div class="min-w-[200px]">
+                        <select id="correspondentFilter" 
+                                class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">All Correspondents</option>
+                            <% filters.allCorrespondents.forEach(function(corr) { %>
+                                <option value="<%= corr %>" <%= filters.correspondent === corr ? 'selected' : '' %>>
+                                    <%= corr %>
+                                </option>
+                            <% }); %>
+                        </select>
+                    </div>
+                </div>
+            
+                <!-- Table Container -->
+                <div class="material-card"> <!-- Using your material-card class for consistent theming -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead>
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">
+                                        <input type="checkbox" id="selectAll" class="rounded">
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">ID</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">Title</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">Tags</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">Correspondent</th>
+                                </tr>
+                            </thead>
+                            <tbody id="documentsTableBody">
+                                <% actual.forEach(function(doc) { %>
+                                    <tr class="border-t border-gray-200 hover:bg-gray-100">
+                                        <td class="px-4 py-4">
+                                            <input type="checkbox" class="doc-select rounded" value="<%= doc.document_id %>">
+                                        </td>
+                                        <td class="px-4 py-4 text-sm"><%= doc.document_id %></td>
+                                        <td class="px-4 py-4 text-sm">
+                                            <div class="font-medium"><%= doc.title %></div>
+                                            <div class="text-xs text-gray-500">Modified: <%= new Date(doc.created_at).toLocaleString() %></div>
+                                        </td>
+                                        <td class="px-4 py-4">
+                                            <div class="flex flex-wrap gap-2">
+                                                <% if (doc.tags && Array.isArray(doc.tags) && doc.tags.length > 0) { %>
+                                                    <% doc.tags.forEach(function(tag) { %>
+                                                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs" data-tag-id="<%= tag.id %>">
+                                                            <%= tag.name %>
+                                                        </span>
+                                                    <% }); %>
+                                                <% } else { %>
+                                                    <span class="text-gray-400 text-sm">No tags</span>
+                                                <% } %>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-4 text-sm">
+                                            <%= doc.correspondent %>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            
+                <!-- Pagination -->
+                <% if (pagination.pages > 1) { %>
+                    <div class="flex justify-center mt-6">
+                        <nav class="flex items-center gap-2">
+                            <% if (pagination.current > 1) { %>
+                                <a href="?page=<%= pagination.current - 1 %>" 
+                                   class="px-3 py-2 rounded-lg border hover:bg-gray-50">
+                                    Previous
+                                </a>
+                            <% } %>
+                            
+                            <% for(let i = 1; i <= pagination.pages; i++) { %>
+                                <a href="?page=<%= i %>" 
+                                   class="px-3 py-2 rounded-lg border <%= pagination.current === i ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50' %>">
+                                    <%= i %>
+                                </a>
+                            <% } %>
+                            
+                            <% if (pagination.current < pagination.pages) { %>
+                                <a href="?page=<%= pagination.current + 1 %>" 
+                                   class="px-3 py-2 rounded-lg border hover:bg-gray-50">
+                                    Next
+                                </a>
+                            <% } %>
+                        </nav>
+                    </div>
+                <% } %>
+            </div>
+        </main>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">Confirm Reset</h3>
+                <button class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-content">
+                <p class="mb-4">Are you sure you want to reset the selected documents to their original values? This action cannot be undone.</p>
+                <div class="flex justify-end gap-4">
+                    <button id="cancelReset" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">
+                        Cancel
+                    </button>
+                    <button id="confirmReset" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                        Confirm Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Confirmation Modal -->
+    <div id="confirmModalAll" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">Confirm Reset</h3>
+                <button class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-content">
+                <p class="mb-4">Are you sure you want to reset <b>all</b> documents to their original values? This action cannot be undone.</p>
+                <div class="flex justify-end gap-4">
+                    <button id="cancelResetAll" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">
+                        Cancel
+                    </button>
+                    <button id="confirmResetAll" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                        Confirm Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/dashboard.js"></script>
+    <script src="js/history.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize elements
+            const confirmModal = document.getElementById('confirmModal');
+            const confirmModalAll = document.getElementById('confirmModalAll');
+            const selectAll = document.getElementById('selectAll');
+            const resetAllBtn = document.getElementById('resetAllBtn');
+            const resetSelectedBtn = document.getElementById('resetSelectedBtn');
+            const searchInput = document.getElementById('searchInput');
+            const tagFilter = document.getElementById('tagFilter');
+            const correspondentFilter = document.getElementById('correspondentFilter');
+            const tableBody = document.getElementById('documentsTableBody');
+            const allRows = Array.from(tableBody.getElementsByTagName('tr'));
+        
+            // Select All functionality
+            selectAll.addEventListener('change', () => {
+                const visibleCheckboxes = document.querySelectorAll('tr:not([style*="display: none"]) .doc-select');
+                visibleCheckboxes.forEach(checkbox => {
+                    checkbox.checked = selectAll.checked;
+                });
+            });
+        
+            // Update selectAll when individual checkboxes change
+            document.querySelectorAll('.doc-select').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const visibleCheckboxes = document.querySelectorAll('tr:not([style*="display: none"]) .doc-select');
+                    selectAll.checked = Array.from(visibleCheckboxes).every(cb => cb.checked);
+                });
+            });
+        
+            // Filter functionality
+            function filterTable() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const selectedTag = tagFilter.value;
+                const selectedCorrespondent = correspondentFilter.value;
+        
+                allRows.forEach(row => {
+                    const title = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                    const correspondent = row.querySelector('td:nth-child(5)').textContent.toLowerCase();
+                    const tagElements = Array.from(row.querySelectorAll('.bg-blue-100'));
+                    const tags = tagElements.map(tag => tag.textContent.trim());
+                    const tagIds = tagElements.map(tag => tag.dataset.tagId);
+        
+                    const matchesSearch = !searchTerm || 
+                        title.includes(searchTerm) || 
+                        correspondent.includes(searchTerm) ||
+                        tags.some(tag => tag.toLowerCase().includes(searchTerm));
+        
+                    const matchesTag = !selectedTag || tagIds.includes(selectedTag);
+                    const matchesCorrespondent = !selectedCorrespondent || correspondent === selectedCorrespondent.toLowerCase();
+        
+                    row.style.display = (matchesSearch && matchesTag && matchesCorrespondent) ? '' : 'none';
+                });
+        
+                // Update select all checkbox state after filtering
+                const visibleCheckboxes = document.querySelectorAll('tr:not([style*="display: none"]) .doc-select');
+                selectAll.checked = visibleCheckboxes.length > 0 && Array.from(visibleCheckboxes).every(cb => cb.checked);
+            }
+        
+            // Debounced search
+            let timeoutId;
+            searchInput.addEventListener('input', () => {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(filterTable, 300);
+            });
+        
+            // Immediate filter on select changes
+            tagFilter.addEventListener('change', filterTable);
+            correspondentFilter.addEventListener('change', filterTable);
+        
+            // Reset functionality
+            async function resetDocuments(ids) {
+                try {
+                    const response = await fetch('/api/reset-documents', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ ids }),
+                    });
+        
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        throw new Error('Failed to reset documents');
+                    }
+                } catch (error) {
+                    console.error('Error resetting documents:', error);
+                    alert('Failed to reset documents. Please try again.');
+                }
+            }
+
+                        // Reset functionality
+            async function resetAllDocuments() {
+                try {
+                    const response = await fetch('/api/reset-all-documents', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+        
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        throw new Error('Failed to reset documents');
+                    }
+                } catch (error) {
+                    console.error('Error resetting documents:', error);
+                    alert('Failed to reset documents. Please try again.');
+                }
+            }
+        
+            // Reset selected button
+            resetSelectedBtn.addEventListener('click', () => {
+                const selectedDocs = Array.from(document.querySelectorAll('tr:not([style*="display: none"]) .doc-select:checked'))
+                    .map(checkbox => checkbox.value);
+        
+                if (selectedDocs.length === 0) {
+                    alert('Please select at least one document to reset.');
+                    return;
+                }
+        
+                confirmModal.classList.remove('hidden');
+                confirmModal.classList.add('show');
+            });
+
+            // Reset all button
+            resetAllBtn.addEventListener('click', () => {      
+                confirmModalAll.classList.remove('hidden');
+                confirmModalAll.classList.add('show');
+            });
+        
+            // Modal actions
+            document.getElementById('confirmReset').addEventListener('click', () => {
+                const selectedDocs = Array.from(document.querySelectorAll('tr:not([style*="display: none"]) .doc-select:checked'))
+                    .map(checkbox => checkbox.value);
+                resetDocuments(selectedDocs);
+            });
+        
+            document.getElementById('cancelReset').addEventListener('click', () => {
+                confirmModal.classList.remove('show');
+                confirmModal.classList.add('hidden');
+            });
+        
+            // Close modal on overlay click
+            confirmModal.querySelector('.modal-overlay').addEventListener('click', () => {
+                confirmModal.classList.remove('show');
+                confirmModal.classList.add('hidden');
+            });
+
+            ////////////////////////////////////////////////
+            // Modal actions
+            document.getElementById('confirmResetAll').addEventListener('click', () => {
+                const selectedDocs = Array.from(document.querySelectorAll('tr:not([style*="display: none"]) .doc-select:checked'))
+                    .map(checkbox => checkbox.value);
+                resetAllDocuments();
+            });
+        
+            document.getElementById('cancelResetAll').addEventListener('click', () => {
+                confirmModalAll.classList.remove('show');
+                confirmModalAll.classList.add('hidden');
+            });
+        
+            // Close modal on overlay click
+            confirmModalAll.querySelector('.modal-overlay').addEventListener('click', () => {
+                confirmModalAll.classList.remove('show');
+                confirmModalAll.classList.add('hidden');
+            });
+        });
+        </script>
+</body>
+</html>
