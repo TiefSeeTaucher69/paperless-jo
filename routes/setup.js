@@ -608,7 +608,7 @@ router.get('/debug/correspondents', async (req, res) => {
 
 router.post('/manual/analyze', express.json(), async (req, res) => {
   try {
-    const { content, existingTags } = req.body;
+    const { content, existingTags, id } = req.body;
     
     if (!content || typeof content !== 'string') {
       console.log('Invalid content received:', content);
@@ -616,10 +616,10 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
     }
 
     if (process.env.AI_PROVIDER === 'openai') {
-      const analyzeDocument = await openaiService.analyzeDocument(content, existingTags || []);
+      const analyzeDocument = await openaiService.analyzeDocument(content, existingTags, id || []);
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'ollama') {
-      const analyzeDocument = await ollamaService.analyzeDocument(content, existingTags || []);
+      const analyzeDocument = await ollamaService.analyzeDocument(content, existingTags, id || []);
       return res.json(analyzeDocument);
     } else {
       return res.status(500).json({ error: 'AI provider not configured' });

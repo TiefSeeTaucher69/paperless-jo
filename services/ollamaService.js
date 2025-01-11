@@ -1,5 +1,7 @@
 const axios = require('axios');
 const config = require('../config/config');
+const fs = require('fs').promises;
+const path = require('path');
 
 class OllamaService {
     constructor() {
@@ -10,9 +12,26 @@ class OllamaService {
         });
     }
 
-    async analyzeDocument(content, existingTags = []) {
+    async analyzeDocument(content, existingTags, id = []) {
+        const cachePath = path.join('./public/images', `${id}.png`);
         try {
+            const now = new Date();
+            const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
             const prompt = this._buildPrompt(content, existingTags);
+
+            // Handle thumbnail caching
+            try {
+                await fs.access(cachePath);
+                console.log('[DEBUG] Thumbnail already cached');
+            } catch (err) {
+                console.log('Thumbnail not cached, fetching from Paperless');  
+                const thumbnailData = await paperlessService.getThumbnailImage(id);
+            if (!thumbnailData) {
+                console.warn('Thumbnail nicht gefunden');
+            }
+                await fs.mkdir(path.dirname(cachePath), { recursive: true });
+                await fs.writeFile(cachePath, thumbnailData);
+            }
             
             const response = await this.client.post(`${this.apiUrl}/api/generate`, {
                 model: this.model,
