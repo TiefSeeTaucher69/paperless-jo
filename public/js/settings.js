@@ -1,3 +1,4 @@
+//settings.js
 // Theme Management
 class ThemeManager {
     constructor() {
@@ -89,6 +90,7 @@ class FormManager {
         if (showTags === 'yes') {
             tagsInputSection.classList.remove('hidden');
         } else {
+            document.getElementById('tags').value = '';
             tagsInputSection.classList.add('hidden');
         }
     }
@@ -162,21 +164,17 @@ class TagsManager {
         this.tagInput = document.getElementById('tagInput');
         this.tagsContainer = document.getElementById('tagsContainer');
         this.tagsHiddenInput = document.getElementById('tags');
-        // Suche nach dem Button basierend auf seiner Position statt Klasse
         this.addTagButton = this.tagInput?.closest('.space-y-2')?.querySelector('button');
         
         if (this.tagInput && this.tagsContainer && this.addTagButton) {
             this.initialize();
             
-            // Initialisiere existierende Tags
-            document.querySelectorAll('#tagsContainer .bg-blue-100 button').forEach(button => {
-                this.initializeTagRemoval(button);
-            });
+            // Initialize existing tags with proper event handlers
+            this.initializeExistingTags();
         }
     }
 
     initialize() {
-        // Nur Event Listener hinzufügen, wenn die Elemente existieren
         if (this.addTagButton) {
             this.addTagButton.addEventListener('click', () => this.addTag());
         }
@@ -189,6 +187,16 @@ class TagsManager {
                 }
             });
         }
+    }
+
+    initializeExistingTags() {
+        const existingTags = this.tagsContainer.querySelectorAll('.bg-blue-100');
+        existingTags.forEach(tagElement => {
+            const removeButton = tagElement.querySelector('button');
+            if (removeButton) {
+                this.initializeTagRemoval(removeButton);
+            }
+        });
     }
 
     initializeTagRemoval(button) {
@@ -208,8 +216,11 @@ class TagsManager {
             });
 
             if (result.isConfirmed) {
-                button.closest('.bg-blue-100').remove();
-                this.updateHiddenInput();
+                const tagElement = button.closest('.bg-blue-100');
+                if (tagElement) {
+                    tagElement.remove();
+                    this.updateHiddenInput();
+                }
             }
         });
     }
@@ -219,6 +230,7 @@ class TagsManager {
 
         const tagText = this.tagInput.value.trim();
         const specialChars = /[,;:\n\r\\/]/;
+        
         if (specialChars.test(tagText)) {
             await Swal.fire({
                 title: 'Invalid Characters',
@@ -232,6 +244,7 @@ class TagsManager {
             });
             return;
         }
+
         if (tagText) {
             const tag = this.createTagElement(tagText);
             this.tagsContainer.appendChild(tag);
@@ -263,8 +276,10 @@ class TagsManager {
     updateHiddenInput() {
         if (!this.tagsHiddenInput || !this.tagsContainer) return;
         
-        const tags = Array.from(this.tagsContainer.children)
-            .map(tag => tag.querySelector('span').textContent);
+        const tags = Array.from(this.tagsContainer.querySelectorAll('.bg-blue-100 span'))
+            .map(span => span.textContent.trim())
+            .filter(tag => tag); // Remove any empty tags
+            
         this.tagsHiddenInput.value = tags.join(',');
     }
 }
@@ -375,6 +390,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
         try {
+
             const formData = new FormData(setupForm);
             const response = await fetch('/settings', {
                 method: 'POST',

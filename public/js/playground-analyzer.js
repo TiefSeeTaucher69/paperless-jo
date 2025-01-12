@@ -596,7 +596,8 @@ class PlaygroundAnalyzer {
                     content: contentData.content,
                     existingTags: existingTags.map(t => t.id),
                     correspondent: existingCorrespondent,
-                    prompt: prompt
+                    prompt: prompt,
+                    documentId: docId
                 })
             });
 

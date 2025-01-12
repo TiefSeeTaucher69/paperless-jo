@@ -133,6 +133,7 @@
                                     <th class="px-4 py-3 text-left text-sm font-semibold">Title</th>
                                     <th class="px-4 py-3 text-left text-sm font-semibold">Tags</th>
                                     <th class="px-4 py-3 text-left text-sm font-semibold">Correspondent</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="documentsTableBody">
@@ -161,6 +162,11 @@
                                         </td>
                                         <td class="px-4 py-4 text-sm">
                                             <%= doc.correspondent %>
+                                        </td>
+                                        <td class="px-4 py-4">
+                                            <button class="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600" onclick="window.open('<%= doc.link %>')">
+                                                <i class="fa-solid fa-eye"></i><span class="sm:inline">View</span>
+                                            </button>
                                         </td>
                                     </tr>
                                 <% }); %>

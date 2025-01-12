@@ -179,7 +179,7 @@ module.exports = {
     }
   },
 
-  isDocumentProcessed(documentId) {
+  async isDocumentProcessed(documentId) {
     try {
       const row = findDocument.get(documentId);
       return !!row;

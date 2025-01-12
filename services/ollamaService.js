@@ -2,6 +2,7 @@ const axios = require('axios');
 const config = require('../config/config');
 const fs = require('fs').promises;
 const path = require('path');
+const paperlessService = require('./paperlessService');
 
 class OllamaService {
     constructor() {
@@ -55,8 +56,7 @@ class OllamaService {
                   top_p: 0.9,
                   repeat_penalty: 1.1,
                   top_k: 7,
-                  num_predict: 256,
-                  num_ctx: 10000
+                  num_predict: 256
                 }
               //   options: {
               //     temperature: 0.3,        // Moderately low for balance between consistency and creativity

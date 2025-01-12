@@ -271,13 +271,15 @@ router.get('/history', async (req, res) => {
       // Parse tag IDs and map them to full tag objects
       const tagIds = doc.tags === '[]' ? [] : JSON.parse(doc.tags || '[]');
       const resolvedTags = tagIds.map(id => tagMap.get(parseInt(id))).filter(Boolean);
-
+      const baseURL = process.env.PAPERLESS_API_URL.replace(/\/api$/, '');
+      const hotlink = `${baseURL}/documents/${doc.document_id}/`;
       return {
         document_id: doc.document_id,
         title: doc.title || 'Modified: Invalid Date',
         created_at: doc.created_at,
         tags: resolvedTags, // Now contains full tag objects instead of just IDs
-        correspondent: doc.correspondent || 'Not assigned'
+        correspondent: doc.correspondent || 'Not assigned',
+        link: hotlink
       };
     });
 
@@ -617,6 +619,12 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
 
     if (process.env.AI_PROVIDER === 'openai') {
       const analyzeDocument = await openaiService.analyzeDocument(content, existingTags, id || []);
+      await documentModel.addOpenAIMetrics(
+            id, 
+            analyzeDocument.metrics.promptTokens,
+            analyzeDocument.metrics.completionTokens,
+            analyzeDocument.metrics.totalTokens
+          )
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'ollama') {
       const analyzeDocument = await ollamaService.analyzeDocument(content, existingTags, id || []);
@@ -632,7 +640,7 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
 
 router.post('/manual/playground', express.json(), async (req, res) => {
   try {
-    const { content, existingTags, prompt } = req.body;
+    const { content, existingTags, prompt, documentId } = req.body;
     
     if (!content || typeof content !== 'string') {
       console.log('Invalid content received:', content);
@@ -641,6 +649,12 @@ router.post('/manual/playground', express.json(), async (req, res) => {
 
     if (process.env.AI_PROVIDER === 'openai') {
       const analyzeDocument = await openaiService.analyzePlayground(content, prompt);
+      await documentModel.addOpenAIMetrics(
+        documentId, 
+        analyzeDocument.metrics.promptTokens,
+        analyzeDocument.metrics.completionTokens,
+        analyzeDocument.metrics.totalTokens
+      )
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'ollama') {
       const analyzeDocument = await ollamaService.analyzePlayground(content, prompt);

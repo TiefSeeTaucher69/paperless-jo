@@ -3,6 +3,7 @@ const axios = require('axios');
 const config = require('../config/config');
 const fs = require('fs');
 const path = require('path');
+const { parse, isValid, parseISO } = require('date-fns');
 
 class PaperlessService {
   constructor() {
@@ -900,21 +901,42 @@ class PaperlessService {
         console.log('[DEBUG] Document already has a correspondent, keeping existing one:', currentDoc.correspondent);
         delete updates.correspondent;
       }
+
+      let updateData;
+      try {
+        if (updates.created) {
+          let dateObject;
+          
+          // First try to parse as ISO
+          dateObject = parseISO(updates.created);
+          
+          // If not valid, try German format
+          if (!isValid(dateObject)) {
+            dateObject = parse(updates.created, 'dd.MM.yyyy', new Date());
+          }
+          
+          // Check if we got a valid date
+          if (!isValid(dateObject)) {
+            throw new Error(`Invalid date format: ${updates.created}`);
+          }
+      
+          updateData = {
+            ...updates,
+            created: dateObject.toISOString()
+          };
+        } else {
+          updateData = { ...updates };
+        }
+      } catch (error) {
+        console.error(`[ERROR] updating document ${documentId}:`, error.message);
+        console.error('[DEBUG-ERROR] Received Date:', updates);
+        return;
+      }      
   
-      // Bereite die Update-Daten vor
-      const updateData = {
-        ...updates,
-        // Wenn ein Datum vorhanden ist, formatiere es korrekt für die API
-        ...(updates.created && {
-          created: new Date(updates.created).toISOString()
-        })
-      };
-  
-      // Führe das Update durch
+      // Update the document with the new data
       await this.client.patch(`/documents/${documentId}/`, updateData);
       console.log(`[SUCCESS] Updated document ${documentId} with:`, updateData);
-      
-      return await this.getDocument(documentId); // Optional: Gib das aktualisierte Dokument zurück
+      return await this.getDocument(documentId); // Optional: Give back the updated document
     } catch (error) {
       console.error(`[ERROR] updating document ${documentId}:`, error.message);
       return null; // Oder eine andere geeignete Rückgabe
