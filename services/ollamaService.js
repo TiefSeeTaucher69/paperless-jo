@@ -58,7 +58,8 @@ class OllamaService {
                   top_p: 0.9,
                   repeat_penalty: 1.1,
                   top_k: 7,
-                  num_predict: 256
+                  num_predict: 256,
+                  num_ctx: 100000
                 }
               //   options: {
               //     temperature: 0.3,        // Moderately low for balance between consistency and creativity
@@ -149,7 +150,8 @@ class OllamaService {
                   top_p: 0.9,
                   repeat_penalty: 1.1,
                   top_k: 7,
-                  num_predict: 256
+                  num_predict: 256,
+                  num_ctx: 100000
                 }
               //   options: {
               //     temperature: 0.3,        // Moderately low for balance between consistency and creativity
@@ -226,12 +228,18 @@ class OllamaService {
             .filter(name => name.length > 0)  // Remove empty strings
             .join(', ');
     
-        return `${systemPrompt}
-    Existing tags: ${existingTagsList}\n
-    Existing Correspondents: ${existingCorrespondentList}\n
-    ${JSON.stringify(content)}
-    
-    `;
+        if(process.env.USE_EXISTING_DATA === 'yes') {
+            return `${systemPrompt}
+            Existing tags: ${existingTagsList}\n
+            Existing Correspondents: ${existingCorrespondentList}\n
+            ${JSON.stringify(content)}
+            
+            `;
+        }else {
+            return `${systemPrompt}
+            ${JSON.stringify(content)}
+            `;
+        }
     }
 
     _parseResponse(response) {

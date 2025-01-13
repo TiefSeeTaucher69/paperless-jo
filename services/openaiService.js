@@ -98,14 +98,21 @@ class OpenAIService {
         .map(tag => tag.name)
         .join(', ');
       
-      // Get system prompt and model
-      let systemPrompt = `
-      Prexisting tags: ${existingTagsList}\n\n
-      Prexisiting correspondent: ${existingCorrespondentList}\n\n
-      ` + process.env.SYSTEM_PROMPT;
-      const model = process.env.OPENAI_MODEL;
+
+      let systemPrompt = '';
       let promptTags = '';
-      
+      const model = process.env.OPENAI_MODEL;
+      // Get system prompt and model
+      if(process.env.USE_EXISTING_DATA === 'yes') {
+        systemPrompt = `
+        Prexisting tags: ${existingTagsList}\n\n
+        Prexisiting correspondent: ${existingCorrespondentList}\n\n
+        ` + process.env.SYSTEM_PROMPT;
+        promptTags = '';
+      } else {
+        systemPrompt = process.env.SYSTEM_PROMPT;
+        promptTags = '';
+      }
       if (process.env.USE_PROMPT_TAGS === 'yes') {
         promptTags = process.env.PROMPT_TAGS;
         systemPrompt = `

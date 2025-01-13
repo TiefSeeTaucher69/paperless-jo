@@ -376,7 +376,8 @@ router.get('/setup', async (req, res) => {
       USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
       PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS),
       PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' ',
-      PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || 'yes'
+      PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || 'yes',
+      USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no'
     };
 
     // Check both configuration and users
@@ -547,7 +548,8 @@ router.get('/settings', async (req, res) => {
     USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
     PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS),
     PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' ',
-    PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || ' '
+    PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || ' ',
+    USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no'
   };
   
   if (isConfigured) {
@@ -626,7 +628,7 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
           )
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'ollama') {
-      const analyzeDocument = await ollamaService.analyzeDocument(content, existingTags, id || []);
+      const analyzeDocument = await ollamaService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
     } else {
       return res.status(500).json({ error: 'AI provider not configured' });
@@ -767,7 +769,8 @@ router.post('/setup', express.json(), async (req, res) => {
           promptTags,
           username,
           password,
-          paperlessUsername
+          paperlessUsername,
+          useExistingData
       } = req.body;
 
       const normalizeArray = (value) => {
@@ -802,7 +805,8 @@ router.post('/setup', express.json(), async (req, res) => {
           ADD_AI_PROCESSED_TAG: aiProcessedTag || 'no',
           AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
           USE_PROMPT_TAGS: usePromptTags || 'no',
-          PROMPT_TAGS: normalizeArray(promptTags)
+          PROMPT_TAGS: normalizeArray(promptTags),
+          USE_EXISTING_DATA: useExistingData || 'no'
       };
 
       // Validate AI provider config
@@ -868,7 +872,8 @@ router.post('/settings', express.json(), async (req, res) => {
       aiTagName,
       usePromptTags,
       promptTags,
-      paperlessUsername
+      paperlessUsername,
+      useExistingData
     } = req.body;
 
     const currentConfig = {
@@ -887,7 +892,8 @@ router.post('/settings', express.json(), async (req, res) => {
       ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
       AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
       USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
-      PROMPT_TAGS: process.env.PROMPT_TAGS || ''
+      PROMPT_TAGS: process.env.PROMPT_TAGS || '',
+      USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no'
     };
 
     const normalizeArray = (value) => {
@@ -953,6 +959,7 @@ router.post('/settings', express.json(), async (req, res) => {
     if (aiTagName) updatedConfig.AI_PROCESSED_TAG_NAME = aiTagName;
     if (usePromptTags) updatedConfig.USE_PROMPT_TAGS = usePromptTags;
     if (promptTags) updatedConfig.PROMPT_TAGS = normalizeArray(promptTags);
+    if (useExistingData) updatedConfig.USE_EXISTING_DATA = useExistingData;
 
     const mergedConfig = {
       ...currentConfig,
