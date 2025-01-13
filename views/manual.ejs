@@ -139,6 +139,7 @@
                             <div class="mb-4">
                                 <h3 class="text-sm font-medium text-text-secondary mb-2">AI Suggestions</h3>
                                 <div id="suggestedTags" class="flex flex-wrap gap-2"></div>
+                                <input type="hidden" id="tags" name="tags" value="">
                             </div>
         
                             <!-- Current Tags -->
@@ -475,14 +476,17 @@ async function handleAnalysis() {
     }
 }
 
-// Document Update Functions
 async function updateDocumentTags() {
     if (!currentDocument || isUpdating) return;
 
     isUpdating = true;
     try {
-        const titleValue = document.getElementById('titleName').textContent;
-        const tagIds = document.getElementById('tags').value.split(',').filter(id => id);
+        const titleElement = document.getElementById('titleName');
+        const tagsElement = document.getElementById('tags');
+        
+        // Add null checks
+        const titleValue = titleElement ? titleElement.textContent : '';
+        const tagIds = tagsElement && tagsElement.value ? tagsElement.value.split(',').filter(id => id) : [];
 
         const response = await fetch('/manual/updateDocument', {
             method: 'POST',
@@ -502,7 +506,7 @@ async function updateDocumentTags() {
             throw new Error(errorData.error || 'Failed to update document');
         }
 
-        await response.json();
+        const result = await response.json();
         showMessage('Tags updated successfully', 'success');
     } catch (error) {
         showMessage('Error updating tags: ' + error.message);

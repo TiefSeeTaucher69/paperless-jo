@@ -512,8 +512,6 @@ router.get('/dashboard', async (req, res) => {
   const averageTotalTokens = metrics.length > 0 ? Math.round(metrics.reduce((acc, cur) => acc + cur.totalTokens, 0) / metrics.length) : 0;
   const tokensOverall = metrics.length > 0 ? metrics.reduce((acc, cur) => acc + cur.totalTokens, 0) : 0;
   const version = configFile.PAPERLESS_AI_VERSION || ' ';
-  console.log(tagCount);
-  console.log(correspondentCount);
   res.render('dashboard', { paperless_data: { tagCount, correspondentCount, documentCount, processedDocumentCount }, openai_data: { averagePromptTokens, averageCompletionTokens, averageTotalTokens, tokensOverall }, version });
 });
 
@@ -611,14 +609,15 @@ router.get('/debug/correspondents', async (req, res) => {
 router.post('/manual/analyze', express.json(), async (req, res) => {
   try {
     const { content, existingTags, id } = req.body;
-    
+    let existingCorrespondentList = await paperlessService.listCorrespondentsNames();
+    existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
     if (!content || typeof content !== 'string') {
       console.log('Invalid content received:', content);
       return res.status(400).json({ error: 'Valid content string is required' });
     }
 
     if (process.env.AI_PROVIDER === 'openai') {
-      const analyzeDocument = await openaiService.analyzeDocument(content, existingTags, id || []);
+      const analyzeDocument = await openaiService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
       await documentModel.addOpenAIMetrics(
             id, 
             analyzeDocument.metrics.promptTokens,
@@ -853,100 +852,131 @@ router.post('/setup', express.json(), async (req, res) => {
 
 router.post('/settings', express.json(), async (req, res) => {
   try {
-      const { 
-          paperlessUrl, 
-          paperlessToken, 
-          aiProvider,
-          openaiKey,
-          openaiModel,
-          ollamaUrl,
-          ollamaModel,
-          scanInterval,
-          systemPrompt,
-          showTags,
-          tags,
-          aiProcessedTag,
-          aiTagName,
-          usePromptTags,
-          promptTags,
-          paperlessUsername
-      } = req.body;
+    const { 
+      paperlessUrl, 
+      paperlessToken, 
+      aiProvider,
+      openaiKey,
+      openaiModel,
+      ollamaUrl,
+      ollamaModel,
+      scanInterval,
+      systemPrompt,
+      showTags,
+      tags,
+      aiProcessedTag,
+      aiTagName,
+      usePromptTags,
+      promptTags,
+      paperlessUsername
+    } = req.body;
 
-      const normalizeArray = (value) => {
-          if (!value) return [];
-          if (Array.isArray(value)) return value;
-          if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
-          return [];
-      };
+    const currentConfig = {
+      PAPERLESS_API_URL: process.env.PAPERLESS_API_URL || '',
+      PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN || '',
+      PAPERLESS_USERNAME: process.env.PAPERLESS_USERNAME || '',
+      AI_PROVIDER: process.env.AI_PROVIDER || '',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+      OPENAI_MODEL: process.env.OPENAI_MODEL || '',
+      OLLAMA_API_URL: process.env.OLLAMA_API_URL || '',
+      OLLAMA_MODEL: process.env.OLLAMA_MODEL || '',
+      SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
+      SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
+      PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
+      TAGS: process.env.TAGS || '',
+      ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
+      AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
+      USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
+      PROMPT_TAGS: process.env.PROMPT_TAGS || ''
+    };
 
-      const processedPrompt = systemPrompt 
-          ? systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n')
-          : '';
+    const normalizeArray = (value) => {
+      if (!value) return [];
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
+      return [];
+    };
 
-      // Validate Paperless config
+    if (paperlessUrl !== currentConfig.PAPERLESS_API_URL?.replace('/api', '') || 
+        paperlessToken !== currentConfig.PAPERLESS_API_TOKEN) {
       const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
       if (!isPaperlessValid) {
+        return res.status(400).json({ 
+          error: 'Paperless-ngx connection failed. Please check URL and Token.'
+        });
+      }
+    }
+
+    const updatedConfig = {};
+
+    if (paperlessUrl) updatedConfig.PAPERLESS_API_URL = paperlessUrl + '/api';
+    if (paperlessToken) updatedConfig.PAPERLESS_API_TOKEN = paperlessToken;
+    if (paperlessUsername) updatedConfig.PAPERLESS_USERNAME = paperlessUsername;
+
+    if (aiProvider) {
+      updatedConfig.AI_PROVIDER = aiProvider;
+      
+      if (aiProvider === 'openai' && openaiKey) {
+        const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
+        if (!isOpenAIValid) {
           return res.status(400).json({ 
-              error: 'Paperless-ngx connection failed. Please check URL and Token.'
+            error: 'OpenAI API Key is not valid. Please check the key.'
           });
+        }
+        updatedConfig.OPENAI_API_KEY = openaiKey;
+        if (openaiModel) updatedConfig.OPENAI_MODEL = openaiModel;
+      } 
+      else if (aiProvider === 'ollama' && (ollamaUrl || ollamaModel)) {
+        const isOllamaValid = await setupService.validateOllamaConfig(
+          ollamaUrl || currentConfig.OLLAMA_API_URL,
+          ollamaModel || currentConfig.OLLAMA_MODEL
+        );
+        if (!isOllamaValid) {
+          return res.status(400).json({ 
+            error: 'Ollama connection failed. Please check URL and Model.'
+          });
+        }
+        if (ollamaUrl) updatedConfig.OLLAMA_API_URL = ollamaUrl;
+        if (ollamaModel) updatedConfig.OLLAMA_MODEL = ollamaModel;
       }
+    }
 
-      // Prepare base config
-      const config = {
-          PAPERLESS_API_URL: paperlessUrl + '/api',
-          PAPERLESS_API_TOKEN: paperlessToken,
-          PAPERLESS_USERNAME: paperlessUsername,
-          AI_PROVIDER: aiProvider,
-          SCAN_INTERVAL: scanInterval || '*/30 * * * *',
-          SYSTEM_PROMPT: processedPrompt,
-          PROCESS_PREDEFINED_DOCUMENTS: showTags || 'no',
-          TAGS: normalizeArray(tags),
-          ADD_AI_PROCESSED_TAG: aiProcessedTag || 'no',
-          AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
-          USE_PROMPT_TAGS: usePromptTags || 'no',
-          PROMPT_TAGS: normalizeArray(promptTags)
-      };
+    if (scanInterval) updatedConfig.SCAN_INTERVAL = scanInterval;
+    if (systemPrompt) updatedConfig.SYSTEM_PROMPT = systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
+    if (showTags) updatedConfig.PROCESS_PREDEFINED_DOCUMENTS = showTags;
+    if(tags !== undefined || tags !== null || tags !== ''){
+      updatedConfig.TAGS = normalizeArray(tags);
+    }else{ 
+      updatedConfig.TAGS = '';
+    }
+    if (aiProcessedTag) updatedConfig.ADD_AI_PROCESSED_TAG = aiProcessedTag;
+    if (aiTagName) updatedConfig.AI_PROCESSED_TAG_NAME = aiTagName;
+    if (usePromptTags) updatedConfig.USE_PROMPT_TAGS = usePromptTags;
+    if (promptTags) updatedConfig.PROMPT_TAGS = normalizeArray(promptTags);
 
-      // Validate AI provider config
-      if (aiProvider === 'openai') {
-          const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
-          if (!isOpenAIValid) {
-              return res.status(400).json({ 
-                  error: 'OpenAI API Key is not valid. Please check the key.'
-              });
-          }
-          config.OPENAI_API_KEY = openaiKey;
-          config.OPENAI_MODEL = openaiModel || 'gpt-4o-mini';
-      } else if (aiProvider === 'ollama') {
-          const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
-          if (!isOllamaValid) {
-              return res.status(400).json({ 
-                  error: 'Ollama connection failed. Please check URL and Model.'
-              });
-          }
-          config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
-          config.OLLAMA_MODEL = ollamaModel || 'llama3.2';
-      }
+    const mergedConfig = {
+      ...currentConfig,
+      ...updatedConfig
+    };
 
-      // Save configuration
-      await setupService.saveConfig(config);
-      // Send success response
-      res.json({ 
-          success: true,
-          message: 'Configuration saved successfully.',
-          restart: true
-      });
+    await setupService.saveConfig(mergedConfig);
+    
+    res.json({ 
+      success: true,
+      message: 'Configuration saved successfully.',
+      restart: true
+    });
 
-      // Trigger application restart
-      setTimeout(() => {
-          process.exit(0);
-      }, 5000);
+    // Trigger application restart
+    setTimeout(() => {
+      process.exit(0);
+    }, 5000);
 
   } catch (error) {
-      console.error('Setup error:', error);
-      res.status(500).json({ 
-          error: 'An error occurred: ' + error.message
-      });
+    console.error('Setup error:', error);
+    res.status(500).json({ 
+      error: 'An error occurred: ' + error.message
+    });
   }
 });
 

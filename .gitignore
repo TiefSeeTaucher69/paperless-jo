@@ -15,3 +15,6 @@ public/images/
 delete_all.js
 documents.json
 apitest.js
+logs/*
+api_correspondent.js
+prompt.txt

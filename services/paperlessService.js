@@ -349,7 +349,6 @@ class PaperlessService {
         }
       }
   
-      console.log(allCorrespondents);
       return allCorrespondents;
   
     } catch (error) {
@@ -708,40 +707,40 @@ class PaperlessService {
   }
 }
 
-  async searchForExistingCorrespondent(correspondent) {
-      try {
-        const response = await this.client.get('/correspondents/', {
-            params: {
-                name__icontains: correspondent
-            }
-        });
+async searchForExistingCorrespondent(correspondent) {
+  try {
+      const response = await this.client.get('/correspondents/', {
+          params: {
+              name__icontains: correspondent
+          }
+      });
 
-        const results = response.data.results;
-        
-        if (results.length === 0) {
-            console.log(`[DEBUG] No correspondent with name "${correspondent}" found`);
-            return null;
-        }
-        
-        if (results.length > 1) {
-            console.log(`[DEBUG] Multiple correspondents found:`);
-            results.forEach(c => {
-                console.log(`- ID: ${c.id}, Name: ${c.name}`);
-            });
-            return results;
-        }
+      const results = response.data.results;
+      
+      if (results.length === 0) {
+          console.log(`[DEBUG] No correspondent with name "${correspondent}" found`);
+          return null;
+      }
+      
+      // Check for exact match in the results - thanks to @skius for the hint!
+      const exactMatch = results.find(c => c.name.toLowerCase() === correspondent.toLowerCase());
+      if (exactMatch) {
+          console.log(`[DEBUG] Found exact match for correspondent "${correspondent}" with ID ${exactMatch.id}`);
+          return {
+              id: exactMatch.id,
+              name: exactMatch.name
+          };
+      }
 
-        // Genau ein Ergebnis gefunden
-        return {
-            id: results[0].id,
-            name: results[0].name
-        };
+      // No exact match found, return null
+      console.log(`[DEBUG] No exact match found for "${correspondent}"`);
+      return null;
 
-    } catch (error) {
-        console.error('[ERROR] while seraching for existing correspondent:', error.message);
-        throw error;
-    }
+  } catch (error) {
+      console.error('[ERROR] while searching for existing correspondent:', error.message);
+      throw error;
   }
+}
 
   async getOrCreateCorrespondent(name) {
     this.initialize();
@@ -879,24 +878,20 @@ class PaperlessService {
     this.initialize();
     if (!this.client) return;
     try {
-      // Hole aktuelles Dokument mit existierenden Tags
       const currentDoc = await this.getDocument(documentId);
       
-      // Wenn das Update Tags enthält, füge sie zu den existierenden hinzu
       if (updates.tags) {
         console.log(`[DEBUG] Current tags for document ${documentId}:`, currentDoc.tags);
         console.log(`[DEBUG] Adding new tags:`, updates.tags);
         console.log(`[DEBUG] Current correspondent:`, currentDoc.correspondent);
         console.log(`[DEBUG] New correspondent:`, updates.correspondent);
                 
-        // Kombiniere existierende und neue Tags
         const combinedTags = [...new Set([...currentDoc.tags, ...updates.tags])];
         updates.tags = combinedTags;
         
         console.log(`[DEBUG] Combined tags:`, combinedTags);
       }
 
-      // Entferne den correspondent aus updates wenn bereits einer existiert
       if (currentDoc.correspondent && updates.correspondent) {
         console.log('[DEBUG] Document already has a correspondent, keeping existing one:', currentDoc.correspondent);
         delete updates.correspondent;
@@ -907,17 +902,18 @@ class PaperlessService {
         if (updates.created) {
           let dateObject;
           
-          // First try to parse as ISO
           dateObject = parseISO(updates.created);
           
-          // If not valid, try German format
           if (!isValid(dateObject)) {
             dateObject = parse(updates.created, 'dd.MM.yyyy', new Date());
+            if (!isValid(dateObject)) {
+              dateObject = parse(updates.created, 'dd-MM-yyyy', new Date());
+            }
           }
           
-          // Check if we got a valid date
           if (!isValid(dateObject)) {
-            throw new Error(`Invalid date format: ${updates.created}`);
+            console.warn(`[WARN] Invalid date format: ${updates.created}, using fallback date: 01.01.1990`);
+            dateObject = new Date(1990, 0, 1);
           }
       
           updateData = {
@@ -928,18 +924,20 @@ class PaperlessService {
           updateData = { ...updates };
         }
       } catch (error) {
-        console.error(`[ERROR] updating document ${documentId}:`, error.message);
-        console.error('[DEBUG-ERROR] Received Date:', updates);
-        return;
+        console.warn('[WARN] Error parsing date:', error.message);
+        console.warn('[DEBUG] Received Date:', updates);
+        updateData = {
+          ...updates,
+          created: new Date(1990, 0, 1).toISOString()
+        };
       }      
   
-      // Update the document with the new data
       await this.client.patch(`/documents/${documentId}/`, updateData);
       console.log(`[SUCCESS] Updated document ${documentId} with:`, updateData);
-      return await this.getDocument(documentId); // Optional: Give back the updated document
+      return await this.getDocument(documentId);
     } catch (error) {
       console.error(`[ERROR] updating document ${documentId}:`, error.message);
-      return null; // Oder eine andere geeignete Rückgabe
+      return null;
     }
   }
 }

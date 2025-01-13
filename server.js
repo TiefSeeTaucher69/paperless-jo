@@ -10,6 +10,22 @@ const setupService = require('./services/setupService');
 const setupRoutes = require('./routes/setup');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const Logger = require('./services/loggerService');
+const { max } = require('date-fns');
+
+const htmlLogger = new Logger({
+  logFile: 'logs.html',
+  format: 'html',
+  timestamp: true,
+  maxFileSize: 1024 * 1024 * 10
+});
+
+const txtLogger = new Logger({
+  logFile: 'logs.txt',
+  format: 'txt',
+  timestamp: true,
+  maxFileSize: 1024 * 1024 * 10
+});
 
 const app = express();
 let runningTask = false;
@@ -49,7 +65,7 @@ async function initializeDataDirectory() {
 }
 
 // Document processing functions
-async function processDocument(doc, existingTags, ownUserId) {
+async function processDocument(doc, existingTags, existingCorrespondentList, ownUserId) {
   const isProcessed = await documentModel.isDocumentProcessed(doc.id);
   if (isProcessed) return null;
 
@@ -75,7 +91,7 @@ async function processDocument(doc, existingTags, ownUserId) {
   }
 
   const aiService = AIServiceFactory.getService();
-  const analysis = await aiService.analyzeDocument(content, existingTags, doc.id);
+  const analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id);
   
   if (analysis.error) {
     throw new Error(`[ERROR] Document analysis failed: ${analysis.error}`);
@@ -140,15 +156,18 @@ async function scanInitial() {
       return;
     }
 
-    const [existingTags, documents, ownUserId] = await Promise.all([
+    let [existingTags, documents, ownUserId, existingCorrespondentList] = await Promise.all([
       paperlessService.getTags(),
       paperlessService.getAllDocuments(),
-      paperlessService.getOwnUserID()
+      paperlessService.getOwnUserID(),
+      paperlessService.listCorrespondentsNames()
     ]);
+    //get existing correspondent list
+    existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
 
     for (const doc of documents) {
       try {
-        const result = await processDocument(doc, existingTags, ownUserId);
+        const result = await processDocument(doc, existingTags, existingCorrespondentList, ownUserId);
         if (!result) continue;
 
         const { analysis, originalData } = result;
@@ -171,15 +190,19 @@ async function scanDocuments() {
 
   runningTask = true;
   try {
-    const [existingTags, documents, ownUserId] = await Promise.all([
+    let [existingTags, documents, ownUserId, existingCorrespondentList] = await Promise.all([
       paperlessService.getTags(),
       paperlessService.getAllDocuments(),
-      paperlessService.getOwnUserID()
+      paperlessService.getOwnUserID(),
+      paperlessService.listCorrespondentsNames()
     ]);
+
+    //get existing correspondent list
+    existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
 
     for (const doc of documents) {
       try {
-        const result = await processDocument(doc, existingTags, ownUserId);
+        const result = await processDocument(doc, existingTags, existingCorrespondentList, ownUserId);
         if (!result) continue;
 
         const { analysis, originalData } = result;

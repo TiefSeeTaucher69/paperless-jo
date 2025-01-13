@@ -65,7 +65,7 @@ class OpenAIService {
     return text.slice(0, Math.floor(text.length * ratio));
   }
 
-  async analyzeDocument(content, existingTags = [], id) {
+  async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id) {
     const cachePath = path.join('./public/images', `${id}.png`);
     try {
       this.initialize();
@@ -99,13 +99,18 @@ class OpenAIService {
         .join(', ');
       
       // Get system prompt and model
-      let systemPrompt = process.env.SYSTEM_PROMPT;
+      let systemPrompt = `
+      Prexisting tags: ${existingTagsList}\n\n
+      Prexisiting correspondent: ${existingCorrespondentList}\n\n
+      ` + process.env.SYSTEM_PROMPT;
       const model = process.env.OPENAI_MODEL;
       let promptTags = '';
       
       if (process.env.USE_PROMPT_TAGS === 'yes') {
         promptTags = process.env.PROMPT_TAGS;
-        systemPrompt = config.specialPromptPreDefinedTags;
+        systemPrompt = `
+        Take these tags and try to match one or more to the document content.\n\n
+        ` + config.specialPromptPreDefinedTags;
       }
       
       // Calculate total prompt tokens including all components
@@ -122,6 +127,8 @@ class OpenAIService {
       // Truncate content if necessary
       const truncatedContent = await this.truncateToTokenLimit(content, availableTokens);
       
+      // write complete Prompt to file for debugging
+      await this.writePromptToFile(systemPrompt, truncatedContent);
       // Make API request
       const response = await this.client.chat.completions.create({
         model: model,
@@ -182,6 +189,28 @@ class OpenAIService {
         metrics: null,
         error: error.message 
       };
+    }
+  }
+
+  async writePromptToFile(systemPrompt, truncatedContent) {
+    const filePath = './logs/prompt.txt';
+    const maxSize = 10 * 1024 * 1024;
+  
+    try {
+      const stats = await fs.stat(filePath);
+      if (stats.size > maxSize) {
+        await fs.unlink(filePath); // Delete the file if is biger 10MB
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.warn('[WARNING] Error checking file size:', error);
+      }
+    }
+  
+    try {
+      await fs.appendFile(filePath, systemPrompt + truncatedContent + '\n\n');
+    } catch (error) {
+      console.error('[ERROR] Error writing to file:', error);
     }
   }
 
