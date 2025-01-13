@@ -73,7 +73,7 @@ class OpenAIService {
       const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
       
       if (!this.client) {
-        throw new Error('OpenAI client not initialized - missing API key');
+        throw new Error('OpenAI client not initialized');
       }
 
       // Handle thumbnail caching

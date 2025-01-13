@@ -13,12 +13,12 @@ class OllamaService {
         });
     }
 
-    async analyzeDocument(content, existingTags, id = []) {
+    async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id) {
         const cachePath = path.join('./public/images', `${id}.png`);
         try {
             const now = new Date();
             const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
-            const prompt = this._buildPrompt(content, existingTags);
+            const prompt = this._buildPrompt(content, existingTags, existingCorrespondentList);
 
             // Handle thumbnail caching
             try {
@@ -33,6 +33,8 @@ class OllamaService {
                 await fs.mkdir(path.dirname(cachePath), { recursive: true });
                 await fs.writeFile(cachePath, thumbnailData);
             }
+
+            await this.writePromptToFile(prompt);
             
             const response = await this.client.post(`${this.apiUrl}/api/generate`, {
                 model: this.model,
@@ -99,6 +101,29 @@ class OllamaService {
         }
     }
 
+
+    async writePromptToFile(systemPrompt) {
+        const filePath = './logs/prompt.txt';
+        const maxSize = 10 * 1024 * 1024;
+      
+        try {
+          const stats = await fs.stat(filePath);
+          if (stats.size > maxSize) {
+            await fs.unlink(filePath); // Delete the file if is biger 10MB
+          }
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            console.warn('[WARNING] Error checking file size:', error);
+          }
+        }
+      
+        try {
+          await fs.appendFile(filePath, '================================================================================' + systemPrompt + '\n\n' + '================================================================================\n\n');
+        } catch (error) {
+          console.error('[ERROR] Error writing to file:', error);
+        }
+      }
+
     async analyzePlayground(content, prompt) {
         try {
           
@@ -124,8 +149,7 @@ class OllamaService {
                   top_p: 0.9,
                   repeat_penalty: 1.1,
                   top_k: 7,
-                  num_predict: 256,
-                  num_ctx: 10000
+                  num_predict: 256
                 }
               //   options: {
               //     temperature: 0.3,        // Moderately low for balance between consistency and creativity
@@ -168,23 +192,46 @@ class OllamaService {
         }
     }
 
-    _buildPrompt(content, existingTags = []) {
+    _buildPrompt(content, existingTags = [], existingCorrespondent = []) {
         let systemPrompt;
         let promptTags = '';
-
+    
+        // Validate that existingCorrespondent is an array and handle if it's not
+        const correspondentList = Array.isArray(existingCorrespondent) 
+            ? existingCorrespondent 
+            : [];
+    
         if (process.env.USE_PROMPT_TAGS === 'yes') {
             promptTags = process.env.PROMPT_TAGS;
             systemPrompt = config.specialPromptPreDefinedTags;
         } else {
             systemPrompt = process.env.SYSTEM_PROMPT;
         }
-
-        // Format existing tags similar to OpenAI service
-        const existingTagsList = existingTags
-            .map(tag => tag.name)
+    
+        // Format existing tags
+        const existingTagsList = Array.isArray(existingTags)
+            ? existingTags
+                .filter(tag => tag && tag.name)
+                .map(tag => tag.name)
+                .join(', ')
+            : '';
+    
+        // Format existing correspondents - handle both array of objects and array of strings
+        const existingCorrespondentList = correspondentList
+            .filter(Boolean)  // Remove any null/undefined entries
+            .map(correspondent => {
+                if (typeof correspondent === 'string') return correspondent;
+                return correspondent?.name || '';
+            })
+            .filter(name => name.length > 0)  // Remove empty strings
             .join(', ');
-
-        return `${systemPrompt}\nExisting tags: ${existingTagsList}\n\n${JSON.stringify(content)}`;
+    
+        return `${systemPrompt}
+    Existing tags: ${existingTagsList}\n
+    Existing Correspondents: ${existingCorrespondentList}\n
+    ${JSON.stringify(content)}
+    
+    `;
     }
 
     _parseResponse(response) {
