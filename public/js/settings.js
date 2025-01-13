@@ -392,6 +392,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
         try {
 
             const formData = new FormData(setupForm);
+            //remove from formData.systemPrompt all ` chars
+            formData.set('systemPrompt', formData.get('systemPrompt').replace(/`/g, ''));
             const response = await fetch('/settings', {
                 method: 'POST',
                 headers: {
