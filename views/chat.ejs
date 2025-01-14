@@ -21,7 +21,7 @@
             <select id="documentSelect" class="select-input">
                 <option value="">Please choose...</option>
                 <% documents.forEach(function(doc) { %>
-                    <option value="<%= doc.id %>"><%= doc.title %></option>
+                    <option value="<%= doc.id %>" <%= doc.id == open ? 'selected="true"' : '' %>><%= doc.title %></option>
                 <% }); %>
             </select>
         </div>
