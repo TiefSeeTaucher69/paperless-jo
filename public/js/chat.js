@@ -228,7 +228,7 @@ async function submitForm(){
         if (response) {
             addMessage(response, false);
         }
-    } catch (error) {
+    } catch {
         showError('Failed to send message');
     }
-};
+}
