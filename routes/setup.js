@@ -832,11 +832,19 @@ router.post('/setup', express.json(), async (req, res) => {
 
       let apiToken = '';
       //generate a random secure api token
-      if(process.env.API_KEY !== undefined || process.env.API_KEY !== null) {
+      if(process.env.API_KEY === undefined || process.env.API_KEY === null || process.env.API_KEY === '') {
         apiToken = require('crypto').randomBytes(64).toString('hex');
       }else{
         apiToken = process.env.API_KEY;
       }
+
+      let jwtToken = '';
+      //generate a random secure jwt token
+      if(process.env.JWT_SECRET === undefined || process.env.JWT_SECRET === null || process.env.JWT_SECRET === '') {
+        jwtToken = require('crypto').randomBytes(64).toString('hex');
+      }else{
+        jwtToken = process.env.JWT_SECRET;
+      }      
 
       // Prepare base config
       const config = {
@@ -853,7 +861,8 @@ router.post('/setup', express.json(), async (req, res) => {
           USE_PROMPT_TAGS: usePromptTags || 'no',
           PROMPT_TAGS: normalizeArray(promptTags),
           USE_EXISTING_DATA: useExistingData || 'no',
-          API_KEY: apiToken
+          API_KEY: apiToken,
+          JWT_SECRET: jwtToken
       };
 
       // Validate AI provider config
