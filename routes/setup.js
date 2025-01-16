@@ -30,31 +30,43 @@ let PUBLIC_ROUTES = [
 
 // Combined middleware to check authentication and setup
 router.use(async (req, res, next) => {
-  // Check if route is public
+  const token = req.cookies.jwt || req.headers.authorization?.split(' ')[1];
+  const apiKey = req.headers['x-api-key'];
+
+  // Public route check
   if (PUBLIC_ROUTES.some(route => req.path.startsWith(route))) {
     return next();
   }
 
-  // First check authentication
-  const token = req.cookies.jwt || req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.redirect('/login');
+  // API key authentication
+  if (apiKey && apiKey === process.env.API_KEY) {
+    req.user = { apiKey: true };
+  } else {
+    // Fallback to JWT authentication
+    if (!token) {
+      return res.redirect('/login');
+    }
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+    } catch (error) {
+      res.clearCookie('jwt');
+      return res.redirect('/login');
+    }
   }
 
+  // Setup check
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    const isConfigured = await setupService.isConfigured();
+    if (!isConfigured && !req.path.startsWith('/setup')) {
+      return res.redirect('/setup');
+    }
   } catch (error) {
-    res.clearCookie('jwt');
-    return res.redirect('/login');
+    console.error('Error checking setup configuration:', error);
+    return res.status(500).send('Internal Server Error');
   }
 
-  // Then check if setup is completed
-  const isConfigured = await setupService.isConfigured();
-  if (!isConfigured && !req.path.startsWith('/setup')) {
-    return res.redirect('/setup');
-  }
-  
   next();
 });
 
@@ -342,6 +354,36 @@ router.post('/api/reset-documents', async (req, res) => {
   catch (error) {
     console.error('[ERROR] resetting documents:', error);
     res.status(500).json({ error: 'Error resetting documents' });
+  }
+});
+
+router.post('/api/key-regenerate', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const dotenv = require('dotenv');
+    const crypto = require('crypto');    
+    const envPath = path.join(__dirname, '../data/', '.env');
+    const envConfig = dotenv.parse(fs.readFileSync(envPath));
+    // Generiere ein neues API-Token
+    const apiKey = crypto.randomBytes(32).toString('hex');
+    envConfig.API_KEY = apiKey;
+
+    // Schreibe die aktualisierte .env-Datei
+    const envContent = Object.entries(envConfig)
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+    fs.writeFileSync(envPath, envContent);
+
+    // Setze die Umgebungsvariable für den aktuellen Prozess
+    process.env.API_KEY = apiKey;
+
+    // Sende die Antwort zurück
+    res.json({ success: apiKey });
+    console.log('API key regenerated:', apiKey);
+  } catch (error) {
+    console.error('API key regeneration error:', error);
+    res.status(500).json({ error: 'Error regenerating API key' });
   }
 });
 
@@ -792,6 +834,14 @@ router.post('/setup', express.json(), async (req, res) => {
           });
       }
 
+      let apiToken = '';
+      //generate a random secure api token
+      if(process.env.API_KEY !== undefined || process.env.API_KEY !== null) {
+        apiToken = require('crypto').randomBytes(64).toString('hex');
+      }else{
+        apiToken = process.env.API_KEY;
+      }
+
       // Prepare base config
       const config = {
           PAPERLESS_API_URL: paperlessUrl + '/api',
@@ -806,7 +856,8 @@ router.post('/setup', express.json(), async (req, res) => {
           AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
           USE_PROMPT_TAGS: usePromptTags || 'no',
           PROMPT_TAGS: normalizeArray(promptTags),
-          USE_EXISTING_DATA: useExistingData || 'no'
+          USE_EXISTING_DATA: useExistingData || 'no',
+          API_KEY: apiToken
       };
 
       // Validate AI provider config
@@ -893,7 +944,8 @@ router.post('/settings', express.json(), async (req, res) => {
       AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
       USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
       PROMPT_TAGS: process.env.PROMPT_TAGS || '',
-      USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no'
+      USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no',
+      API_KEY: process.env.API_KEY || ''
     };
 
     const normalizeArray = (value) => {
@@ -960,6 +1012,15 @@ router.post('/settings', express.json(), async (req, res) => {
     if (usePromptTags) updatedConfig.USE_PROMPT_TAGS = usePromptTags;
     if (promptTags) updatedConfig.PROMPT_TAGS = normalizeArray(promptTags);
     if (useExistingData) updatedConfig.USE_EXISTING_DATA = useExistingData;
+
+    let apiToken = '';
+    //generate a random secure api token
+    if(process.env.API_KEY === undefined || process.env.API_KEY === null) {
+      console.log('Generating new API key');
+      apiToken = Promise.resolve(require('crypto').randomBytes(64).toString('hex'));
+    }else{
+      updatedConfig.API_KEY = process.env.API_KEY;
+    }
 
     const mergedConfig = {
       ...currentConfig,
