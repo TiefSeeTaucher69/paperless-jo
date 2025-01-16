@@ -191,6 +191,15 @@ document.getElementById('documentSelect').addEventListener('change', function() 
     }
 });
 
+document.addEventListener("DOMContentLoaded", function () {
+    const documentSelect = document.getElementById('documentSelect');
+    const documentId = documentSelect.value;
+
+    if (documentId){
+        initializeChat(documentId);
+    }
+});
+
 document.getElementById('messageInput').addEventListener('keydown', async (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();

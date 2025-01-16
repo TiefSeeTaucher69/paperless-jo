@@ -228,13 +228,9 @@ router.get('/thumb/:documentId', async (req, res) => {
 // Hauptseite mit Dokumentenliste
 router.get('/chat', async (req, res) => {
   try {
-    if(process.env.AI_PROVIDER === 'openai') {
+      const {open} = req.query;
       const documents = await paperlessService.getDocuments();
-      res.render('chat', { documents });
-    }else{
-      const documents = await paperlessService.getDocuments();
-      res.render('chat', { documents });
-    }
+      res.render('chat', { documents, open });
   } catch (error) {
     console.error('[ERRO] loading documents:', error);
     res.status(500).send('Error loading documents');
