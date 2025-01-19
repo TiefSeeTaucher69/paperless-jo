@@ -16,6 +16,7 @@ const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const { authenticateJWT, isAuthenticated } = require('./auth.js');
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const customService = require('../services/customService.js');
 
 
 // API endpoints that should not redirect
@@ -668,6 +669,9 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
     } else if (process.env.AI_PROVIDER === 'ollama') {
       const analyzeDocument = await ollamaService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
+    } else if (process.env.AI_PROVIDER === 'custom') {
+      const analyzeDocument = await customService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      return res.json(analyzeDocument);
     } else {
       return res.status(500).json({ error: 'AI provider not configured' });
     }
@@ -697,6 +701,15 @@ router.post('/manual/playground', express.json(), async (req, res) => {
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'ollama') {
       const analyzeDocument = await ollamaService.analyzePlayground(content, prompt);
+      return res.json(analyzeDocument);
+    } else if (process.env.AI_PROVIDER === 'custom') {
+      const analyzeDocument = await customService.analyzePlayground(content, prompt);
+      await documentModel.addOpenAIMetrics(
+        documentId, 
+        analyzeDocument.metrics.promptTokens,
+        analyzeDocument.metrics.completionTokens,
+        analyzeDocument.metrics.totalTokens
+      )
       return res.json(analyzeDocument);
     } else {
       return res.status(500).json({ error: 'AI provider not configured' });

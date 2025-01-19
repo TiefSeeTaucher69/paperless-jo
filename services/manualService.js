@@ -5,10 +5,17 @@ const emptyVar = null;
 
 class ManualService {
     constructor() {
-        this.openai = new OpenAI({ apiKey: config.openai.apiKey });
-        this.ollama = axios.create({
-        timeout: 300000
-        });
+        if(config.aiProvider === 'custom'){
+            this.openai = new OpenAI({
+                apiKey: config.custom.apiKey,
+                baseUrl: config.custom.apiUrl
+            });
+        }else{            
+            this.openai = new OpenAI({ apiKey: config.openai.apiKey });
+            this.ollama = axios.create({
+            timeout: 300000
+            });
+        }
     }
     
     async analyzeDocument(content, existingTags, provider) {
@@ -17,7 +24,9 @@ class ManualService {
             return this._analyzeOpenAI(content, existingTags);
         } else if (provider === 'ollama') {
             return this._analyzeOllama(content, existingTags);
-        } else {
+        } else if (provider === 'custom') {
+            return this._analyzeCustom(content, existingTags);
+        } else {            
             throw new Error('Invalid provider');
         }
         } catch (error) {
@@ -63,6 +72,45 @@ class ManualService {
         console.error('Failed to analyze document with OpenAI:', error);
         return { tags: [], correspondent: null };
         }
+    }
+
+    async _analyzeCustom(content, existingTags) {
+        try {
+            const existingTagsList = existingTags
+                .map(tag => tag.name)
+                .join(', ');
+        
+            const systemPrompt = process.env.SYSTEM_PROMPT;
+        
+            const response = await this.openai.chat.completions.create({
+                model: config.custom.model,
+                messages: [
+                {
+                    role: "system",
+                    content: systemPrompt
+                },
+                {
+                    role: "user",
+                    content: content
+                }
+                ],
+                temperature: 0.3,
+            });
+        
+            let jsonContent = response.choices[0].message.content;
+            jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            
+            const parsedResponse = JSON.parse(jsonContent);
+            
+            if (!Array.isArray(parsedResponse.tags) || typeof parsedResponse.correspondent !== 'string') {
+                throw new Error('Invalid response structure');
+            }
+            
+            return parsedResponse;
+            } catch (error) {
+            console.error('Failed to analyze document with OpenAI:', error);
+            return { tags: [], correspondent: null };
+            }
     }
     
     async _analyzeOllama(content, existingTags) {

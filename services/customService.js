@@ -249,7 +249,7 @@ class CustomOpenAIService {
       
       // Make API request
       const response = await this.client.chat.completions.create({
-        model: process.env.OPENAI_MODEL,
+        model: config.custom.model,
         messages: [
           {
             role: "system",
@@ -278,6 +278,8 @@ class CustomOpenAIService {
         completionTokens: usage.completion_tokens,
         totalTokens: usage.total_tokens
       };
+
+      console.log(mappedUsage);
 
       let jsonContent = response.choices[0].message.content;
       jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
