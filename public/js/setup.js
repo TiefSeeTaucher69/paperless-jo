@@ -30,7 +30,6 @@ class ThemeManager {
     }
 }
 
-// Form Management
 class FormManager {
     constructor() {
         this.form = document.getElementById('setupForm');
@@ -73,22 +72,46 @@ class FormManager {
         const provider = this.aiProvider.value;
         const openaiSettings = document.getElementById('openaiSettings');
         const ollamaSettings = document.getElementById('ollamaSettings');
+        const customSettings = document.getElementById('customSettings');
+        
+        // Get all required fields
         const openaiKey = document.getElementById('openaiKey');
         const ollamaUrl = document.getElementById('ollamaUrl');
         const ollamaModel = document.getElementById('ollamaModel');
+        const customBaseUrl = document.getElementById('customBaseUrl');
+        const customApiKey = document.getElementById('customApiKey');
+        const customModel = document.getElementById('customModel');
         
-        if (provider === 'openai') {
-            openaiSettings.style.display = 'block';
-            ollamaSettings.style.display = 'none';
-            openaiKey.required = true;
-            ollamaUrl.required = false;
-            ollamaModel.required = false;
-        } else {
-            openaiSettings.style.display = 'none';
-            ollamaSettings.style.display = 'block';
-            openaiKey.required = false;
-            ollamaUrl.required = true;
-            ollamaModel.required = true;
+        // Hide all settings first
+        openaiSettings.style.display = 'none';
+        ollamaSettings.style.display = 'none';
+        customSettings.style.display = 'none';
+        
+        // Reset all required attributes
+        openaiKey.required = false;
+        ollamaUrl.required = false;
+        ollamaModel.required = false;
+        customBaseUrl.required = false;
+        customApiKey.required = false;
+        customModel.required = false;
+        
+        // Show and set required fields based on selected provider
+        switch (provider) {
+            case 'openai':
+                openaiSettings.style.display = 'block';
+                openaiKey.required = true;
+                break;
+            case 'ollama':
+                ollamaSettings.style.display = 'block';
+                ollamaUrl.required = true;
+                ollamaModel.required = true;
+                break;
+            case 'custom':
+                customSettings.style.display = 'block';
+                customBaseUrl.required = true;
+                customApiKey.required = true;
+                customModel.required = true;
+                break;
         }
     }
 

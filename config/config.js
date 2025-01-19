@@ -11,7 +11,7 @@ console.log('Loaded environment variables:', {
 });
 
 module.exports = {
-  PAPERLESS_AI_VERSION: '2.2.1',
+  PAPERLESS_AI_VERSION: '2.3.0',
   CONFIGURED: false,
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
   paperless: {
@@ -24,6 +24,11 @@ module.exports = {
   ollama: {
     apiUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
     model: process.env.OLLAMA_MODEL || 'llama2'
+  },
+  custom: {
+    apiUrl: process.env.CUSTOM_BASE_URL || '',
+    apiKey: process.env.CUSTOM_API_KEY || '',
+    model: process.env.CUSTOM_MODEL || ''
   },
   aiProvider: process.env.AI_PROVIDER || 'openai',
   scanInterval: process.env.SCAN_INTERVAL || '*/30 * * * *',

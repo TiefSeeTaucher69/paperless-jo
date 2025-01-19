@@ -808,8 +808,13 @@ router.post('/setup', express.json(), async (req, res) => {
           username,
           password,
           paperlessUsername,
-          useExistingData
+          useExistingData,
+          customApiKey,
+          customBaseUrl,
+          customModel
       } = req.body;
+
+      console.log('Setup request received:', req.body);
 
       const normalizeArray = (value) => {
           if (!value) return [];
@@ -862,7 +867,10 @@ router.post('/setup', express.json(), async (req, res) => {
           PROMPT_TAGS: normalizeArray(promptTags),
           USE_EXISTING_DATA: useExistingData || 'no',
           API_KEY: apiToken,
-          JWT_SECRET: jwtToken
+          JWT_SECRET: jwtToken,
+          CUSTOM_API_KEY: customApiKey || '',
+          CUSTOM_BASE_URL: customBaseUrl || '',
+          CUSTOM_MODEL: customModel || ''
       };
 
       // Validate AI provider config
@@ -884,8 +892,19 @@ router.post('/setup', express.json(), async (req, res) => {
           }
           config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
           config.OLLAMA_MODEL = ollamaModel || 'llama3.2';
+      }else if (aiProvider === 'custom') {
+        console.log('Custom AI provider selected');
+          const isCustomValid = await setupService.validateCustomConfig(customBaseUrl, customApiKey, customModel);
+          if (!isCustomValid) {
+              return res.status(400).json({
+                  error: 'Custom connection failed. Please check URL, API Key and Model.'
+              });
+          }
+          config.CUSTOM_BASE_URL = customBaseUrl;
+          config.CUSTOM_API_KEY = customApiKey;
+          config.CUSTOM_MODEL = customModel;
       }
-
+      
       // Save configuration
       await setupService.saveConfig(config);
       const hashedPassword = await bcrypt.hash(password, 15);
@@ -929,7 +948,10 @@ router.post('/settings', express.json(), async (req, res) => {
       usePromptTags,
       promptTags,
       paperlessUsername,
-      useExistingData
+      useExistingData,
+      customApiKey,
+      customBaseUrl,
+      customModel
     } = req.body;
 
     const currentConfig = {
@@ -950,7 +972,10 @@ router.post('/settings', express.json(), async (req, res) => {
       USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
       PROMPT_TAGS: process.env.PROMPT_TAGS || '',
       USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no',
-      API_KEY: process.env.API_KEY || ''
+      API_KEY: process.env.API_KEY || '',
+      CUSTOM_API_KEY: process.env.CUSTOM_API_KEY || '',
+      CUSTOM_BASE_URL: process.env.CUSTOM_BASE_URL || '',
+      CUSTOM_MODEL: process.env.CUSTOM_MODEL || ''
     };
 
     const normalizeArray = (value) => {
@@ -1017,6 +1042,9 @@ router.post('/settings', express.json(), async (req, res) => {
     if (usePromptTags) updatedConfig.USE_PROMPT_TAGS = usePromptTags;
     if (promptTags) updatedConfig.PROMPT_TAGS = normalizeArray(promptTags);
     if (useExistingData) updatedConfig.USE_EXISTING_DATA = useExistingData;
+    if (customApiKey) updatedConfig.CUSTOM_API_KEY = customApiKey;
+    if (customBaseUrl) updatedConfig.CUSTOM_BASE_URL = customBaseUrl;
+    if (customModel) updatedConfig.CUSTOM_MODEL = customModel;
 
     let apiToken = '';
     //generate a random secure api token

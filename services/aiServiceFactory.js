@@ -1,6 +1,7 @@
 const config = require('../config/config');
 const openaiService = require('./openaiService');
 const ollamaService = require('./ollamaService');
+const customService = require('./customService');
 
 class AIServiceFactory {
   static getService() {
@@ -10,6 +11,8 @@ class AIServiceFactory {
       case 'openai':
       default:
         return openaiService;
+      case 'custom':
+        return customService;
     }
   }
 }

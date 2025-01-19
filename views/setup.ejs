@@ -159,9 +159,12 @@
                                         <option value="ollama" <%= config.AI_PROVIDER === 'ollama' ? 'selected' : '' %>>
                                             Ollama (Local LLM)
                                         </option>
+                                        <option value="custom" <%= config.AI_PROVIDER === 'custom' ? 'selected' : '' %>>
+                                            Custom
+                                        </option>
                                     </select>
                                 </div>
-
+                        
                                 <!-- OpenAI Settings -->
                                 <div id="openaiSettings" class="provider-settings">
                                     <div class="form-group">
@@ -189,7 +192,7 @@
                                         </select>
                                     </div>
                                 </div>
-
+                        
                                 <!-- Ollama Settings -->
                                 <div id="ollamaSettings" class="provider-settings">
                                     <div class="form-group">
@@ -208,6 +211,43 @@
                                                name="ollamaModel"
                                                value="<%= config.OLLAMA_MODEL %>"
                                                class="modern-input">
+                                    </div>
+                                </div>
+                        
+                                <!-- Custom Provider Settings -->
+                                <div id="customSettings" class="provider-settings">
+                                    <div class="form-group">
+                                        <label for="customBaseUrl">Base URL</label>
+                                        <input type="text" 
+                                               id="customBaseUrl" 
+                                               name="customBaseUrl"
+                                               value="<%= config.CUSTOM_BASE_URL %>"
+                                               class="modern-input"
+                                               placeholder="https://api.example.com">
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="customApiKey">API Key</label>
+                                        <div class="password-input">
+                                            <input type="password" 
+                                                   id="customApiKey" 
+                                                   name="customApiKey"
+                                                   value="<%= config.CUSTOM_API_KEY %>"
+                                                   class="modern-input">
+                                            <button type="button" class="password-toggle" data-input="customApiKey">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="customModel">Model</label>
+                                        <input type="text" 
+                                               id="customModel" 
+                                               name="customModel"
+                                               value="<%= config.CUSTOM_MODEL %>"
+                                               class="modern-input"
+                                               placeholder="Enter model name">
                                     </div>
                                 </div>
                             </div>
