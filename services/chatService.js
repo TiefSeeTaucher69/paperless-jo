@@ -141,6 +141,13 @@ class ChatService {
           messages: chatData.messages,
           temperature: 0.7,
         });
+      }else if(process.env.AI_PROVIDER === 'custom') {
+        console.log('Using Custom AI provider');
+        response = await OpenAIService.client.chat.completions.create({
+          model: process.env.CUSTOM_MODEL,
+          messages: chatData.messages,
+          temperature: 0.7,
+        });
       }else{
         throw new Error('AI Provider not found');
       }

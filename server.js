@@ -30,8 +30,32 @@ const txtLogger = new Logger({
 const app = express();
 let runningTask = false;
 
-// Middleware setup
-app.use(cors());
+
+const corsOptions = {
+  origin: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'x-api-key',
+    'Access-Control-Allow-Private-Network'
+  ],
+  credentials: false
+};
+
+app.use(cors(corsOptions));
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Access-Control-Allow-Private-Network');
+  res.header('Access-Control-Allow-Private-Network', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -52,6 +76,7 @@ app.use((req, res, next) => {
   };
   next();
 });
+
 
 // Initialize data directory
 async function initializeDataDirectory() {

@@ -17,13 +17,18 @@ class OpenAIService {
         baseURL: config.ollama.apiUrl + '/v1',
         apiKey: 'ollama'
       });
-    }
+    } else if (!this.client && config.aiProvider === 'custom') {
+      this.client = new OpenAI({
+        baseURL: config.custom.apiUrl,
+        apiKey: config.custom.apiKey
+      });
+    } else if (!this.client && config.aiProvider === 'openai') {
     if (!this.client && config.openai.apiKey) {
       this.client = new OpenAI({
         apiKey: config.openai.apiKey
       });
     }
-  }
+    }}
 
   // Calculate tokens for a given text
   async calculateTokens(text) {
