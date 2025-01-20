@@ -5,7 +5,8 @@
 # Paperless-AI
 
 An automated document analyzer for Paperless-ngx using OpenAI API, Ollama and all OpenAI API compatible Services to automatically analyze and tag your documents. \
-It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query your documents with AI, a modern and intuitive Webinterface. 
+It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query your documents with AI, a modern and intuitive Webinterface. \
+\
 **Following Services and OpenAI API compatible services have been successfully tested:**
 - Ollama
 - OpenAI
