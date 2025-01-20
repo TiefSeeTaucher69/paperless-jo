@@ -4,9 +4,21 @@
 
 # Paperless-AI
 
-An automated document analyzer for Paperless-ngx using OpenAI API, Ollama (Mistral, llama, phi4, gemma 2) and all OpenAI API compatible Services (for example Deepseek, OpenRouter.ai, and so on) to automatically analyze and tag your documents. \
-It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query your documents with AI, a modern and intuitive Webinterface. 
-
+An automated document analyzer for Paperless-ngx using OpenAI API, Ollama and all OpenAI API compatible Services to automatically analyze and tag your documents. \
+It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query your documents with AI, a modern and intuitive Webinterface. \
+\
+**Following Services and OpenAI API compatible services have been successfully tested:**
+- Ollama
+- OpenAI
+- DeepSeek.ai
+- OpenRouter.ai
+- Perplexity.ai
+- Together.ai
+- VLLM
+- LiteLLM
+- Fastchat
+- Gemini (Google)
+- ... and there are possibly many more
 
 ### Disclaimer:
 paperless-ai makes changes to the documents in your productive paperlessNGX instance that cannot be easily undone.
