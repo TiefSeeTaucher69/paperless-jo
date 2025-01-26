@@ -86,7 +86,7 @@ If you upgrade from 1.x to 2.1.x or later:
 
 - Docker and Docker Compose
 - Access to a Paperless-ngx installation
-- OpenAI API key or your own Ollama instance with your chosen model running and reachable.
+- Cloud based LLM access (see list on top) or your own Ollama or other selfhosted LLM instance with your chosen model running and reachable.
 - Basic understanding of cron syntax (for scan interval configuration)
 
 ## Installation
