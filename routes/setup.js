@@ -17,6 +17,7 @@ const cookieParser = require('cookie-parser');
 const { authenticateJWT, isAuthenticated } = require('./auth.js');
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const customService = require('../services/customService.js');
+require('dotenv').config({ path: '../data/.env' });
 
 
 // API endpoints that should not redirect
@@ -60,16 +61,18 @@ router.use(async (req, res, next) => {
   // Setup check
   try {
     const isConfigured = await setupService.isConfigured();
-    if (!isConfigured && process.env.PAPERLESS_AI_INITIAL_SETUP === 'no' && !req.path.startsWith('/setup')) {
+    console.log('env:', process.env.PAPERLESS_AI_INITIAL_SETUP);
+  
+    if (!isConfigured && (!process.env.PAPERLESS_AI_INITIAL_SETUP || process.env.PAPERLESS_AI_INITIAL_SETUP === 'no') && !req.path.startsWith('/setup')) {
       return res.redirect('/setup');
-    }else if (!isConfigured && process.env.PAPERLESS_AI_INITIAL_SETUP === 'yes' && !req.path.startsWith('/settings')) {
+    } else if (!isConfigured && process.env.PAPERLESS_AI_INITIAL_SETUP === 'yes' && !req.path.startsWith('/settings')) {
       return res.redirect('/settings');
     }
   } catch (error) {
     console.error('Error checking setup configuration:', error);
     return res.status(500).send('Internal Server Error');
   }
-
+  
   next();
 });
 
@@ -924,7 +927,8 @@ router.post('/setup', express.json(), async (req, res) => {
           JWT_SECRET: jwtToken,
           CUSTOM_API_KEY: customApiKey || '',
           CUSTOM_BASE_URL: customBaseUrl || '',
-          CUSTOM_MODEL: customModel || ''
+          CUSTOM_MODEL: customModel || '',
+          PAPERLESS_AI_INITIAL_SETUP: 'yes'
       };
 
       // Validate AI provider config
