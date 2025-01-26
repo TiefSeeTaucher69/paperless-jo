@@ -201,6 +201,24 @@ class PromptRatingSystem {
                 pointer-events: auto;
             }
 
+            #ratingModal .prompt-preview {
+                max-height: 40vh;
+                overflow-y: auto;
+                margin-right: -0.5rem;
+                padding-right: 0.5rem;
+            }
+
+            #ratingModal .prompt-preview code {
+                display: block;
+                word-break: break-word;
+            }
+
+            @media (max-height: 700px) {
+                #ratingModal .prompt-preview {
+                    max-height: 30vh;
+                }
+            }
+
             .star-rating button {
                 color: #cbd5e1;
                 transition: all 0.2s ease;
@@ -623,6 +641,7 @@ class PlaygroundAnalyzer {
 
     async updateDocumentCard(docCard, analysisResult, existing) {
         // Tags aktualisieren
+        console.log('Existing Data:', existing);
         if (analysisResult.tags && analysisResult.tags.length > 0) {
             const tagsContainer = docCard.querySelector('.tags-container, div[class*="flex flex-wrap gap"]');
             if (tagsContainer) {
@@ -640,21 +659,25 @@ class PlaygroundAnalyzer {
                 });
             }
         }
-
+    
         // Correspondent aktualisieren
         if (analysisResult.correspondent && analysisResult.correspondent !== existing.existingCorrespondent) {
             const correspondentElem = docCard.querySelector('[data-correspondent]');
             if (correspondentElem) {
+                // Speichere den ursprünglichen Namen statt der ID
+                const oldCorrespondentName = correspondentElem.textContent.trim();
                 const infoContainer = document.createElement('div');
                 infoContainer.className = 'info-item';
                 
                 const newValue = document.createElement('span');
                 newValue.className = 'updated-text truncate';
-                newValue.textContent = analysisResult.correspondent;
+                // Hier müssen wir den neuen Namen aus correspondentNames holen
+                newValue.textContent = window.correspondentNames?.[analysisResult.correspondent] || analysisResult.correspondent;
                 
                 const oldValue = document.createElement('span');
                 oldValue.className = 'old-value';
-                oldValue.textContent = existing.existingCorrespondent;
+                // Verwende den gespeicherten Namen
+                oldValue.textContent = oldCorrespondentName;
                 
                 infoContainer.appendChild(newValue);
                 infoContainer.appendChild(oldValue);
@@ -663,7 +686,7 @@ class PlaygroundAnalyzer {
                 infoContainer.dataset.correspondent = analysisResult.correspondent;
             }
         }
-
+    
         // Titel aktualisieren
         if (analysisResult.title && analysisResult.title !== existing.existingTitle) {
             const titleElem = docCard.querySelector('h3');
@@ -685,7 +708,7 @@ class PlaygroundAnalyzer {
                 titleElem.parentNode.replaceChild(infoContainer, titleElem);
             }
         }
-
+    
         // Highlight-Effekt
         docCard.classList.add('updated');
         setTimeout(() => {

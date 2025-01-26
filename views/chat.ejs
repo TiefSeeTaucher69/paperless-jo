@@ -1,73 +1,97 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paperless Chat</title>
-    
-    <!-- External Libraries -->
+    <title>Paperless-AI Chat</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
-    
-    <!-- Custom Styles -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/chat.css">
 </head>
-<body data-theme="light">
-    <div class="chat-container">
-        <!-- Document Selection -->
-        <div class="document-select-card">
-            <h2 class="card-title">Select Document</h2>
-            <select id="documentSelect" class="select-input">
-                <option value="">Please choose...</option>
-                <% documents.forEach(function(doc) { %>
-                    <option value="<%= doc.id %>" <%= doc.id == open ? 'selected="true"' : '' %>><%= doc.title %></option>
-                <% }); %>
-            </select>
-        </div>
-
-        <!-- Chat Interface -->
-        <div class="chat-interface">
-            <!-- Initial State -->
-            <div class="initial-state" id="initialState">
-                <p>Please select a document to start the chat.</p>
-            </div>
-
-            <!-- Chat History -->
-            <div id="chatHistory" class="chat-history hidden">
-                <!-- Messages will be added here dynamically -->
-            </div>
-
-            <!-- Message Input -->
-            <div id="messageForm" class="message-form hidden">
-                <input type="hidden" id="documentId" name="documentId" value="">
-                <textarea 
-                    id="messageInput"
-                    name="message" 
-                    class="message-input"
-                    placeholder="Type your message... (Shift + Enter for new line)"
-                    rows="1"
-                    required></textarea>
-                <button type="submit" class="send-button">
-                    Send
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Theme Toggle -->
-    <button class="theme-toggle" onclick="toggleTheme()">
-        <svg id="lightIcon" class="theme-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-        <svg id="darkIcon" class="theme-icon hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-        </svg>
+<body class="h-full">
+    <button id="themeToggle" class="theme-toggle">
+        <i class="fas fa-moon"></i>
     </button>
 
-    <!-- Custom Scripts -->
+    <div class="layout-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <h1 class="brand-title">Paperless-AI<small style="display: block;"><%= version %></small></h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li><a href="/dashboard" class="sidebar-link"><i class="fas fa-home"></i><span>Dashboard</span></a></li>
+                    <li><a href="/manual" class="sidebar-link"><i class="fas fa-file-alt"></i><span>Manual</span></a></li>
+                    <li><a href="/chat" class="sidebar-link active"><i class="fa-solid fa-comment"></i><span>Chat</span></a></li>
+                    <li><a href="/playground" class="sidebar-link"><i class="fa-solid fa-flask-vial"></i><span>Playground</span></a></li>
+                    <li><a href="/history" class="sidebar-link"><i class="fa-solid fa-clock-rotate-left"></i><span>History</span></a></li>
+                    <li><a href="/settings" class="sidebar-link"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+                    <li><a href="/logout" class="sidebar-link"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-wrapper">
+                <div class="content-header">
+                    <h2 class="content-title">Document Chat</h2>
+                </div>
+
+                <div class="chat-container">
+                    <!-- Document Selection -->
+                    <div class="material-card">
+                        <h2 class="card-title">Select Document</h2>
+                        <select id="documentSelect" class="select-input">
+                            <option value="">Please choose...</option>
+                            <% documents.forEach(function(doc) { %>
+                                <option value="<%= doc.id %>" <%= doc.id == open ? 'selected="true"' : '' %>><%= doc.title %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+
+                    <!-- Chat Interface -->
+                    <div class="material-card chat-interface">
+                        <!-- Initial State -->
+                        <div class="initial-state" id="initialState">
+                            <p>Please select a document to start the chat.</p>
+                        </div>
+
+                        <!-- Chat History -->
+                        <div id="chatHistory" class="chat-history hidden">
+                            <!-- Messages will be added here dynamically -->
+                        </div>
+
+                        <!-- Message Input -->
+                        <div id="messageForm" class="message-form hidden">
+                            <input type="hidden" id="documentId" name="documentId" value="">
+                            <textarea 
+                                id="messageInput"
+                                name="message" 
+                                class="message-input"
+                                placeholder="Type your message... (Shift + Enter for new line)"
+                                rows="1"
+                                required></textarea>
+                            <button type="submit" class="send-button">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/dashboard.js"></script>
     <script src="js/chat.js"></script>
 </body>
 </html>

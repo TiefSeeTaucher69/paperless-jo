@@ -57,6 +57,17 @@
     color: #f1f5f9;
 }
 
+[data-theme="dark"] #apiKeyContainer {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #copyNotification {
+    background-color: var(--stats-box-highlight);
+    color: var(--text-primary);
+    border-color: var(--stats-border);
+}
+
 /* Base Styles */
 body {
     background-color: var(--bg-secondary);
@@ -451,6 +462,19 @@ body {
 .detail-item-info {
     color: var(--text-secondary);
     font-size: 0.875rem;
+}
+
+.content-header {
+    background-color: var(--bg-primary);
+}
+
+.content-title {
+    color: var(--text-primary);
+}
+
+#apiKeyContainer {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
 /* Custom Scrollbar */

@@ -27,62 +27,7 @@ class ThemeManager {
     }
 }
 
-// Search & Sort Functionality
-class DocumentManager {
-    constructor() {
-        this.searchInput = document.getElementById('searchInput');
-        this.sortSelect = document.getElementById('sortSelect');
-        this.documentsGrid = document.getElementById('documentsGrid');
-        this.initialize();
-    }
-
-    initialize() {
-        // Search Event Listener
-        this.searchInput.addEventListener('input', (e) => this.handleSearch(e));
-        
-        // Sort Event Listener
-        this.sortSelect.addEventListener('change', (e) => this.handleSort(e));
-    }
-
-    handleSearch(e) {
-        const searchTerm = e.target.value.toLowerCase();
-        const cards = document.querySelectorAll('.document-card');
-        
-        cards.forEach(card => {
-            const title = card.querySelector('.card-title').textContent.toLowerCase();
-            card.style.display = title.includes(searchTerm) ? '' : 'none';
-        });
-    }
-
-    handleSort(e) {
-        const cards = Array.from(this.documentsGrid.children);
-        
-        cards.sort((a, b) => {
-            const titleA = a.querySelector('.card-title').textContent;
-            const titleB = b.querySelector('.card-title').textContent;
-            const dateA = new Date(a.querySelector('[style*="color: var(--text-secondary)"] p').textContent);
-            const dateB = new Date(b.querySelector('[style*="color: var(--text-secondary)"] p').textContent);
-            
-            switch(e.target.value) {
-                case 'title_asc':
-                    return titleA.localeCompare(titleB);
-                case 'title_desc':
-                    return titleB.localeCompare(titleA);
-                case 'created_asc':
-                    return dateA - dateB;
-                case 'created_desc':
-                    return dateB - dateA;
-                default:
-                    return 0;
-            }
-        });
-        
-        cards.forEach(card => this.documentsGrid.appendChild(card));
-    }
-}
-
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.themeManager = new ThemeManager();
-    window.documentManager = new DocumentManager();
 });

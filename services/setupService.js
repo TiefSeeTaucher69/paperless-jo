@@ -127,6 +127,15 @@ class SetupService {
       if (!ollamaValid) {
         throw new Error('Invalid Ollama configuration');
       }
+    } else if (aiProvider === 'custom') {
+      const customValid = await this.validateCustomConfig(
+        config.CUSTOM_BASE_URL,
+        config.CUSTOM_API_KEY,
+        config.CUSTOM_MODEL
+      );
+      if (!customValid) {
+        throw new Error('Invalid Custom AI configuration');
+      }
     }
 
     return true;

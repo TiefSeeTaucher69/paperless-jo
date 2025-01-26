@@ -436,7 +436,8 @@ Analyze the document content and extract the following information into a struct
 2. correspondent: Identify the sender/institution but do not include addresses
 3. tags: Select up to 4 relevant thematic tags
 4. document_date: Extract the document date (format: YYYY-MM-DD)
-5. language: Determine the document language (e.g. "de" or "en")
+5. document_type: Determine a precise type that classifies the document (e.g. Invoice, Contract, Employer, Information and so on)
+6. language: Determine the document language (e.g. "de" or "en")
       
 Important rules for the analysis:
 

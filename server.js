@@ -117,7 +117,7 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
 
   const aiService = AIServiceFactory.getService();
   const analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id);
-  
+  console.log('Repsonse from AI service:', analysis);
   if (analysis.error) {
     throw new Error(`[ERROR] Document analysis failed: ${analysis.error}`);
   }
@@ -135,6 +135,7 @@ async function buildUpdateData(analysis, doc) {
     tags: tagIds,
     title: analysis.document.title || doc.title,
     created: analysis.document.document_date || doc.created,
+    document_type: analysis.document.document_type || doc.document_type,
   };
 
   if (analysis.document.correspondent) {
@@ -150,6 +151,17 @@ async function buildUpdateData(analysis, doc) {
 
   if (analysis.document.language) {
     updateData.language = analysis.document.language;
+  }
+
+  if (analysis.document.document_type) {
+    try {
+      const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type);
+      if (documentType) {
+        updateData.document_type = documentType.id;
+      }
+    } catch (error) {
+      console.error(`[ERROR] Error processing document type:`, error);
+    }
   }
 
   return updateData;
@@ -295,7 +307,7 @@ async function startScanning() {
 
     const userId = await paperlessService.getOwnUserID();
     if (!userId) {
-      console.error('Failed to get own user ID. Aborting scanning.');
+      console.error('Failed to get own user ID. Abort scanning.');
       return;
     }
 

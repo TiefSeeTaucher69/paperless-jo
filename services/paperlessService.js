@@ -792,6 +792,90 @@ async searchForExistingCorrespondent(correspondent) {
     }
 }
 
+async searchForExistingDocumentType(documentType) {
+  try {
+      const response = await this.client.get('/document_types/', {
+          params: {
+              name__icontains: documentType
+          }
+      });
+
+      const results = response.data.results;
+      
+      if (results.length === 0) {
+          console.log(`[DEBUG] No document type with name "${documentType}" found`);
+          return null;
+      }
+      
+      // Check for exact match in the results
+      const exactMatch = results.find(dt => dt.name.toLowerCase() === documentType.toLowerCase());
+      if (exactMatch) {
+          console.log(`[DEBUG] Found exact match for document type "${documentType}" with ID ${exactMatch.id}`);
+          return {
+              id: exactMatch.id,
+              name: exactMatch.name
+          };
+      }
+
+      // No exact match found, return null
+      console.log(`[DEBUG] No exact match found for "${documentType}"`);
+      return null;
+
+  } catch (error) {
+      console.error('[ERROR] while searching for existing document type:', error.message);
+      throw error;
+  }
+}
+
+async getOrCreateDocumentType(name) {
+  this.initialize();
+  
+  try {
+      // Suche nach existierendem document_type
+      const existingDocType = await this.searchForExistingDocumentType(name);
+      console.log("[DEBUG] Response Document Type Search: ", existingDocType);
+  
+      if (existingDocType) {
+          console.log(`[DEBUG] Found existing document type "${name}" with ID ${existingDocType.id}`);
+          return existingDocType;
+      }
+  
+      // Erstelle neuen document_type
+      try {
+          const createResponse = await this.client.post('/document_types/', { 
+              name: name,
+              matching_algorithm: 1, // 1 = ANY
+              match: "",  // Optional: Kann später angepasst werden
+              is_insensitive: true
+          });
+          console.log(`[DEBUG] Created new document type "${name}" with ID ${createResponse.data.id}`);
+          return createResponse.data;
+      } catch (createError) {
+          if (createError.response?.status === 400 && 
+              createError.response?.data?.error?.includes('unique constraint')) {
+            
+              // Race condition check
+              const retryResponse = await this.client.get('/document_types/', {
+                  params: { name: name }
+              });
+            
+              const justCreatedDocType = retryResponse.data.results.find(
+                  dt => dt.name.toLowerCase() === name.toLowerCase()
+              );
+            
+              if (justCreatedDocType) {
+                  console.log(`[DEBUG] Retrieved document type "${name}" after constraint error with ID ${justCreatedDocType.id}`);
+                  return justCreatedDocType;
+              }
+          }
+          throw createError;
+      }
+  } catch (error) {
+      console.error(`[ERROR] Failed to process document type "${name}":`, error.message);
+      throw error;
+  }
+}
+
   async removeUnusedTagsFromDocument(documentId, keepTagIds) {
     this.initialize();
     if (!this.client) return;

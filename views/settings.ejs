@@ -45,7 +45,7 @@
                     <li>
                         <a href="/chat" class="sidebar-link">
                             <i class="fa-solid fa-comment"></i>
-                            <span>Chat (beta)</span>
+                            <span>Chat</span>
                         </a>
                     </li>
                     <li>
@@ -79,22 +79,22 @@
         <!-- Main Content -->
         <main class="main-content">
             <div class="content-wrapper">
-                <div class="content-header flex justify-between items-center px-6 py-4 bg-white shadow-sm">
-                    <h2 class="content-title text-2xl font-semibold text-gray-800">Configuration</h2>
+                <div class="content-header flex justify-between items-center px-6 py-4 bg-white dark:bg-gray-800 shadow-sm">
+                    <h2 class="content-title text-2xl font-semibold text-gray-800 dark:text-white">Configuration</h2>
                     <div class="relative flex items-center space-x-4">API-KEY:
-                        <div id="apiKeyContainer"
-                             class="relative w-48 px-4 py-2 bg-gray-100 rounded cursor-pointer select-none filter blur-sm hover:blur-none transition-all duration-200 truncate"
+                        <div id="apiKeyContainer" 
+                             class="relative w-48 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded cursor-pointer select-none filter blur-sm hover:blur-none transition-all duration-200 truncate"
                              data-api-key="<%= config.API_KEY %>"
                              title="<%= config.API_KEY %>">
                              <%= config.API_KEY %>
                         </div>
                         <button id="regenerateBtn" 
-                                class="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors duration-200 flex items-center space-x-2">
+                                class="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2">
                             <i class="fas fa-sync-alt" id="regenerateIcon"></i>
                             <span>Regenerate</span>
                         </button>
                         <div id="copyNotification" 
-                             class="absolute right-0 top-0 mt-12 w-64 bg-green-50 text-green-800 border border-green-200 rounded-lg p-3 hidden">
+                             class="absolute right-0 top-0 mt-12 w-64 bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-100 border border-green-200 dark:border-green-700 rounded-lg p-3 hidden">
                             <div class="flex items-center">
                                 <i class="fas fa-check-circle mr-2"></i>
                                 <span>API key copied to clipboard!</span>
@@ -102,9 +102,25 @@
                         </div>
                     </div>
                 </div>
-        
                 <!-- Main Form Card -->
                 <div class="material-card">
+                    <% if (success || settingsError) { %>
+                        <div class="mb-6 space-y-4">
+                            <% if (success) { %>
+                                <div class="flex gap-2 p-4 bg-green-50 text-green-800 border border-green-200 rounded-lg">
+                                    <i class="fas fa-check-circle mt-1"></i>
+                                    <p><%= success %></p>
+                                </div>
+                            <% } %>
+                            
+                            <% if (settingsError) { %>
+                                <div class="flex gap-2 p-4 bg-red-50 text-red-800 border border-red-200 rounded-lg">
+                                    <i class="fas fa-exclamation-triangle mt-1"></i>
+                                    <p><%= settingsError %></p>
+                                </div>
+                            <% } %>
+                        </div>
+                    <% } %>
                     <form id="setupForm" class="space-y-8">
                         <!-- Connection Section -->
                         <section class="space-y-6">
