@@ -255,9 +255,18 @@ router.get('/chat/init', async (req, res) => {
 
 // Nachricht senden
 router.post('/chat/message', async (req, res) => {
-  const { documentId, message } = req.body;
-  const response = await ChatService.sendMessage(documentId, message);
-  res.json(response);
+  try {
+    const { documentId, message } = req.body;
+    if (!documentId || !message) {
+      return res.status(400).json({ error: 'Document ID and message are required' });
+    }
+    
+    // Use the new streaming method
+    await ChatService.sendMessageStream(documentId, message, res);
+  } catch (error) {
+    console.error('Chat message error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 router.get('/chat/init/:documentId', async (req, res) => {

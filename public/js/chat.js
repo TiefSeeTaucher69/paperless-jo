@@ -19,9 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTextareaAutoResize();
 });
 
-/**
- * Initialize chat for a selected document
- */
 async function initializeChat(documentId) {
     try {
         const response = await fetch(`/chat/init/${documentId}`);
@@ -36,7 +33,6 @@ async function initializeChat(documentId) {
         
         currentDocumentId = documentId;
         
-        // Show welcome message
         addMessage('Chat initialized for document: ' + data.documentTitle, false);
     } catch (error) {
         console.error('Error initializing chat:', error);
@@ -44,9 +40,6 @@ async function initializeChat(documentId) {
     }
 }
 
-/**
- * Send a message to the server
- */
 async function sendMessage(message) {
     try {
         const response = await fetch('/chat/message', {
@@ -61,19 +54,62 @@ async function sendMessage(message) {
         });
         
         if (!response.ok) throw new Error('Failed to send message');
-        const data = await response.json();
         
-        // Return the actual response text from the JSON
-        return data.reply || data.message || 'No response received';
+        // Create message container for streaming response
+        const containerDiv = document.createElement('div');
+        containerDiv.className = 'message-container assistant';
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message assistant';
+        containerDiv.appendChild(messageDiv);
+        
+        document.getElementById('chatHistory').appendChild(containerDiv);
+        
+        let markdown = '';
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = line.slice(6);
+                    if (data === '[DONE]') continue;
+
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (parsed.content) {
+                            markdown += parsed.content;
+                            messageDiv.innerHTML = marked.parse(markdown);
+                            
+                            // Apply syntax highlighting to any code blocks
+                            messageDiv.querySelectorAll('pre code').forEach((block) => {
+                                hljs.highlightBlock(block);
+                            });
+                            
+                            // Scroll to bottom
+                            const chatHistory = document.getElementById('chatHistory');
+                            chatHistory.scrollTop = chatHistory.scrollHeight;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing SSE data:', e);
+                    }
+                }
+            }
+        }
+
+        return null; // No need to return response as it's handled in streaming
     } catch (error) {
         console.error('Error sending message:', error);
         throw error;
     }
 }
 
-/**
- * Add a message to the chat history
- */
 function addMessage(message, isUser = true) {
     const containerDiv = document.createElement('div');
     containerDiv.className = `message-container ${isUser ? 'user' : 'assistant'}`;
@@ -82,10 +118,8 @@ function addMessage(message, isUser = true) {
     messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
     
     if (isUser) {
-        // User messages are displayed as plain text
         messageDiv.innerHTML = `<p>${escapeHtml(message)}</p>`;
     } else {
-        // For assistant messages, try to extract content from JSON if it's a string
         let messageContent = message;
         try {
             if (typeof message === 'string' && message.trim().startsWith('{')) {
@@ -96,10 +130,7 @@ function addMessage(message, isUser = true) {
             console.log('Message is not JSON, using as is');
         }
         
-        // Parse the message content as Markdown
         messageDiv.innerHTML = marked.parse(messageContent);
-        
-        // Apply syntax highlighting to code blocks
         messageDiv.querySelectorAll('pre code').forEach((block) => {
             hljs.highlightBlock(block);
         });
@@ -111,9 +142,6 @@ function addMessage(message, isUser = true) {
     chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
-/**
- * Show error message to user
- */
 function showError(message) {
     const errorDiv = document.createElement('div');
     errorDiv.className = 'message-container assistant';
@@ -125,9 +153,6 @@ function showError(message) {
     document.getElementById('chatHistory').appendChild(errorDiv);
 }
 
-/**
- * Escape HTML to prevent XSS
- */
 function escapeHtml(unsafe) {
     return unsafe
         .replace(/&/g, "&amp;")
@@ -137,9 +162,6 @@ function escapeHtml(unsafe) {
         .replace(/'/g, "&#039;");
 }
 
-/**
- * Theme handling functions
- */
 function toggleTheme() {
     const currentTheme = document.body.getAttribute('data-theme');
     const newTheme = currentTheme === 'light' ? 'dark' : 'light';
@@ -163,9 +185,6 @@ function setTheme(theme) {
     }
 }
 
-/**
- * Textarea auto-resize functionality
- */
 function setupTextareaAutoResize() {
     const textarea = document.getElementById('messageInput');
     
@@ -183,7 +202,6 @@ function setupTextareaAutoResize() {
     });
 }
 
-// Event Listeners
 document.getElementById('documentSelect').addEventListener('change', function() {
     const documentId = this.value;
     if (documentId) {
@@ -195,7 +213,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const documentSelect = document.getElementById('documentSelect');
     const documentId = documentSelect.value;
 
-    if (documentId){
+    if (documentId) {
         initializeChat(documentId);
     }
 });
@@ -205,9 +223,9 @@ document.getElementById('messageInput').addEventListener('keydown', async (e) =>
         e.preventDefault();
         await submitForm();
     }
-})
+});
 
-async function submitForm(){
+async function submitForm() {
     const messageInput = document.getElementById('messageInput');
     const message = messageInput.value.trim();
     
@@ -221,13 +239,8 @@ async function submitForm(){
         messageInput.value = '';
         messageInput.style.height = 'auto';
         
-        // Send message and get response
-        const response = await sendMessage(message);
-        
-        // Show assistant response
-        if (response) {
-            addMessage(response, false);
-        }
+        // Send message and handle streaming response
+        await sendMessage(message);
     } catch {
         showError('Failed to send message');
     }
