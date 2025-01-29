@@ -20,7 +20,7 @@ RUN npm install pm2 -g
 COPY package*.json ./
 
 # Install node dependencies with clean install
-RUN npm ci --only=production
+RUN npm ci --only=production && npm cache clean --force
 
 # Copy application source code
 COPY . .
@@ -38,5 +38,5 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 # Set production environment
 ENV NODE_ENV=production
 
-# Start application with PM2
+# Start application with PM2 with user node
 CMD ["pm2-runtime", "ecosystem.config.js"]
