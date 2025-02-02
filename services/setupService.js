@@ -68,6 +68,7 @@ class SetupService {
       apiKey: apiKey,
       model: model
     };
+    console.log('Custom AI config:', config);
     try {
       const openai = new OpenAI({ 
         apiKey: config.apiKey, 
@@ -79,7 +80,7 @@ class SetupService {
       });
       return completion.choices && completion.choices.length > 0;
     } catch (error) {
-      console.error('Custom AI validation error:', error.message);
+      console.error('Custom AI validation error:', error);
       return false;
     }
   }

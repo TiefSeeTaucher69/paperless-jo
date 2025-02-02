@@ -434,6 +434,22 @@ textarea.disabled {
     }
 }
 
+.checkbox-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .checkbox-container input[type="checkbox"] {
+    margin-right: 5px;
+  }
+
+  @media (max-width: 600px) {
+    .checkbox-container {
+      flex-direction: column;
+    }
+  }
+
 /* Dark mode adjustments */
 [data-theme="dark"] .tippy-box[data-theme~='custom'] {
     background-color: var(--bg-secondary);

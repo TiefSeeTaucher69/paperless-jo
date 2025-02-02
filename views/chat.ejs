@@ -18,7 +18,11 @@
     </button>
 
     <div class="layout-container">
+        <button id="mobileMenuButton" class="mobile-menu-button">
+            <i class="fas fa-bars"></i>
+        </button>
         <!-- Sidebar -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="brand-icon">
@@ -90,7 +94,54 @@
             </div>
         </main>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuButton = document.getElementById('mobileMenuButton');
+            const sidebar = document.querySelector('.sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            function toggleSidebar(event) {
+                event.stopPropagation(); // Prevent event bubbling
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+                
+                // Toggle menu icon
+                const icon = mobileMenuButton.querySelector('i');
+                if (sidebar.classList.contains('active')) {
+                    icon.classList.remove('fa-bars');
+                    icon.classList.add('fa-times');
+                } else {
+                    icon.classList.remove('fa-times');
+                    icon.classList.add('fa-bars');
+                }
+            }
 
+            // Toggle sidebar when clicking the menu button
+            mobileMenuButton.addEventListener('click', toggleSidebar);
+
+            // Close sidebar when clicking the overlay
+            sidebarOverlay.addEventListener('click', function(event) {
+                event.stopPropagation(); // Prevent event bubbling
+                if (sidebar.classList.contains('active')) {
+                    toggleSidebar(event);
+                }
+            });
+
+            // Prevent sidebar from closing when clicking inside it
+            sidebar.addEventListener('click', function(event) {
+                event.stopPropagation();
+            });
+
+            // Handle links in sidebar
+            const sidebarLinks = document.querySelectorAll('.sidebar-link');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', function(event) {
+                    // Don't prevent default here to allow navigation
+                    event.stopPropagation();
+                });
+            });
+        });
+    </script>
     <script src="js/dashboard.js"></script>
     <script src="js/chat.js"></script>
 </body>

@@ -15,7 +15,11 @@
     </button>
 
     <div class="layout-container">
+        <button id="mobileMenuButton" class="mobile-menu-button">
+            <i class="fas fa-bars"></i>
+        </button>
         <!-- Sidebar -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="brand-icon">
@@ -75,8 +79,25 @@
         <!-- Main Content -->
         <main class="main-content">
             <div class="content-wrapper">
-                <div class="content-header">
+                <div class="content-header flex items-center justify-between">
                     <h2 class="content-title">Dashboard Overview</h2>
+                    <div class="flex items-center gap-4">
+                        <button 
+                            id="scanButton" 
+                            class="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+                            onclick="triggerScan()"
+                        >
+                            <i class="fas fa-sync-alt"></i>
+                            <span>Scan Now</span>
+                        </button>
+                        <!-- Success message toast -->
+                        <div id="successToast" class="hidden fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-check"></i>
+                                <span>Scan completed successfully!</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Top Cards -->
@@ -214,13 +235,111 @@
             </div>
         </main>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuButton = document.getElementById('mobileMenuButton');
+            const sidebar = document.querySelector('.sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            function toggleSidebar(event) {
+                event.stopPropagation(); // Prevent event bubbling
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+                
+                // Toggle menu icon
+                const icon = mobileMenuButton.querySelector('i');
+                if (sidebar.classList.contains('active')) {
+                    icon.classList.remove('fa-bars');
+                    icon.classList.add('fa-times');
+                } else {
+                    icon.classList.remove('fa-times');
+                    icon.classList.add('fa-bars');
+                }
+            }
 
+            // Toggle sidebar when clicking the menu button
+            mobileMenuButton.addEventListener('click', toggleSidebar);
+
+            // Close sidebar when clicking the overlay
+            sidebarOverlay.addEventListener('click', function(event) {
+                event.stopPropagation(); // Prevent event bubbling
+                if (sidebar.classList.contains('active')) {
+                    toggleSidebar(event);
+                }
+            });
+
+            // Prevent sidebar from closing when clicking inside it
+            sidebar.addEventListener('click', function(event) {
+                event.stopPropagation();
+            });
+
+            // Handle links in sidebar
+            const sidebarLinks = document.querySelectorAll('.sidebar-link');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', function(event) {
+                    // Don't prevent default here to allow navigation
+                    event.stopPropagation();
+                });
+            });
+        });
+    </script>
     <!-- Pass data to JavaScript -->
     <script>
         window.dashboardData = {
             documentCount: <%= paperless_data.documentCount %>,
             processedCount: <%= paperless_data.processedDocumentCount %>
         };
+    </script>
+    <script>
+        async function triggerScan() {
+            const button = document.getElementById('scanButton');
+            
+            // If already scanning, prevent multiple clicks
+            if (button.disabled) {
+                return;
+            }
+            
+            const icon = button.querySelector('i');
+            const span = button.querySelector('span');
+            
+            // Disable button and show loading state
+            button.disabled = true;
+            button.classList.add('opacity-50', 'cursor-not-allowed');
+            icon.classList.add('animate-spin');
+            span.textContent = 'Scanning...';
+            
+            try {
+                const response = await fetch('/api/scan/now', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Scan failed');
+                }
+                
+                // Show success message
+                const toast = document.getElementById('successToast');
+                toast.classList.remove('hidden');
+                
+                // Hide success message after 3 seconds
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+                
+            } catch (error) {
+                console.error('Scan failed:', error);
+                // Optional: Show error message to user
+            } finally {
+                // Reset button state
+                button.disabled = false;
+                button.classList.remove('opacity-50', 'cursor-not-allowed');
+                icon.classList.remove('animate-spin');
+                span.textContent = 'Scan Now';
+            }
+        }
     </script>
     <script src="js/dashboard.js"></script>
 </body>

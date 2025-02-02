@@ -5,6 +5,7 @@ const paperlessService = require('../services/paperlessService.js');
 const openaiService = require('../services/openaiService.js');
 const ollamaService = require('../services/ollamaService.js');
 const documentModel = require('../models/document.js');
+const AIServiceFactory = require('../services/aiServiceFactory');
 const debugService = require('../services/debugService.js');
 const configFile = require('../config/config.js');
 const ChatService = require('../services/chatService.js');
@@ -17,6 +18,7 @@ const cookieParser = require('cookie-parser');
 const { authenticateJWT, isAuthenticated } = require('./auth.js');
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const customService = require('../services/customService.js');
+const config = require('../config/config.js');
 require('dotenv').config({ path: '../data/.env' });
 
 
@@ -61,8 +63,7 @@ router.use(async (req, res, next) => {
   // Setup check
   try {
     const isConfigured = await setupService.isConfigured();
-    console.log('env:', process.env.PAPERLESS_AI_INITIAL_SETUP);
-  
+ 
     if (!isConfigured && (!process.env.PAPERLESS_AI_INITIAL_SETUP || process.env.PAPERLESS_AI_INITIAL_SETUP === 'no') && !req.path.startsWith('/setup')) {
       return res.redirect('/setup');
     } else if (!isConfigured && process.env.PAPERLESS_AI_INITIAL_SETUP === 'yes' && !req.path.startsWith('/settings')) {
@@ -398,6 +399,159 @@ router.post('/api/reset-documents', async (req, res) => {
     res.status(500).json({ error: 'Error resetting documents' });
   }
 });
+
+router.post('/api/scan/now', async (req, res) => {
+try {
+    const isConfigured = await setupService.isConfigured();
+    if (!isConfigured) {
+      console.log('Setup not completed. Visit http://your-ip-or-host.com:3000/setup to complete setup.');
+      return;
+    }
+
+    const userId = await paperlessService.getOwnUserID();
+    if (!userId) {
+      console.error('Failed to get own user ID. Abort scanning.');
+      return;
+    }
+    
+      try {
+        let [existingTags, documents, ownUserId, existingCorrespondentList] = await Promise.all([
+          paperlessService.getTags(),
+          paperlessService.getAllDocuments(),
+          paperlessService.getOwnUserID(),
+          paperlessService.listCorrespondentsNames()
+        ]);
+    
+        //get existing correspondent list
+        existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
+    
+        for (const doc of documents) {
+          try {
+            const result = await processDocument(doc, existingTags, existingCorrespondentList, ownUserId);
+            if (!result) continue;
+    
+            const { analysis, originalData } = result;
+            const updateData = await buildUpdateData(analysis, doc);
+            await saveDocumentChanges(doc.id, updateData, analysis, originalData);
+          } catch (error) {
+            console.error(`[ERROR] processing document ${doc.id}:`, error);
+          }
+        }
+      } catch (error) {
+        console.error('[ERROR]  during document scan:', error);
+      } finally {
+        runningTask = false;
+        console.log('[INFO] Task completed');
+        res.send('Task completed');
+      }
+  } catch (error) {
+    console.error('[ERROR] in startScanning:', error);
+  }
+});
+
+async function processDocument(doc, existingTags, existingCorrespondentList, ownUserId) {
+  const isProcessed = await documentModel.isDocumentProcessed(doc.id);
+  if (isProcessed) return null;
+
+  const documentOwnerId = await paperlessService.getOwnerOfDocument(doc.id);
+  if (documentOwnerId !== ownUserId && documentOwnerId !== null) {
+    console.log(`[DEBUG] Document belongs to: ${documentOwnerId}, skipping analysis`);
+    console.log(`[DEBUG] Document ${doc.id} not owned by user, skipping analysis`);
+    return null;
+  }
+
+  let [content, originalData] = await Promise.all([
+    paperlessService.getDocumentContent(doc.id),
+    paperlessService.getDocument(doc.id)
+  ]);
+
+  if (!content || !content.length >= 10) {
+    console.log(`[DEBUG] Document ${doc.id} has no content, skipping analysis`);
+    return null;
+  }
+
+  if (content.length > 50000) {
+    content = content.substring(0, 50000);
+  }
+
+  const aiService = AIServiceFactory.getService();
+  const analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id);
+  console.log('Repsonse from AI service:', analysis);
+  if (analysis.error) {
+    throw new Error(`[ERROR] Document analysis failed: ${analysis.error}`);
+  }
+
+  return { analysis, originalData };
+}
+
+async function buildUpdateData(analysis, doc) {
+  const updateData = {};
+
+  // Only process tags if tagging is activated
+  if (config.limitFunctions?.activateTagging !== 'no') {
+    const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags);
+    if (errors.length > 0) {
+      console.warn('[ERROR] Some tags could not be processed:', errors);
+    }
+    updateData.tags = tagIds;
+  }
+
+  // Only process title if title generation is activated
+  if (config.limitFunctions?.activateTitle !== 'no') {
+    updateData.title = analysis.document.title || doc.title;
+  }
+
+  // Add created date regardless of settings as it's a core field
+  updateData.created = analysis.document.document_date || doc.created;
+
+  // Only process document type if document type classification is activated
+  if (config.limitFunctions?.activateDocumentType !== 'no' && analysis.document.document_type) {
+    try {
+      const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type);
+      if (documentType) {
+        updateData.document_type = documentType.id;
+      }
+    } catch (error) {
+      console.error(`[ERROR] Error processing document type:`, error);
+    }
+  }
+
+  // Only process correspondent if correspondent detection is activated
+  if (config.limitFunctions?.activateCorrespondents !== 'no' && analysis.document.correspondent) {
+    try {
+      const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.document.correspondent);
+      if (correspondent) {
+        updateData.correspondent = correspondent.id;
+      }
+    } catch (error) {
+      console.error(`[ERROR] Error processing correspondent:`, error);
+    }
+  }
+
+  // Always include language if provided as it's a core field
+  if (analysis.document.language) {
+    updateData.language = analysis.document.language;
+  }
+
+  return updateData;
+}
+
+async function saveDocumentChanges(docId, updateData, analysis, originalData) {
+  const { tags: originalTags, correspondent: originalCorrespondent, title: originalTitle } = originalData;
+  
+  await Promise.all([
+    documentModel.saveOriginalData(docId, originalTags, originalCorrespondent, originalTitle),
+    paperlessService.updateDocument(docId, updateData),
+    documentModel.addProcessedDocument(docId, updateData.title),
+    documentModel.addOpenAIMetrics(
+      docId, 
+      analysis.metrics.promptTokens,
+      analysis.metrics.completionTokens,
+      analysis.metrics.totalTokens
+    ),
+    documentModel.addToHistory(docId, updateData.tags, updateData.title, analysis.document.correspondent)
+  ]);
+}
 
 router.post('/api/key-regenerate', async (req, res) => {
   try {
@@ -877,7 +1031,11 @@ router.post('/setup', express.json(), async (req, res) => {
           useExistingData,
           customApiKey,
           customBaseUrl,
-          customModel
+          customModel,
+          activateTagging,
+          activateCorrespondents,
+          activateDocumentType,
+          activateTitle
       } = req.body;
 
       console.log('Setup request received:', req.body);
@@ -902,18 +1060,16 @@ router.post('/setup', express.json(), async (req, res) => {
       }
 
       let apiToken = '';
-      //generate a random secure api token
       if(process.env.API_KEY === undefined || process.env.API_KEY === null || process.env.API_KEY === '') {
         apiToken = require('crypto').randomBytes(64).toString('hex');
-      }else{
+      } else {
         apiToken = process.env.API_KEY;
       }
 
       let jwtToken = '';
-      //generate a random secure jwt token
       if(process.env.JWT_SECRET === undefined || process.env.JWT_SECRET === null || process.env.JWT_SECRET === '') {
         jwtToken = require('crypto').randomBytes(64).toString('hex');
-      }else{
+      } else {
         jwtToken = process.env.JWT_SECRET;
       }      
 
@@ -937,7 +1093,11 @@ router.post('/setup', express.json(), async (req, res) => {
           CUSTOM_API_KEY: customApiKey || '',
           CUSTOM_BASE_URL: customBaseUrl || '',
           CUSTOM_MODEL: customModel || '',
-          PAPERLESS_AI_INITIAL_SETUP: 'yes'
+          PAPERLESS_AI_INITIAL_SETUP: 'yes',
+          ACTIVATE_TAGGING: activateTagging ? 'yes' : 'no',
+          ACTIVATE_CORRESPONDENTS: activateCorrespondents ? 'yes' : 'no',
+          ACTIVATE_DOCUMENT_TYPE: activateDocumentType ? 'yes' : 'no',
+          ACTIVATE_TITLE: activateTitle ? 'yes' : 'no'
       };
 
       // Validate AI provider config
@@ -959,9 +1119,10 @@ router.post('/setup', express.json(), async (req, res) => {
           }
           config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
           config.OLLAMA_MODEL = ollamaModel || 'llama3.2';
-      }else if (aiProvider === 'custom') {
-        console.log('Custom AI provider selected');
+      } else if (aiProvider === 'custom') {
+          console.log('Custom AI provider selected');
           const isCustomValid = await setupService.validateCustomConfig(customBaseUrl, customApiKey, customModel);
+          console.log('Custom AI provider validation:', isCustomValid);
           if (!isCustomValid) {
               return res.status(400).json({
                   error: 'Custom connection failed. Please check URL, API Key and Model.'
@@ -976,7 +1137,7 @@ router.post('/setup', express.json(), async (req, res) => {
       await setupService.saveConfig(config);
       const hashedPassword = await bcrypt.hash(password, 15);
       await documentModel.addUser(username, hashedPassword);
-      // Send success response
+
       res.json({ 
           success: true,
           message: 'Configuration saved successfully.',
@@ -1018,7 +1179,12 @@ router.post('/settings', express.json(), async (req, res) => {
       useExistingData,
       customApiKey,
       customBaseUrl,
-      customModel
+      customModel,
+      // Add new limit functions fields
+      activateTagging,
+      activateCorrespondents,
+      activateDocumentType,
+      activateTitle
     } = req.body;
 
     const currentConfig = {
@@ -1042,7 +1208,12 @@ router.post('/settings', express.json(), async (req, res) => {
       API_KEY: process.env.API_KEY || '',
       CUSTOM_API_KEY: process.env.CUSTOM_API_KEY || '',
       CUSTOM_BASE_URL: process.env.CUSTOM_BASE_URL || '',
-      CUSTOM_MODEL: process.env.CUSTOM_MODEL || ''
+      CUSTOM_MODEL: process.env.CUSTOM_MODEL || '',
+      // Add limit functions to current config with defaults
+      ACTIVATE_TAGGING: process.env.ACTIVATE_TAGGING || 'yes',
+      ACTIVATE_CORRESPONDENTS: process.env.ACTIVATE_CORRESPONDENTS || 'yes',
+      ACTIVATE_DOCUMENT_TYPE: process.env.ACTIVATE_DOCUMENT_TYPE || 'yes',
+      ACTIVATE_TITLE: process.env.ACTIVATE_TITLE || 'yes'
     };
 
     const normalizeArray = (value) => {
@@ -1052,6 +1223,7 @@ router.post('/settings', express.json(), async (req, res) => {
       return [];
     };
 
+    // Validate Paperless connection if URL or token changed
     if (paperlessUrl !== currentConfig.PAPERLESS_API_URL?.replace('/api', '') || 
         paperlessToken !== currentConfig.PAPERLESS_API_TOKEN) {
       const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
@@ -1068,6 +1240,7 @@ router.post('/settings', express.json(), async (req, res) => {
     if (paperlessToken) updatedConfig.PAPERLESS_API_TOKEN = paperlessToken;
     if (paperlessUsername) updatedConfig.PAPERLESS_USERNAME = paperlessUsername;
 
+    // Handle AI provider configuration
     if (aiProvider) {
       updatedConfig.AI_PROVIDER = aiProvider;
       
@@ -1096,14 +1269,11 @@ router.post('/settings', express.json(), async (req, res) => {
       }
     }
 
+    // Update general settings
     if (scanInterval) updatedConfig.SCAN_INTERVAL = scanInterval;
     if (systemPrompt) updatedConfig.SYSTEM_PROMPT = systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
     if (showTags) updatedConfig.PROCESS_PREDEFINED_DOCUMENTS = showTags;
-    if(tags !== undefined || tags !== null || tags !== ''){
-      updatedConfig.TAGS = normalizeArray(tags);
-    }else{ 
-      updatedConfig.TAGS = '';
-    }
+    if (tags !== undefined) updatedConfig.TAGS = normalizeArray(tags);
     if (aiProcessedTag) updatedConfig.ADD_AI_PROCESSED_TAG = aiProcessedTag;
     if (aiTagName) updatedConfig.AI_PROCESSED_TAG_NAME = aiTagName;
     if (usePromptTags) updatedConfig.USE_PROMPT_TAGS = usePromptTags;
@@ -1113,13 +1283,19 @@ router.post('/settings', express.json(), async (req, res) => {
     if (customBaseUrl) updatedConfig.CUSTOM_BASE_URL = customBaseUrl;
     if (customModel) updatedConfig.CUSTOM_MODEL = customModel;
 
-    let apiToken = '';
-    //generate a random secure api token
-    if(process.env.API_KEY === undefined || process.env.API_KEY === null) {
+    // Handle limit functions
+    // Convert checkbox values to 'yes'/'no' format
+    updatedConfig.ACTIVATE_TAGGING = activateTagging ? 'yes' : 'no';
+    updatedConfig.ACTIVATE_CORRESPONDENTS = activateCorrespondents ? 'yes' : 'no';
+    updatedConfig.ACTIVATE_DOCUMENT_TYPE = activateDocumentType ? 'yes' : 'no';
+    updatedConfig.ACTIVATE_TITLE = activateTitle ? 'yes' : 'no';
+
+    // Handle API key
+    let apiToken = process.env.API_KEY;
+    if (!apiToken) {
       console.log('Generating new API key');
-      apiToken = Promise.resolve(require('crypto').randomBytes(64).toString('hex'));
-    }else{
-      updatedConfig.API_KEY = process.env.API_KEY;
+      apiToken = require('crypto').randomBytes(64).toString('hex');
+      updatedConfig.API_KEY = apiToken;
     }
 
     const mergedConfig = {
@@ -1141,7 +1317,7 @@ router.post('/settings', express.json(), async (req, res) => {
     }, 5000);
 
   } catch (error) {
-    console.error('Setup error:', error);
+    console.error('Settings update error:', error);
     res.status(500).json({ 
       error: 'An error occurred: ' + error.message
     });

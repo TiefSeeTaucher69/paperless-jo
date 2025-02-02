@@ -383,7 +383,84 @@
                                         <p class="help-text">These tags will be exclusively used in the AI prompt</p>
                                     </div>
                                 </div>
-                                
+                                <!-- Limit Functions Section -->
+                                <div class="form-group space-y-4">
+                                    <label class="flex items-center gap-2 font-medium">
+                                        <i class="fas fa-sliders-h text-blue-500"></i>
+                                        Enable/Disable AI Functions
+                                    </label>
+                                    <p class="text-sm text-gray-500">Select which functions the AI should perform during document analysis</p>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                        <div class="modern-card flex-1 p-4 rounded-lg border border-gray-200 hover:border-blue-500 transition-colors duration-200">
+                                            <label class="flex items-start cursor-pointer w-full">
+                                                <input type="checkbox" 
+                                                    id="activateTagging" 
+                                                    name="activateTagging" 
+                                                    class="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                    <%= config.ACTIVATE_TAGGING === 'yes' ? 'checked' : '' %>>
+                                                <div class="ml-3">
+                                                    <div class="flex items-center font-medium">
+                                                        <i class="fas fa-tags text-blue-500 mr-2"></i>
+                                                        Tags Assignment
+                                                    </div>
+                                                    <p class="text-sm text-gray-500 mt-1">Automatically assign relevant tags to documents</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="modern-card flex-1 p-4 rounded-lg border border-gray-200 hover:border-blue-500 transition-colors duration-200">
+                                            <label class="flex items-start cursor-pointer w-full">
+                                                <input type="checkbox" 
+                                                    id="activateCorrespondents" 
+                                                    name="activateCorrespondents" 
+                                                    class="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                    <%= config.ACTIVATE_CORRESPONDENTS === 'yes' ? 'checked' : '' %>>
+                                                <div class="ml-3">
+                                                    <div class="flex items-center font-medium">
+                                                        <i class="fas fa-user text-blue-500 mr-2"></i>
+                                                        Correspondent Detection
+                                                    </div>
+                                                    <p class="text-sm text-gray-500 mt-1">Identify document senders automatically</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="modern-card flex-1 p-4 rounded-lg border border-gray-200 hover:border-blue-500 transition-colors duration-200">
+                                            <label class="flex items-start cursor-pointer w-full">
+                                                <input type="checkbox" 
+                                                    id="activateDocumentType" 
+                                                    name="activateDocumentType" 
+                                                    class="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                    <%= config.ACTIVATE_DOCUMENT_TYPE === 'yes' ? 'checked' : '' %>>
+                                                <div class="ml-3">
+                                                    <div class="flex items-center font-medium">
+                                                        <i class="fas fa-file-alt text-blue-500 mr-2"></i>
+                                                        Document Type Classification
+                                                    </div>
+                                                    <p class="text-sm text-gray-500 mt-1">Determine the type of document automatically</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="modern-card flex-1 p-4 rounded-lg border border-gray-200 hover:border-blue-500 transition-colors duration-200">
+                                            <label class="flex items-start cursor-pointer w-full">
+                                                <input type="checkbox" 
+                                                    id="activateTitle" 
+                                                    name="activateTitle" 
+                                                    class="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                    <%= config.ACTIVATE_TITLE === 'yes' ? 'checked' : '' %>>
+                                                <div class="ml-3">
+                                                    <div class="flex items-center font-medium">
+                                                        <i class="fas fa-heading text-blue-500 mr-2"></i>
+                                                        Title Generation
+                                                    </div>
+                                                    <p class="text-sm text-gray-500 mt-1">Generate meaningful titles for documents</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
                                 <hr/>
                                 <!-- System Prompt -->
                                 <div class="form-group">

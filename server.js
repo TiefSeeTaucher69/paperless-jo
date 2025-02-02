@@ -126,19 +126,39 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
 }
 
 async function buildUpdateData(analysis, doc) {
-  const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags);
-  if (errors.length > 0) {
-    console.warn('[ERROR] Some tags could not be processed:', errors);
+  const updateData = {};
+
+  // Only process tags if tagging is activated
+  if (config.limitFunctions?.activateTagging !== 'no') {
+    const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags);
+    if (errors.length > 0) {
+      console.warn('[ERROR] Some tags could not be processed:', errors);
+    }
+    updateData.tags = tagIds;
   }
 
-  const updateData = {
-    tags: tagIds,
-    title: analysis.document.title || doc.title,
-    created: analysis.document.document_date || doc.created,
-    document_type: analysis.document.document_type || doc.document_type,
-  };
+  // Only process title if title generation is activated
+  if (config.limitFunctions?.activateTitle !== 'no') {
+    updateData.title = analysis.document.title || doc.title;
+  }
 
-  if (analysis.document.correspondent) {
+  // Add created date regardless of settings as it's a core field
+  updateData.created = analysis.document.document_date || doc.created;
+
+  // Only process document type if document type classification is activated
+  if (config.limitFunctions?.activateDocumentType !== 'no' && analysis.document.document_type) {
+    try {
+      const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type);
+      if (documentType) {
+        updateData.document_type = documentType.id;
+      }
+    } catch (error) {
+      console.error(`[ERROR] Error processing document type:`, error);
+    }
+  }
+
+  // Only process correspondent if correspondent detection is activated
+  if (config.limitFunctions?.activateCorrespondents !== 'no' && analysis.document.correspondent) {
     try {
       const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.document.correspondent);
       if (correspondent) {
@@ -149,19 +169,9 @@ async function buildUpdateData(analysis, doc) {
     }
   }
 
+  // Always include language if provided as it's a core field
   if (analysis.document.language) {
     updateData.language = analysis.document.language;
-  }
-
-  if (analysis.document.document_type) {
-    try {
-      const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type);
-      if (documentType) {
-        updateData.document_type = documentType.id;
-      }
-    } catch (error) {
-      console.error(`[ERROR] Error processing document type:`, error);
-    }
   }
 
   return updateData;

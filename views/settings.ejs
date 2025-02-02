@@ -14,12 +14,18 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="h-full">
+    
+    
     <button id="themeToggle" class="theme-toggle">
         <i class="fas fa-moon dark:fas fa-sun"></i>
     </button>
-
+    
     <div class="layout-container">
+        <button id="mobileMenuButton" class="mobile-menu-button">
+            <i class="fas fa-bars"></i>
+        </button>
         <!-- Sidebar -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="brand-icon">
@@ -414,6 +420,90 @@
                                         </div>
                                     </div>
                                 </div>
+                                <hr/>
+                                <!-- Limit Functions Section -->
+                                <section class="space-y-6">
+                                    <h2 class="text-xl font-bold flex items-center gap-2 text-primary mb-4">
+                                        <i class="fas fa-tasks"></i>
+                                        AI Function Limits
+                                    </h2>
+                                    <div class="space-y-4">
+                                        <div class="space-y-2">
+                                            <label class="text-sm font-medium">Enable/Disable AI Functions</label>
+                                            <p class="text-sm text-gray-500 mb-4">Select which functions the AI should perform during document analysis</p>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div class="border border-gray-200 shadow-sm rounded-lg hover:border-blue-500 transition-colors duration-200">
+                                                    <label for="activateTagging" class="flex items-center p-4 cursor-pointer w-full">
+                                                        <input type="checkbox" 
+                                                            id="activateTagging" 
+                                                            name="activateTagging" 
+                                                            class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                            <%= config.ACTIVATE_TAGGING === 'yes' ? 'checked' : '' %>>
+                                                        <div class="ml-3">
+                                                            <div class="flex items-center text-gray-900 font-medium">
+                                                                <i class="fas fa-tags mr-2 text-blue-500"></i>
+                                                                Tags Assignment
+                                                            </div>
+                                                            <p class="text-sm text-gray-500 mt-1">Automatically assign relevant tags to documents</p>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                                
+                                                <div class="border border-gray-200 shadow-sm rounded-lg hover:border-blue-500 transition-colors duration-200">
+                                                    <label for="activateCorrespondents" class="flex items-center p-4 cursor-pointer w-full">
+                                                        <input type="checkbox" 
+                                                            id="activateCorrespondents" 
+                                                            name="activateCorrespondents" 
+                                                            class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                            <%= config.ACTIVATE_CORRESPONDENTS === 'yes' ? 'checked' : '' %>>
+                                                        <div class="ml-3">
+                                                            <div class="flex items-center text-gray-900 font-medium">
+                                                                <i class="fas fa-user mr-2 text-blue-500"></i>
+                                                                Correspondent Detection
+                                                            </div>
+                                                            <p class="text-sm text-gray-500 mt-1">Identify document senders automatically</p>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                                
+                                                <div class="border border-gray-200 shadow-sm rounded-lg hover:border-blue-500 transition-colors duration-200">
+                                                    <label for="activateDocumentType" class="flex items-center p-4 cursor-pointer w-full">
+                                                        <input type="checkbox" 
+                                                            id="activateDocumentType" 
+                                                            name="activateDocumentType" 
+                                                            class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                            <%= config.ACTIVATE_DOCUMENT_TYPE === 'yes' ? 'checked' : '' %>>
+                                                        <div class="ml-3">
+                                                            <div class="flex items-center text-gray-900 font-medium">
+                                                                <i class="fas fa-file-alt mr-2 text-blue-500"></i>
+                                                                Document Type Classification
+                                                            </div>
+                                                            <p class="text-sm text-gray-500 mt-1">Determine the type of document automatically</p>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                                
+                                                <div class="border border-gray-200 shadow-sm rounded-lg hover:border-blue-500 transition-colors duration-200">
+                                                    <label for="activateTitle" class="flex items-center p-4 cursor-pointer w-full">
+                                                        <input type="checkbox" 
+                                                            id="activateTitle" 
+                                                            name="activateTitle" 
+                                                            class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                            <%= config.ACTIVATE_TITLE === 'yes' ? 'checked' : '' %>>
+                                                        <div class="ml-3">
+                                                            <div class="flex items-center text-gray-900 font-medium">
+                                                                <i class="fas fa-heading mr-2 text-blue-500"></i>
+                                                                Title Generation
+                                                            </div>
+                                                            <p class="text-sm text-gray-500 mt-1">Generate meaningful titles for documents</p>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
         
                                 <!-- System Prompt Section -->
                                 <div class="border-t pt-4 space-y-4">
@@ -576,6 +666,55 @@
             }
         });
     });
+    </script>
+    <!-- Füge dies direkt vor dem schließenden </body> Tag ein -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuButton = document.getElementById('mobileMenuButton');
+            const sidebar = document.querySelector('.sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            function toggleSidebar(event) {
+                event.stopPropagation(); // Prevent event bubbling
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+                
+                // Toggle menu icon
+                const icon = mobileMenuButton.querySelector('i');
+                if (sidebar.classList.contains('active')) {
+                    icon.classList.remove('fa-bars');
+                    icon.classList.add('fa-times');
+                } else {
+                    icon.classList.remove('fa-times');
+                    icon.classList.add('fa-bars');
+                }
+            }
+
+            // Toggle sidebar when clicking the menu button
+            mobileMenuButton.addEventListener('click', toggleSidebar);
+
+            // Close sidebar when clicking the overlay
+            sidebarOverlay.addEventListener('click', function(event) {
+                event.stopPropagation(); // Prevent event bubbling
+                if (sidebar.classList.contains('active')) {
+                    toggleSidebar(event);
+                }
+            });
+
+            // Prevent sidebar from closing when clicking inside it
+            sidebar.addEventListener('click', function(event) {
+                event.stopPropagation();
+            });
+
+            // Handle links in sidebar
+            const sidebarLinks = document.querySelectorAll('.sidebar-link');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', function(event) {
+                    // Don't prevent default here to allow navigation
+                    event.stopPropagation();
+                });
+            });
+        });
     </script>
     <script src="js/settings.js"></script>
 </body>

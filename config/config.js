@@ -4,10 +4,24 @@ const envPath = path.join(currentDir, 'data', '.env');
 console.log('Loading .env from:', envPath); // Debug log
 require('dotenv').config({ path: envPath });
 
+// Helper function to parse boolean-like env vars
+const parseEnvBoolean = (value, defaultValue = 'yes') => {
+  if (!value) return defaultValue;
+  return value.toLowerCase() === 'true' || value === '1' || value.toLowerCase() === 'yes' ? 'yes' : 'no';
+};
+
+// Initialize limit functions with defaults
+const limitFunctions = {
+  activateTagging: parseEnvBoolean(process.env.ACTIVATE_TAGGING, 'yes'),
+  activateCorrespondents: parseEnvBoolean(process.env.ACTIVATE_CORRESPONDENTS, 'yes'),
+  activateDocumentType: parseEnvBoolean(process.env.ACTIVATE_DOCUMENT_TYPE, 'yes'),
+  activateTitle: parseEnvBoolean(process.env.ACTIVATE_TITLE, 'yes')
+};
 
 console.log('Loaded environment variables:', {
   PAPERLESS_API_URL: process.env.PAPERLESS_API_URL,
   PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN,
+  LIMIT_FUNCTIONS: limitFunctions
 });
 
 module.exports = {
@@ -32,6 +46,13 @@ module.exports = {
   },
   aiProvider: process.env.AI_PROVIDER || 'openai',
   scanInterval: process.env.SCAN_INTERVAL || '*/30 * * * *',
+  // Add limit functions to config
+  limitFunctions: {
+    activateTagging: limitFunctions.activateTagging,
+    activateCorrespondents: limitFunctions.activateCorrespondents,
+    activateDocumentType: limitFunctions.activateDocumentType,
+    activateTitle: limitFunctions.activateTitle
+  },
   specialPromptPreDefinedTags: `You are a document analysis AI. You will analyze the document. 
   You take the main information to associate tags with the document. 
   You will also find the correspondent of the document (Sender not reciever). Also you find a meaningful and short title for the document.
