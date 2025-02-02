@@ -25,7 +25,7 @@ console.log('Loaded environment variables:', {
 });
 
 module.exports = {
-  PAPERLESS_AI_VERSION: '2.4.0',
+  PAPERLESS_AI_VERSION: '2.4.5',
   CONFIGURED: false,
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
   paperless: {
