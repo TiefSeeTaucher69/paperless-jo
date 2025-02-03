@@ -946,7 +946,7 @@ async getOrCreateDocumentType(name) {
         return null;
     }
 }
-
+  //Remove if not needed?
   async getOwnerOfDocument(documentId) {
     this.initialize();
     try {
@@ -957,6 +957,19 @@ async getOrCreateDocumentType(name) {
       return null;
     }
   }
+
+  // Checks if the document is accessable by the current user
+  async getPermissionOfDocument(documentId) {
+    this.initialize();
+    try {
+      const response = await this.client.get(`/documents/${documentId}/`);
+      return response.data.user_can_change;
+    } catch (error) {
+      console.error(`[ERROR] No Permission to edit document ${documentId}:`, error.message);
+      return null;
+    }
+  }
+
 
   async updateDocument(documentId, updates) {
     this.initialize();
