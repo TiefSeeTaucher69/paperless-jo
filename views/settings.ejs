@@ -504,7 +504,82 @@
                                         </div>
                                     </div>
                                 </section>
-        
+                                <!-- Custom Fields Section -->
+                                <section class="space-y-6">
+                                    <h2 class="text-xl font-bold flex items-center gap-2 text-primary mb-4">
+                                        <i class="fas fa-table text-blue-500"></i>
+                                        Custom Fields
+                                    </h2>
+                                    <div class="space-y-4">
+                                        <div id="customFieldsList" class="space-y-2">
+                                            <% if (config.CUSTOM_FIELDS && Array.isArray(JSON.parse(config.CUSTOM_FIELDS).custom_fields)) { %>
+                                                <% JSON.parse(config.CUSTOM_FIELDS).custom_fields.forEach((field, index) => { %>
+                                                    <div class="custom-field-item flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 transition-colors">
+                                                        <div class="cursor-move text-gray-400">
+                                                            <i class="fas fa-grip-vertical"></i>
+                                                        </div>
+                                                        <div class="flex-1">
+                                                            <p class="font-medium text-gray-900 dark:text-gray-100"><%= field.value %></p>
+                                                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                                                Type: <%= field.data_type %>
+                                                                <% if (field.data_type === 'monetary' && field.currency) { %>
+                                                                    (<%= field.currency %>)
+                                                                <% } %>
+                                                            </p>
+                                                        </div>
+                                                        <button type="button" 
+                                                                onclick="removeCustomField(this)"
+                                                                class="text-gray-400 hover:text-red-500 transition-colors">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                <% }); %>
+                                            <% } %>
+                                        </div>
+
+                                        <div class="grid grid-cols-12 gap-3">
+                                            <div class="col-span-5">
+                                                <input type="text" 
+                                                    id="newFieldName" 
+                                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" 
+                                                    placeholder="Enter field name...">
+                                            </div>
+                                            
+                                            <div class="col-span-3">
+                                                <select id="newFieldType" 
+                                                        onchange="toggleCurrencySelect()"
+                                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                                                    <option value="string">Text</option>
+                                                    <option value="float">Number</option>
+                                                    <option value="integer">Integer</option>
+                                                    <option value="monetary">Currency</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="col-span-2">
+                                                <select id="currencyCode" 
+                                                        class="hidden w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                                                    <option value="EUR">EUR</option>
+                                                    <option value="USD">USD</option>
+                                                    <option value="GBP">GBP</option>
+                                                    <option value="JPY">JPY</option>
+                                                    <option value="CHF">CHF</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="col-span-2">
+                                                <button type="button" 
+                                                        onclick="addCustomField()"
+                                                        class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center gap-2">
+                                                    <i class="fas fa-plus"></i>
+                                                    Add
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <input type="hidden" id="customFieldsJson" name="customFields" value='<%= config.CUSTOM_FIELDS || "{\"custom_fields\":[]}" %>'>
+                                    </div>
+                                </section>
                                 <!-- System Prompt Section -->
                                 <div class="border-t pt-4 space-y-4">
                                     <div class="space-y-2">

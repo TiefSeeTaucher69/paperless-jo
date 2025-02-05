@@ -1035,7 +1035,8 @@ router.post('/setup', express.json(), async (req, res) => {
           activateTagging,
           activateCorrespondents,
           activateDocumentType,
-          activateTitle
+          activateTitle,
+          customFields  // Added parameter for custom fields
       } = req.body;
 
       console.log('Setup request received:', req.body);
@@ -1061,17 +1062,45 @@ router.post('/setup', express.json(), async (req, res) => {
 
       let apiToken = '';
       if(process.env.API_KEY === undefined || process.env.API_KEY === null || process.env.API_KEY === '') {
-        apiToken = require('crypto').randomBytes(64).toString('hex');
+          apiToken = require('crypto').randomBytes(64).toString('hex');
       } else {
-        apiToken = process.env.API_KEY;
+          apiToken = process.env.API_KEY;
       }
 
       let jwtToken = '';
       if(process.env.JWT_SECRET === undefined || process.env.JWT_SECRET === null || process.env.JWT_SECRET === '') {
-        jwtToken = require('crypto').randomBytes(64).toString('hex');
+          jwtToken = require('crypto').randomBytes(64).toString('hex');
       } else {
-        jwtToken = process.env.JWT_SECRET;
+          jwtToken = process.env.JWT_SECRET;
       }      
+
+      // Process custom fields
+      let processedCustomFields = [];
+      if (customFields) {
+          try {
+              const parsedFields = typeof customFields === 'string' 
+                  ? JSON.parse(customFields) 
+                  : customFields;
+              
+              processedCustomFields = parsedFields.custom_fields.map(field => ({
+                  value: field.value,
+                  data_type: field.data_type,
+                  ...(field.currency && { currency: field.currency })
+              }));
+          } catch (error) {
+              console.error('Error processing custom fields:', error);
+              processedCustomFields = [];
+          }
+      }
+
+      try {
+        for (const field of processedCustomFields) {
+          //example json string (processedCustomFields): {"custom_fields":[{"value":"Rechnungssumme","data_type":"monetary","currency":"EUR"},{"value":"Test","data_type":"string"}]}
+          await paperlessService.createCustomFieldSafely(field.value, field.data_type, field.currency);
+        }
+      } catch (error) {
+        console.log('[ERROR] Error creating custom fields:', error);
+      }
 
       // Prepare base config
       const config = {
@@ -1097,7 +1126,10 @@ router.post('/setup', express.json(), async (req, res) => {
           ACTIVATE_TAGGING: activateTagging ? 'yes' : 'no',
           ACTIVATE_CORRESPONDENTS: activateCorrespondents ? 'yes' : 'no',
           ACTIVATE_DOCUMENT_TYPE: activateDocumentType ? 'yes' : 'no',
-          ACTIVATE_TITLE: activateTitle ? 'yes' : 'no'
+          ACTIVATE_TITLE: activateTitle ? 'yes' : 'no',
+          CUSTOM_FIELDS: processedCustomFields.length > 0 
+              ? JSON.stringify({ custom_fields: processedCustomFields }) 
+              : '{"custom_fields":[]}'
       };
 
       // Validate AI provider config
@@ -1161,7 +1193,7 @@ router.post('/settings', express.json(), async (req, res) => {
   try {
     const { 
       paperlessUrl, 
-      paperlessToken, 
+      paperlessToken,
       aiProvider,
       openaiKey,
       openaiModel,
@@ -1180,11 +1212,11 @@ router.post('/settings', express.json(), async (req, res) => {
       customApiKey,
       customBaseUrl,
       customModel,
-      // Add new limit functions fields
       activateTagging,
       activateCorrespondents,
       activateDocumentType,
-      activateTitle
+      activateTitle,
+      customFields  // Added parameter
     } = req.body;
 
     const currentConfig = {
@@ -1209,12 +1241,31 @@ router.post('/settings', express.json(), async (req, res) => {
       CUSTOM_API_KEY: process.env.CUSTOM_API_KEY || '',
       CUSTOM_BASE_URL: process.env.CUSTOM_BASE_URL || '',
       CUSTOM_MODEL: process.env.CUSTOM_MODEL || '',
-      // Add limit functions to current config with defaults
       ACTIVATE_TAGGING: process.env.ACTIVATE_TAGGING || 'yes',
       ACTIVATE_CORRESPONDENTS: process.env.ACTIVATE_CORRESPONDENTS || 'yes',
       ACTIVATE_DOCUMENT_TYPE: process.env.ACTIVATE_DOCUMENT_TYPE || 'yes',
-      ACTIVATE_TITLE: process.env.ACTIVATE_TITLE || 'yes'
+      ACTIVATE_TITLE: process.env.ACTIVATE_TITLE || 'yes',
+      CUSTOM_FIELDS: process.env.CUSTOM_FIELDS || '{"custom_fields":[]}'  // Added default
     };
+
+    // Process custom fields
+    let processedCustomFields = [];
+    if (customFields) {
+      try {
+        const parsedFields = typeof customFields === 'string' 
+          ? JSON.parse(customFields) 
+          : customFields;
+        
+        processedCustomFields = parsedFields.custom_fields.map(field => ({
+          value: field.value,
+          data_type: field.data_type,
+          ...(field.currency && { currency: field.currency })
+        }));
+      } catch (error) {
+        console.error('Error processing custom fields:', error);
+        processedCustomFields = [];
+      }
+    }
 
     const normalizeArray = (value) => {
       if (!value) return [];
@@ -1223,7 +1274,6 @@ router.post('/settings', express.json(), async (req, res) => {
       return [];
     };
 
-    // Validate Paperless connection if URL or token changed
     if (paperlessUrl !== currentConfig.PAPERLESS_API_URL?.replace('/api', '') || 
         paperlessToken !== currentConfig.PAPERLESS_API_TOKEN) {
       const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
@@ -1283,8 +1333,14 @@ router.post('/settings', express.json(), async (req, res) => {
     if (customBaseUrl) updatedConfig.CUSTOM_BASE_URL = customBaseUrl;
     if (customModel) updatedConfig.CUSTOM_MODEL = customModel;
 
+    // Update custom fields
+    if (processedCustomFields.length > 0 || customFields) {
+      updatedConfig.CUSTOM_FIELDS = JSON.stringify({ 
+        custom_fields: processedCustomFields 
+      });
+    }
+
     // Handle limit functions
-    // Convert checkbox values to 'yes'/'no' format
     updatedConfig.ACTIVATE_TAGGING = activateTagging ? 'yes' : 'no';
     updatedConfig.ACTIVATE_CORRESPONDENTS = activateCorrespondents ? 'yes' : 'no';
     updatedConfig.ACTIVATE_DOCUMENT_TYPE = activateDocumentType ? 'yes' : 'no';
@@ -1304,14 +1360,21 @@ router.post('/settings', express.json(), async (req, res) => {
     };
 
     await setupService.saveConfig(mergedConfig);
-    
+    try {
+      for (const field of processedCustomFields) {
+        //example json string (processedCustomFields): {"custom_fields":[{"value":"Rechnungssumme","data_type":"monetary","currency":"EUR"},{"value":"Test","data_type":"string"}]}
+        await paperlessService.createCustomFieldSafely(field.value, field.data_type, field.currency);
+      }
+    } catch (error) {
+      console.log('[ERROR] Error creating custom fields:', error);
+    }
+
     res.json({ 
       success: true,
       message: 'Configuration saved successfully.',
       restart: true
     });
 
-    // Trigger application restart
     setTimeout(() => {
       process.exit(0);
     }, 5000);

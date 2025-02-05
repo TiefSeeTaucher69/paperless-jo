@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css" />
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 </head>
 <body class="h-full">
     <button id="themeToggle" class="theme-toggle material-button-2">
@@ -462,6 +463,96 @@
                                     </div>
                                 </div>
                                 <hr/>
+                                <!-- Custom Fields Section -->
+                                <section>
+                                    <div class="form-group space-y-4">
+                                        <label class="flex items-center gap-2 font-medium">
+                                            <i class="fas fa-table text-blue-500"></i>
+                                            Custom Fields Configuration
+                                        </label>
+                                        <p class="text-sm text-gray-500">Configure custom fields that will be populated by AI during document analysis.</p>
+                                        
+                                        <!-- Fields Container -->
+                                        <div id="customFieldsList" class="space-y-2">
+                                            <% if (config.CUSTOM_FIELDS && Array.isArray(JSON.parse(config.CUSTOM_FIELDS).custom_fields)) { %>
+                                                <% JSON.parse(config.CUSTOM_FIELDS).custom_fields.forEach((field, index) => { %>
+                                                    <div class="custom-field-item flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-200 transition-colors">
+                                                        <div class="cursor-move text-gray-400">
+                                                            <i class="fas fa-grip-vertical"></i>
+                                                        </div>
+                                                        <div class="flex-1 flex items-center gap-4">
+                                                            <div class="flex-1">
+                                                                <p class="font-medium"><%= field.value %></p>
+                                                                <p class="text-sm text-gray-500">
+                                                                    Type: <%= field.data_type %>
+                                                                    <% if (field.data_type === 'monetary' && field.currency) { %>
+                                                                        (<%= field.currency %>)
+                                                                    <% } %>
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <button type="button" 
+                                                                onclick="removeCustomField(this)" 
+                                                                class="text-gray-400 hover:text-red-500 transition-colors">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                <% }); %>
+                                            <% } %>
+                                        </div>
+
+                                        <!-- Add New Field Form -->
+                                        <div class="grid grid-cols-12 gap-3 mt-4">
+                                            <div class="col-span-6">
+                                                <input type="text" 
+                                                    id="newFieldName" 
+                                                    class="modern-input w-full" 
+                                                    placeholder="Enter field name...">
+                                            </div>
+                                            
+                                            <div class="col-span-2">
+                                                <select id="newFieldType" class="modern-input w-full" onchange="toggleCurrencySelect()">
+                                                    <option value="string">Text</option>
+                                                    <option value="float">Number</option>
+                                                    <option value="integer">Integer</option>
+                                                    <option value="monetary">Currency</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="col-span-2">
+                                                <select id="currencyCode" class="modern-input w-full" style="display: none;">
+                                                    <option value="EUR">EUR</option>
+                                                    <option value="USD">USD</option>
+                                                    <option value="GBP">GBP</option>
+                                                    <option value="JPY">JPY</option>
+                                                    <option value="CHF">CHF</option>
+                                                    <option value="AUD">AUD</option>
+                                                    <option value="CAD">CAD</option>
+                                                    <option value="CNY">CNY</option>
+                                                    <option value="INR">INR</option>
+                                                    <option value="NZD">NZD</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="col-span-2">
+                                                <button type="button" 
+                                                        onclick="addCustomField()" 
+                                                        class="material-button w-full flex items-center justify-center gap-2"
+                                                        id="addFieldBtn">
+                                                    <i class="fas fa-plus"></i>
+                                                    Add
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Hidden input for form submission -->
+                                        <input type="hidden" 
+                                            id="customFieldsJson" 
+                                            name="customFields" 
+                                            value="<%= config.CUSTOM_FIELDS || '{"custom_fields":[]}' %>">
+                                    </div>
+                                </section>
+                                <hr/>
                                 <!-- System Prompt -->
                                 <div class="form-group">
                                     <label for="systemPrompt">Prompt Description</label>
@@ -711,6 +802,153 @@
     // Update tooltip placement on window resize
     window.addEventListener('resize', () => {
         tooltipInstance[0].setProps({ placement: getTooltipPlacement() });
+    });
+</script>
+<script>
+    // Custom Fields Management
+    function updateCustomFieldsJson() {
+        const fieldItems = document.querySelectorAll('.custom-field-item');
+        const fields = Array.from(fieldItems).map(item => {
+            const fieldName = item.querySelector('p.font-medium').textContent;
+            const typeText = item.querySelector('p.text-gray-500').textContent;
+            const data_type = typeText.split('Type: ')[1].split(' ')[0];
+            const currency = typeText.includes('(') ? typeText.split('(')[1].split(')')[0] : null;
+            
+            const field = {
+                value: fieldName,
+                data_type: data_type
+            };
+            
+            if (currency) {
+                field.currency = currency;
+            }
+            
+            return field;
+        });
+        
+        document.getElementById('customFieldsJson').value = JSON.stringify({
+            custom_fields: fields
+        });
+    }
+
+    function createFieldElement(fieldName, data_type, currency = null) {
+        const div = document.createElement('div');
+        div.className = 'custom-field-item flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-200 transition-colors';
+        
+        let typeDisplay = `Type: ${data_type}`;
+        if (data_type === 'monetary' && currency) {
+            typeDisplay += ` (${currency})`;
+        }
+        
+        div.innerHTML = `
+            <div class="cursor-move text-gray-400">
+                <i class="fas fa-grip-vertical"></i>
+            </div>
+            <div class="flex-1 flex items-center gap-4">
+                <div class="flex-1">
+                    <p class="font-medium">${fieldName}</p>
+                    <p class="text-sm text-gray-500">${typeDisplay}</p>
+                </div>
+            </div>
+            <button type="button" 
+                    onclick="removeCustomField(this)" 
+                    class="text-gray-400 hover:text-red-500 transition-colors">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+        return div;
+    }
+
+    function toggleCurrencySelect() {
+        const fieldType = document.getElementById('newFieldType').value;
+        const currencySelect = document.getElementById('currencyCode');
+        currencySelect.style.display = fieldType === 'monetary' ? 'block' : 'none';
+    }
+
+    function addCustomField() {
+        const nameInput = document.getElementById('newFieldName');
+        const typeSelect = document.getElementById('newFieldType');
+        const currencySelect = document.getElementById('currencyCode');
+        const fieldsList = document.getElementById('customFieldsList');
+        
+        const fieldName = nameInput.value.trim();
+        const data_type = typeSelect.value;
+        const currency = data_type === 'monetary' ? currencySelect.value : null;
+        
+        if (!fieldName) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Invalid Field Name',
+                text: 'Please enter a field name'
+            });
+            return;
+        }
+        
+        // Check for duplicates
+        const existingFields = document.querySelectorAll('.custom-field-item p.font-medium');
+        if (Array.from(existingFields).some(p => p.textContent === fieldName)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Duplicate Field',
+                text: 'A field with this name already exists'
+            });
+            return;
+        }
+        
+        const fieldElement = createFieldElement(fieldName, data_type, currency);
+        fieldsList.appendChild(fieldElement);
+        
+        // Reset inputs
+        nameInput.value = '';
+        
+        // Update hidden JSON input
+        updateCustomFieldsJson();
+    }
+
+    function removeCustomField(button) {
+        const fieldItem = button.closest('.custom-field-item');
+        Swal.fire({
+            title: 'Delete Field?',
+            text: 'Are you sure you want to delete this custom field?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fieldItem.remove();
+                updateCustomFieldsJson();
+            }
+        });
+    }
+
+    // Initialize Sortable.js for drag-and-drop
+    document.addEventListener('DOMContentLoaded', function() {
+        const fieldsList = document.getElementById('customFieldsList');
+        if (fieldsList) {
+            new Sortable(fieldsList, {
+                animation: 150,
+                handle: '.cursor-move',
+                onEnd: updateCustomFieldsJson
+            });
+        }
+        
+        // Initialize currency select visibility
+        toggleCurrencySelect();
+        
+        // Add keyboard event listener for the name input
+        const nameInput = document.getElementById('newFieldName');
+        nameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomField();
+            }
+        });
+        
+        // Add change event listener for field type
+        const typeSelect = document.getElementById('newFieldType');
+        typeSelect.addEventListener('change', toggleCurrencySelect);
     });
 </script>
 </body>

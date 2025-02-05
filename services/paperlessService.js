@@ -9,6 +9,7 @@ class PaperlessService {
   constructor() {
     this.client = null;
     this.tagCache = new Map();
+    this.customFieldCache = new Map();
     this.lastTagRefresh = 0;
     this.CACHE_LIFETIME = 3000; // 3 Sekunden
   }
@@ -61,11 +62,15 @@ class PaperlessService {
   async refreshTagCache() {
     try {
       console.log('[DEBUG] Refreshing tag cache...');
-      const response = await this.client.get('/tags/');
       this.tagCache.clear();
-      response.data.results.forEach(tag => {
-        this.tagCache.set(tag.name.toLowerCase(), tag);
-      });
+      let nextUrl = '/tags/';
+      while (nextUrl) {
+        const response = await this.client.get(nextUrl);
+        response.data.results.forEach(tag => {
+          this.tagCache.set(tag.name.toLowerCase(), tag);
+        });
+        nextUrl = response.data.next;
+      }
       this.lastTagRefresh = Date.now();
       console.log(`[DEBUG] Tag cache refreshed. Found ${this.tagCache.size} tags.`);
     } catch (error) {
@@ -73,6 +78,82 @@ class PaperlessService {
       throw error;
     }
   }
+
+  async createCustomFieldSafely(fieldName, fieldType, default_currency) {
+    try {
+      // Versuche zuerst, das benutzerdefinierte Feld zu erstellen
+      const response = await this.client.post('/custom_fields/', { 
+        name: fieldName,
+        data_type: fieldType,
+        extra_data: {
+          default_currency: default_currency || null
+        }
+      });
+      const newField = response.data;
+      console.log(`[DEBUG] Successfully created custom field "${fieldName}" with ID ${newField.id}`);
+      this.customFieldCache.set(fieldName.toLowerCase(), newField);
+      return newField;
+    } catch (error) { 
+      if (error.response?.status === 400) {
+        await this.refreshCustomFieldCache();
+        const existingField = await this.findExistingCustomField(fieldName);
+        if (existingField) {
+          return existingField;
+        }
+      }
+      throw error; // Wenn wir das Feld nicht finden konnten, werfen wir den Fehler weiter
+    }
+  }
+
+  async findExistingCustomField(fieldName) {
+    const normalizedName = fieldName.toLowerCase();
+    
+    const cachedField = this.customFieldCache.get(normalizedName);
+    if (cachedField) {
+      console.log(`[DEBUG] Found custom field "${fieldName}" in cache with ID ${cachedField.id}`);
+      return cachedField;
+    }
+
+    try {
+      const response = await this.client.get('/custom_fields/', {
+        params: {
+          name__iexact: normalizedName  // Case-insensitive exact match
+        }
+      });
+
+      if (response.data.results.length > 0) {
+        const foundField = response.data.results[0];
+        console.log(`[DEBUG] Found existing custom field "${fieldName}" via API with ID ${foundField.id}`);
+        this.customFieldCache.set(normalizedName, foundField);
+        return foundField;
+      }
+    } catch (error) {
+      console.warn(`[ERROR] searching for custom field "${fieldName}":`, error.message);
+    }
+
+    return null;
+  }
+
+  async refreshCustomFieldCache() {
+    try {
+      console.log('[DEBUG] Refreshing custom field cache...');
+      this.customFieldCache.clear();
+      let nextUrl = '/custom_fields/';
+      while (nextUrl) {
+        const response = await this.client.get(nextUrl);
+        response.data.results.forEach(field => {
+          this.customFieldCache.set(field.name.toLowerCase(), field);
+        });
+        nextUrl = response.data.next;
+      }
+      this.lastCustomFieldRefresh = Date.now();
+      console.log(`[DEBUG] Custom field cache refreshed. Found ${this.customFieldCache.size} fields.`);
+    } catch (error) {
+      console.error('[ERROR] refreshing custom field cache:', error.message);
+      throw error;
+    }
+  }
+
 
   async findExistingTag(tagName) {
     const normalizedName = tagName.toLowerCase();
