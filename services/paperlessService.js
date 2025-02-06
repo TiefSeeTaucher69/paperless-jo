@@ -79,9 +79,29 @@ class PaperlessService {
     }
   }
 
+  async initializeWithCredentials(apiUrl, apiToken) {
+    this.client = axios.create({
+      baseURL: apiUrl,
+      headers: {
+        'Authorization': `Token ${apiToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    // Test the connection
+    try {
+      await this.client.get('/');
+      return true;
+    } catch (error) {
+      console.error('[ERROR] Failed to initialize with credentials:', error.message);
+      this.client = null;
+      return false;
+    }
+  }
+
   async createCustomFieldSafely(fieldName, fieldType, default_currency) {
     try {
-      // Versuche zuerst, das benutzerdefinierte Feld zu erstellen
+      // Try to create the field first
       const response = await this.client.post('/custom_fields/', { 
         name: fieldName,
         data_type: fieldType,
@@ -101,7 +121,7 @@ class PaperlessService {
           return existingField;
         }
       }
-      throw error; // Wenn wir das Feld nicht finden konnten, werfen wir den Fehler weiter
+      throw error; // When couldn't find the field, rethrow the error
     }
   }
 
@@ -1108,12 +1128,28 @@ async getOrCreateDocumentType(name) {
           ...updates,
           created: new Date(1990, 0, 1).toISOString()
         };
-      }      
-  
+      }
+
+      // Handle custom fields update
+      if (updateData.custom_fields) {
+        console.log('[DEBUG] Custom fields update detected');
+        try {
+          // First, delete existing custom fields
+          console.log(`[DEBUG] Deleting existing custom fields for document ${documentId}`);
+          await this.client.delete(`/documents/${documentId}/custom_fields/`);
+        } catch (error) {
+          // If deletion fails, try updating with empty array first
+          console.warn('[WARN] Could not delete custom fields, trying to clear them:', error.message);
+          await this.client.patch(`/documents/${documentId}/`, { custom_fields: [] });
+        }
+      }
+      
+      console.log('[DEBUG] Final update data:', updateData);
       await this.client.patch(`/documents/${documentId}/`, updateData);
       console.log(`[SUCCESS] Updated document ${documentId} with:`, updateData);
       return await this.getDocument(documentId);
     } catch (error) {
+      console.log(error);
       console.error(`[ERROR] updating document ${documentId}:`, error.message);
       return null;
     }

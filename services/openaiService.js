@@ -102,22 +102,49 @@ class OpenAIService {
       const existingTagsList = existingTags
         .map(tag => tag.name)
         .join(', ');
-      
 
       let systemPrompt = '';
       let promptTags = '';
       const model = process.env.OPENAI_MODEL;
+      
+      // Parse CUSTOM_FIELDS from environment variable
+      let customFieldsObj;
+      try {
+        customFieldsObj = JSON.parse(process.env.CUSTOM_FIELDS);
+      } catch (error) {
+        console.error('Failed to parse CUSTOM_FIELDS:', error);
+        customFieldsObj = { custom_fields: [] };
+      }
+
+      // Generate custom fields template for the prompt
+      const customFieldsTemplate = {};
+
+      customFieldsObj.custom_fields.forEach((field, index) => {
+        customFieldsTemplate[index] = {
+          field_name: field.value,
+          value: "Fill in the value based on your analysis"
+        };
+      });
+
+      // Convert template to string for replacement and wrap in custom_fields
+      const customFieldsStr = '"custom_fields": ' + JSON.stringify(customFieldsTemplate, null, 2)
+        .split('\n')
+        .map(line => '    ' + line)  // Add proper indentation
+        .join('\n');
+
       // Get system prompt and model
       if(process.env.USE_EXISTING_DATA === 'yes') {
         systemPrompt = `
         Prexisting tags: ${existingTagsList}\n\n
         Prexisiting correspondent: ${existingCorrespondentList}\n\n
-        ` + process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt;
+        ` + process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
         promptTags = '';
       } else {
+        config.mustHavePrompt = config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
         systemPrompt = process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt;
         promptTags = '';
       }
+
       if (process.env.USE_PROMPT_TAGS === 'yes') {
         promptTags = process.env.PROMPT_TAGS;
         systemPrompt = `
@@ -125,23 +152,20 @@ class OpenAIService {
         ` + config.specialPromptPreDefinedTags;
       }
       
-      // Calculate total prompt tokens including all components
+      // Rest of the function remains the same
       const totalPromptTokens = await this.calculateTotalPromptTokens(
         systemPrompt,
         process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : []
       );
       
-      // Calculate available tokens
-      const maxTokens = 128000; // Model's maximum context length
-      const reservedTokens = totalPromptTokens + 1000; // Reserve for response
+      const maxTokens = 128000;
+      const reservedTokens = totalPromptTokens + 1000;
       const availableTokens = maxTokens - reservedTokens;
       
-      // Truncate content if necessary
       const truncatedContent = await this.truncateToTokenLimit(content, availableTokens);
       
-      // write complete Prompt to file for debugging
       await this.writePromptToFile(systemPrompt, truncatedContent);
-      // Make API request
+
       const response = await this.client.chat.completions.create({
         model: model,
         messages: [
@@ -157,12 +181,10 @@ class OpenAIService {
         temperature: 0.3,
       });
       
-      // Handle response
       if (!response?.choices?.[0]?.message?.content) {
         throw new Error('Invalid API response structure');
       }
       
-      // Log token usage
       console.log(`[DEBUG] [${timestamp}] OpenAI request sent`);
       console.log(`[DEBUG] [${timestamp}] Total tokens: ${response.usage.total_tokens}`);
       
@@ -179,12 +201,15 @@ class OpenAIService {
       let parsedResponse;
       try {
         parsedResponse = JSON.parse(jsonContent);
+        //write to file and append to the file (txt)
+        fs.appendFile('./logs/response.txt', jsonContent, (err) => {
+          if (err) throw err;
+        });
       } catch (error) {
         console.error('Failed to parse JSON response:', error);
         throw new Error('Invalid JSON response from API');
       }
 
-      // Validate response structure
       if (!parsedResponse || !Array.isArray(parsedResponse.tags) || typeof parsedResponse.correspondent !== 'string') {
         throw new Error('Invalid response structure: missing tags array or correspondent string');
       }
@@ -202,7 +227,7 @@ class OpenAIService {
         error: error.message 
       };
     }
-  }
+}
 
   async writePromptToFile(systemPrompt, truncatedContent) {
     const filePath = './logs/prompt.txt';

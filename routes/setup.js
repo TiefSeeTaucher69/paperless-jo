@@ -1009,183 +1009,188 @@ router.get('/health', async (req, res) => {
 
 router.post('/setup', express.json(), async (req, res) => {
   try {
-      const { 
-          paperlessUrl, 
-          paperlessToken, 
-          aiProvider,
-          openaiKey,
-          openaiModel,
-          ollamaUrl,
-          ollamaModel,
-          scanInterval,
-          systemPrompt,
-          showTags,
-          tags,
-          aiProcessedTag,
-          aiTagName,
-          usePromptTags,
-          promptTags,
-          username,
-          password,
-          paperlessUsername,
-          useExistingData,
-          customApiKey,
-          customBaseUrl,
-          customModel,
-          activateTagging,
-          activateCorrespondents,
-          activateDocumentType,
-          activateTitle,
-          customFields  // Added parameter for custom fields
-      } = req.body;
+    const { 
+      paperlessUrl, 
+      paperlessToken,
+      paperlessUsername,
+      aiProvider,
+      openaiKey,
+      openaiModel,
+      ollamaUrl,
+      ollamaModel,
+      scanInterval,
+      systemPrompt,
+      showTags,
+      tags,
+      aiProcessedTag,
+      aiTagName,
+      usePromptTags,
+      promptTags,
+      username,
+      password,
+      useExistingData,
+      customApiKey,
+      customBaseUrl,
+      customModel,
+      activateTagging,
+      activateCorrespondents,
+      activateDocumentType,
+      activateTitle,
+      activateCustomFields,
+      customFields
+    } = req.body;
 
-      console.log('Setup request received:', req.body);
+    console.log('Setup request received:', req.body);
 
-      const normalizeArray = (value) => {
-          if (!value) return [];
-          if (Array.isArray(value)) return value;
-          if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
-          return [];
-      };
+    // Initialize paperlessService with the new credentials
+    const paperlessApiUrl = paperlessUrl + '/api';
+    const initSuccess = await paperlessService.initializeWithCredentials(paperlessApiUrl, paperlessToken);
+    
+    if (!initSuccess) {
+      return res.status(400).json({ 
+        error: 'Failed to initialize connection to Paperless-ngx. Please check URL and Token.'
+      });
+    }
 
-      const processedPrompt = systemPrompt 
-          ? systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n')
-          : '';
+    // Validate Paperless credentials
+    const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
+    if (!isPaperlessValid) {
+      return res.status(400).json({ 
+        error: 'Paperless-ngx connection failed. Please check URL and Token.'
+      });
+    }
 
-      // Validate Paperless config
-      const isPaperlessValid = await setupService.validatePaperlessConfig(paperlessUrl, paperlessToken);
-      if (!isPaperlessValid) {
-          return res.status(400).json({ 
-              error: 'Paperless-ngx connection failed. Please check URL and Token.'
-          });
-      }
+    const normalizeArray = (value) => {
+      if (!value) return [];
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
+      return [];
+    };
 
-      let apiToken = '';
-      if(process.env.API_KEY === undefined || process.env.API_KEY === null || process.env.API_KEY === '') {
-          apiToken = require('crypto').randomBytes(64).toString('hex');
-      } else {
-          apiToken = process.env.API_KEY;
-      }
-
-      let jwtToken = '';
-      if(process.env.JWT_SECRET === undefined || process.env.JWT_SECRET === null || process.env.JWT_SECRET === '') {
-          jwtToken = require('crypto').randomBytes(64).toString('hex');
-      } else {
-          jwtToken = process.env.JWT_SECRET;
-      }      
-
-      // Process custom fields
-      let processedCustomFields = [];
-      if (customFields) {
-          try {
-              const parsedFields = typeof customFields === 'string' 
-                  ? JSON.parse(customFields) 
-                  : customFields;
-              
-              processedCustomFields = parsedFields.custom_fields.map(field => ({
-                  value: field.value,
-                  data_type: field.data_type,
-                  ...(field.currency && { currency: field.currency })
-              }));
-          } catch (error) {
-              console.error('Error processing custom fields:', error);
-              processedCustomFields = [];
-          }
-      }
-
+    // Process custom fields if enabled
+    let processedCustomFields = [];
+    if (customFields && activateCustomFields) {
       try {
-        for (const field of processedCustomFields) {
-          //example json string (processedCustomFields): {"custom_fields":[{"value":"Rechnungssumme","data_type":"monetary","currency":"EUR"},{"value":"Test","data_type":"string"}]}
-          await paperlessService.createCustomFieldSafely(field.value, field.data_type, field.currency);
+        const parsedFields = typeof customFields === 'string' 
+          ? JSON.parse(customFields) 
+          : customFields;
+        
+        for (const field of parsedFields.custom_fields) {
+          try {
+            const createdField = await paperlessService.createCustomFieldSafely(
+              field.value,
+              field.data_type,
+              field.currency
+            );
+            
+            if (createdField) {
+              processedCustomFields.push({
+                value: field.value,
+                data_type: field.data_type,
+                ...(field.currency && { currency: field.currency })
+              });
+              console.log(`[SUCCESS] Created/found custom field: ${field.value}`);
+            }
+          } catch (fieldError) {
+            console.error(`[WARNING] Error creating custom field ${field.value}:`, fieldError);
+          }
         }
       } catch (error) {
-        console.log('[ERROR] Error creating custom fields:', error);
+        console.error('[ERROR] Error processing custom fields:', error);
       }
+    }
 
-      // Prepare base config
-      const config = {
-          PAPERLESS_API_URL: paperlessUrl + '/api',
-          PAPERLESS_API_TOKEN: paperlessToken,
-          PAPERLESS_USERNAME: paperlessUsername,
-          AI_PROVIDER: aiProvider,
-          SCAN_INTERVAL: scanInterval || '*/30 * * * *',
-          SYSTEM_PROMPT: processedPrompt,
-          PROCESS_PREDEFINED_DOCUMENTS: showTags || 'no',
-          TAGS: normalizeArray(tags),
-          ADD_AI_PROCESSED_TAG: aiProcessedTag || 'no',
-          AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
-          USE_PROMPT_TAGS: usePromptTags || 'no',
-          PROMPT_TAGS: normalizeArray(promptTags),
-          USE_EXISTING_DATA: useExistingData || 'no',
-          API_KEY: apiToken,
-          JWT_SECRET: jwtToken,
-          CUSTOM_API_KEY: customApiKey || '',
-          CUSTOM_BASE_URL: customBaseUrl || '',
-          CUSTOM_MODEL: customModel || '',
-          PAPERLESS_AI_INITIAL_SETUP: 'yes',
-          ACTIVATE_TAGGING: activateTagging ? 'yes' : 'no',
-          ACTIVATE_CORRESPONDENTS: activateCorrespondents ? 'yes' : 'no',
-          ACTIVATE_DOCUMENT_TYPE: activateDocumentType ? 'yes' : 'no',
-          ACTIVATE_TITLE: activateTitle ? 'yes' : 'no',
-          CUSTOM_FIELDS: processedCustomFields.length > 0 
-              ? JSON.stringify({ custom_fields: processedCustomFields }) 
-              : '{"custom_fields":[]}'
-      };
+    // Generate tokens if not provided in environment
+    const apiToken = process.env.API_KEY || require('crypto').randomBytes(64).toString('hex');
+    const jwtToken = process.env.JWT_SECRET || require('crypto').randomBytes(64).toString('hex');
 
-      // Validate AI provider config
-      if (aiProvider === 'openai') {
-          const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
-          if (!isOpenAIValid) {
-              return res.status(400).json({ 
-                  error: 'OpenAI API Key is not valid. Please check the key.'
-              });
-          }
-          config.OPENAI_API_KEY = openaiKey;
-          config.OPENAI_MODEL = openaiModel || 'gpt-4o-mini';
-      } else if (aiProvider === 'ollama') {
-          const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
-          if (!isOllamaValid) {
-              return res.status(400).json({ 
-                  error: 'Ollama connection failed. Please check URL and Model.'
-              });
-          }
-          config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
-          config.OLLAMA_MODEL = ollamaModel || 'llama3.2';
-      } else if (aiProvider === 'custom') {
-          console.log('Custom AI provider selected');
-          const isCustomValid = await setupService.validateCustomConfig(customBaseUrl, customApiKey, customModel);
-          console.log('Custom AI provider validation:', isCustomValid);
-          if (!isCustomValid) {
-              return res.status(400).json({
-                  error: 'Custom connection failed. Please check URL, API Key and Model.'
-              });
-          }
-          config.CUSTOM_BASE_URL = customBaseUrl;
-          config.CUSTOM_API_KEY = customApiKey;
-          config.CUSTOM_MODEL = customModel;
+    const processedPrompt = systemPrompt 
+      ? systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n')
+      : '';
+
+    // Prepare base config
+    const config = {
+      PAPERLESS_API_URL: paperlessApiUrl,
+      PAPERLESS_API_TOKEN: paperlessToken,
+      PAPERLESS_USERNAME: paperlessUsername,
+      AI_PROVIDER: aiProvider,
+      SCAN_INTERVAL: scanInterval || '*/30 * * * *',
+      SYSTEM_PROMPT: processedPrompt,
+      PROCESS_PREDEFINED_DOCUMENTS: showTags || 'no',
+      TAGS: normalizeArray(tags),
+      ADD_AI_PROCESSED_TAG: aiProcessedTag || 'no',
+      AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
+      USE_PROMPT_TAGS: usePromptTags || 'no',
+      PROMPT_TAGS: normalizeArray(promptTags),
+      USE_EXISTING_DATA: useExistingData || 'no',
+      API_KEY: apiToken,
+      JWT_SECRET: jwtToken,
+      CUSTOM_API_KEY: customApiKey || '',
+      CUSTOM_BASE_URL: customBaseUrl || '',
+      CUSTOM_MODEL: customModel || '',
+      PAPERLESS_AI_INITIAL_SETUP: 'yes',
+      ACTIVATE_TAGGING: activateTagging ? 'yes' : 'no',
+      ACTIVATE_CORRESPONDENTS: activateCorrespondents ? 'yes' : 'no',
+      ACTIVATE_DOCUMENT_TYPE: activateDocumentType ? 'yes' : 'no',
+      ACTIVATE_TITLE: activateTitle ? 'yes' : 'no',
+      ACTIVATE_CUSTOM_FIELDS: activateCustomFields ? 'yes' : 'no',
+      CUSTOM_FIELDS: processedCustomFields.length > 0 
+        ? JSON.stringify({ custom_fields: processedCustomFields }) 
+        : '{"custom_fields":[]}'
+    };
+
+    // Validate AI provider config
+    if (aiProvider === 'openai') {
+      const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
+      if (!isOpenAIValid) {
+        return res.status(400).json({ 
+          error: 'OpenAI API Key is not valid. Please check the key.'
+        });
       }
-      
-      // Save configuration
-      await setupService.saveConfig(config);
-      const hashedPassword = await bcrypt.hash(password, 15);
-      await documentModel.addUser(username, hashedPassword);
+      config.OPENAI_API_KEY = openaiKey;
+      config.OPENAI_MODEL = openaiModel || 'gpt-4-turbo-preview';
+    } else if (aiProvider === 'ollama') {
+      const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
+      if (!isOllamaValid) {
+        return res.status(400).json({ 
+          error: 'Ollama connection failed. Please check URL and Model.'
+        });
+      }
+      config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
+      config.OLLAMA_MODEL = ollamaModel || 'llama2';
+    } else if (aiProvider === 'custom') {
+      const isCustomValid = await setupService.validateCustomConfig(customBaseUrl, customApiKey, customModel);
+      if (!isCustomValid) {
+        return res.status(400).json({
+          error: 'Custom connection failed. Please check URL, API Key and Model.'
+        });
+      }
+      config.CUSTOM_BASE_URL = customBaseUrl;
+      config.CUSTOM_API_KEY = customApiKey;
+      config.CUSTOM_MODEL = customModel;
+    }
 
-      res.json({ 
-          success: true,
-          message: 'Configuration saved successfully.',
-          restart: true
-      });
+    // Save configuration
+    await setupService.saveConfig(config);
+    const hashedPassword = await bcrypt.hash(password, 15);
+    await documentModel.addUser(username, hashedPassword);
 
-      // Trigger application restart
-      setTimeout(() => {
-          process.exit(0);
-      }, 5000);
+    res.json({ 
+      success: true,
+      message: 'Configuration saved successfully.',
+      restart: true
+    });
+
+    // Trigger application restart
+    setTimeout(() => {
+      process.exit(0);
+    }, 5000);
 
   } catch (error) {
-      console.error('Setup error:', error);
-      res.status(500).json({ 
-          error: 'An error occurred: ' + error.message
-      });
+    console.error('[ERROR] Setup error:', error);
+    res.status(500).json({ 
+      error: 'An error occurred: ' + error.message
+    });
   }
 });
 
@@ -1216,6 +1221,7 @@ router.post('/settings', express.json(), async (req, res) => {
       activateCorrespondents,
       activateDocumentType,
       activateTitle,
+      activateCustomFields,
       customFields  // Added parameter
     } = req.body;
 
@@ -1245,6 +1251,7 @@ router.post('/settings', express.json(), async (req, res) => {
       ACTIVATE_CORRESPONDENTS: process.env.ACTIVATE_CORRESPONDENTS || 'yes',
       ACTIVATE_DOCUMENT_TYPE: process.env.ACTIVATE_DOCUMENT_TYPE || 'yes',
       ACTIVATE_TITLE: process.env.ACTIVATE_TITLE || 'yes',
+      ACTIVATE_CUSTOM_FIELDS: process.env.ACTIVATE_CUSTOM_FIELDS || 'yes',
       CUSTOM_FIELDS: process.env.CUSTOM_FIELDS || '{"custom_fields":[]}'  // Added default
     };
 
@@ -1265,6 +1272,14 @@ router.post('/settings', express.json(), async (req, res) => {
         console.error('Error processing custom fields:', error);
         processedCustomFields = [];
       }
+    }
+
+    try {
+      for (const field of processedCustomFields) {
+        await paperlessService.createCustomFieldSafely(field.value, field.data_type, field.currency);
+      }
+    } catch (error) {
+      console.log('[ERROR] Error creating custom fields:', error);
     }
 
     const normalizeArray = (value) => {
@@ -1345,6 +1360,7 @@ router.post('/settings', express.json(), async (req, res) => {
     updatedConfig.ACTIVATE_CORRESPONDENTS = activateCorrespondents ? 'yes' : 'no';
     updatedConfig.ACTIVATE_DOCUMENT_TYPE = activateDocumentType ? 'yes' : 'no';
     updatedConfig.ACTIVATE_TITLE = activateTitle ? 'yes' : 'no';
+    updatedConfig.ACTIVATE_CUSTOM_FIELDS = activateCustomFields ? 'yes' : 'no';
 
     // Handle API key
     let apiToken = process.env.API_KEY;
@@ -1362,7 +1378,6 @@ router.post('/settings', express.json(), async (req, res) => {
     await setupService.saveConfig(mergedConfig);
     try {
       for (const field of processedCustomFields) {
-        //example json string (processedCustomFields): {"custom_fields":[{"value":"Rechnungssumme","data_type":"monetary","currency":"EUR"},{"value":"Test","data_type":"string"}]}
         await paperlessService.createCustomFieldSafely(field.value, field.data_type, field.currency);
       }
     } catch (error) {

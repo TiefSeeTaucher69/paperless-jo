@@ -12,6 +12,7 @@
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 </head>
 <body class="h-full">
     
@@ -497,6 +498,22 @@
                                                                 Title Generation
                                                             </div>
                                                             <p class="text-sm text-gray-500 mt-1">Generate meaningful titles for documents</p>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                                <div class="border border-gray-200 shadow-sm rounded-lg hover:border-blue-500 transition-colors duration-200">
+                                                    <label for="activateCustomFields" class="flex items-center p-4 cursor-pointer w-full">
+                                                        <input type="checkbox" 
+                                                            id="activateCustomFields" 
+                                                            name="activateCustomFields" 
+                                                            class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                            <%= config.ACTIVATE_CUSTOM_FIELDS === 'yes' ? 'checked' : '' %>>
+                                                        <div class="ml-3">
+                                                            <div class="flex items-center text-gray-900 font-medium">
+                                                                <i class="fas fa-filter mr-2 text-blue-500"></i>
+                                                                Custom Fields
+                                                            </div>
+                                                            <p class="text-sm text-gray-500 mt-1">Add custom fields to the documents</p>
                                                         </div>
                                                     </label>
                                                 </div>

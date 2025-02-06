@@ -460,6 +460,22 @@
                                                 </div>
                                             </label>
                                         </div>
+                                        <div class="modern-card flex-1 p-4 rounded-lg border border-gray-200 hover:border-blue-500 transition-colors duration-200">
+                                            <label class="flex items-start cursor-pointer w-full">
+                                                <input type="checkbox" 
+                                                    id="activateCustomFields" 
+                                                    name="activateCustomFields" 
+                                                    class="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                    <%= config.ACTIVATE_CUSTOM_FIELDS === 'yes' ? 'checked' : '' %>>
+                                                <div class="ml-3">
+                                                    <div class="flex items-center font-medium">
+                                                        <i class="fas fa-filter text-blue-500 mr-2"></i>
+                                                        Custom Fields
+                                                    </div>
+                                                    <p class="text-sm text-gray-500 mt-1">Add custom fields to the documents</p>
+                                                </div>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                                 <hr/>

@@ -15,7 +15,8 @@ const limitFunctions = {
   activateTagging: parseEnvBoolean(process.env.ACTIVATE_TAGGING, 'yes'),
   activateCorrespondents: parseEnvBoolean(process.env.ACTIVATE_CORRESPONDENTS, 'yes'),
   activateDocumentType: parseEnvBoolean(process.env.ACTIVATE_DOCUMENT_TYPE, 'yes'),
-  activateTitle: parseEnvBoolean(process.env.ACTIVATE_TITLE, 'yes')
+  activateTitle: parseEnvBoolean(process.env.ACTIVATE_TITLE, 'yes'),
+  activateCustomFields: parseEnvBoolean(process.env.ACTIVATE_CUSTOM_FIELDS, 'yes')
 };
 
 console.log('Loaded environment variables:', {
@@ -25,7 +26,7 @@ console.log('Loaded environment variables:', {
 });
 
 module.exports = {
-  PAPERLESS_AI_VERSION: '2.4.5',
+  PAPERLESS_AI_VERSION: '2.5.0',
   CONFIGURED: false,
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
   paperless: {
@@ -44,6 +45,7 @@ module.exports = {
     apiKey: process.env.CUSTOM_API_KEY || '',
     model: process.env.CUSTOM_MODEL || ''
   },
+  customFields: process.env.CUSTOM_FIELDS || '',
   aiProvider: process.env.AI_PROVIDER || 'openai',
   scanInterval: process.env.SCAN_INTERVAL || '*/30 * * * *',
   // Add limit functions to config
@@ -51,7 +53,8 @@ module.exports = {
     activateTagging: limitFunctions.activateTagging,
     activateCorrespondents: limitFunctions.activateCorrespondents,
     activateDocumentType: limitFunctions.activateDocumentType,
-    activateTitle: limitFunctions.activateTitle
+    activateTitle: limitFunctions.activateTitle,
+    activateCustomFields: limitFunctions.activateCustomFields
   },
   specialPromptPreDefinedTags: `You are a document analysis AI. You will analyze the document. 
   You take the main information to associate tags with the document. 
@@ -69,12 +72,15 @@ module.exports = {
     "language": "en/de/es/..."
   }`,
   mustHavePrompt: `  Return the result EXCLUSIVELY as a JSON object. The Tags, Title and Document_Type MUST be in the language that is used in the document.:
+  IMPORTANT: The custom_fields are optional and can be left out if not needed, only try to fill out the values if you find a matching information in the document.
+  Do not change the value of field_name, only fill out the values. If the field is about money only add the number without currency and always use a . for decimal places.
   {
     "title": "xxxxx",
     "correspondent": "xxxxxxxx",
     "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
     "document_type": "Invoice/Contract/...",
     "document_date": "YYYY-MM-DD",
-    "language": "en/de/es/..."
+    "language": "en/de/es/...",
+    %CUSTOMFIELDS%
   }`,
 };

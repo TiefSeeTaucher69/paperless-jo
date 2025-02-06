@@ -159,6 +159,35 @@ async function buildUpdateData(analysis, doc) {
       console.error(`[ERROR] Error processing document type:`, error);
     }
   }
+  
+  // Only process custom fields if custom fields detection is activated
+  if (config.limitFunctions?.activateCustomFields !== 'no' && analysis.document.custom_fields) {
+    const customFields = analysis.document.custom_fields;
+    const processedFields = [];  // Changed to array instead of object
+
+    // Process each custom field in the object
+    for (const key in customFields) {
+      const customField = customFields[key];
+      console.log(`[DEBUG] Processing custom field: ${customField.field_name}`);
+      
+      // Get the field details including ID from paperless-ngx
+      const fieldDetails = await paperlessService.findExistingCustomField(customField.field_name);
+      console.log(`[DEBUG] Found field details:`, fieldDetails);
+      
+      if (fieldDetails && fieldDetails.id) {
+        // Add field entry to array with field instead of field_name
+        processedFields.push({
+          field: fieldDetails.id,  // Changed from field_name to field
+          value: customField.value
+        });
+      }
+    }
+
+    // Only add custom_fields if we have processed fields
+    if (processedFields.length > 0) {
+      updateData.custom_fields = processedFields;
+    }
+  }
 
   // Only process correspondent if correspondent detection is activated
   if (config.limitFunctions?.activateCorrespondents !== 'no' && analysis.document.correspondent) {

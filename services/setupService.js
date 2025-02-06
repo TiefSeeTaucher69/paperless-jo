@@ -29,7 +29,7 @@ class SetupService {
 
   async validatePaperlessConfig(url, token) {
     try {
-      const response = await axios.get(`${url}/documents/`, {
+      const response = await axios.get(`${url}/api/documents/`, {
         headers: {
           'Authorization': `Token ${token}`
         }

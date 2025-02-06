@@ -21,6 +21,32 @@ class OllamaService {
             const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
             const prompt = this._buildPrompt(content, existingTags, existingCorrespondentList);
 
+
+            // Parse CUSTOM_FIELDS from environment variable
+            let customFieldsObj;
+            try {
+                customFieldsObj = JSON.parse(process.env.CUSTOM_FIELDS);
+            } catch (error) {
+                console.error('Failed to parse CUSTOM_FIELDS:', error);
+                customFieldsObj = { custom_fields: [] };
+            }
+
+            // Generate custom fields template for the prompt
+            const customFieldsTemplate = {};
+
+            customFieldsObj.custom_fields.forEach((field, index) => {
+                customFieldsTemplate[index] = {
+                field_name: field.value,
+                value: "Fill in the value based on your analysis"
+                };
+            });
+
+            // Convert template to string for replacement and wrap in custom_fields
+            const customFieldsStr = '"custom_fields": ' + JSON.stringify(customFieldsTemplate, null, 2)
+                .split('\n')
+                .map(line => '    ' + line)  // Add proper indentation
+                .join('\n');
+
             // Handle thumbnail caching
             try {
                 await fs.access(cachePath);
@@ -65,23 +91,32 @@ class OllamaService {
             const expectedResponseTokens = 1024;
             const promptTokenCount = calculatePromptTokenCount(prompt);
             
+            let systemPromptFinal = `
+                    You are a document analyzer. Your task is to analyze documents and extract relevant information. You do not ask back questions. 
+                    YOU MUSTNOT: Ask for additional information or clarification, or ask questions about the document, or ask for additional context.
+                    YOU MUSTNOT: Return a response without the desired JSON format.
+                    YOU MUST: Return the result EXCLUSIVELY as a JSON object. The Tags, Title and Document_Type MUST be in the language that is used in the document.:
+                    IMPORTANT: The custom_fields are optional and can be left out if not needed, only try to fill out the values if you find a matching information in the document.
+                    Do not change the value of field_name, only fill out the values. If the field is about money only add the number without currency and always use a . for decimal places.
+                    {
+                        "title": "xxxxx",
+                        "correspondent": "xxxxxxxx",
+                        "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
+                        "document_type": "Invoice/Contract/...",
+                        "document_date": "YYYY-MM-DD",
+                        "language": "en/de/es/...",
+                        %CUSTOMFIELDS%
+                    }
+                    ALWAYS USE THE INFORMATION TO FILL OUT THE JSON OBJECT. DO NOT ASK BACK QUESTIONS.
+                    `;
+            
+            systemPromptFinal = systemPromptFinal.replace('%CUSTOMFIELDS%', customFieldsStr);
+
             const numCtx = calculateNumCtx(promptTokenCount, expectedResponseTokens);
             const response = await this.client.post(`${this.apiUrl}/api/generate`, {
                 model: this.model,
                 prompt: prompt,
-                system: `
-                You are a document analyzer. Your task is to analyze documents and extract relevant information. You do not ask back questions. 
-                YOU MUSTNOT: Ask for additional information or clarification, or ask questions about the document, or ask for additional context.
-                YOU MUSTNOT: Return a response without the desired JSON format.
-                YOU MUST: Analyze the document content and extract the following information into this structured JSON format and only this format!:         {
-                    "title": "xxxxx",
-                    "correspondent": "xxxxxxxx",
-                    "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
-                    "document_date": "YYYY-MM-DD",
-                    "language": "en/de/es/..."
-                    }
-                    ALWAYS USE THE INFORMATION TO FILL OUT THE JSON OBJECT. DO NOT ASK BACK QUESTIONS.
-                    `,
+                system: systemPromptFinal,
                     stream: false,
                     options: {
                         temperature: 0.7, 
@@ -201,6 +236,7 @@ class OllamaService {
                 "title": "xxxxx",
                 "correspondent": "xxxxxxxx",
                 "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
+                "document_type": "Invoice/Contract/...",
                 "document_date": "YYYY-MM-DD",
                 "language": "en/de/es/..."
                 }
@@ -326,7 +362,9 @@ class OllamaService {
                   correspondent: result.correspondent || null,
                   title: result.title || null,
                   document_date: result.document_date || null,
-                  language: result.language || null
+                  document_type: result.document_type || null,
+                  language: result.language || null,
+                  custom_fields: result.custom_fields || null
               };
   
           } catch (errorx) {
