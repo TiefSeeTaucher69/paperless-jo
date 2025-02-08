@@ -740,6 +740,102 @@ router.get('/api/tagsCount', async (req, res) => {
   res.json(tags);
 });
 
+const documentQueue = [];
+let isProcessing = false;
+
+function extractDocumentId(url) {
+  const match = url.match(/\/documents\/(\d+)\//);
+  if (match && match[1]) {
+    return parseInt(match[1], 10);
+  }
+  throw new Error('Could not extract document ID from URL');
+}
+
+async function processQueue() {
+  if (isProcessing || documentQueue.length === 0) return;
+  
+  isProcessing = true;
+  
+  try {
+    const isConfigured = await setupService.isConfigured();
+    if (!isConfigured) {
+      console.log('Setup not completed. Visit http://your-ip-or-host.com:3000/setup to complete setup.');
+      return;
+    }
+
+    const userId = await paperlessService.getOwnUserID();
+    if (!userId) {
+      console.error('Failed to get own user ID. Abort scanning.');
+      return;
+    }
+
+    const [existingTags, existingCorrespondentList, ownUserId] = await Promise.all([
+      paperlessService.getTags(),
+      paperlessService.listCorrespondentsNames(),
+      paperlessService.getOwnUserID()
+    ]);
+
+    while (documentQueue.length > 0) {
+      const doc = documentQueue.shift();
+      
+      try {
+        const result = await processDocument(doc, existingTags, existingCorrespondentList, ownUserId);
+        if (!result) continue;
+
+        const { analysis, originalData } = result;
+        const updateData = await buildUpdateData(analysis, doc);
+        await saveDocumentChanges(doc.id, updateData, analysis, originalData);
+      } catch (error) {
+        console.error(`[ERROR] Failed to process document ${doc.id}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('[ERROR] Error during queue processing:', error);
+  } finally {
+    isProcessing = false;
+    
+    if (documentQueue.length > 0) {
+      processQueue();
+    }
+  }
+}
+
+router.post('/api/webhook/document', async (req, res) => {
+  try {
+    const { url } = req.body;
+    
+    if (!url) {
+      return res.status(400).send('Missing document URL');
+    }
+    
+    try {
+      const documentId = extractDocumentId(url);
+      const document = await paperlessService.getDocument(documentId);
+      
+      if (!document) {
+        return res.status(404).send(`Document with ID ${documentId} not found`);
+      }
+      
+      documentQueue.push(document);
+      processQueue();
+      
+      res.status(202).send({
+        message: 'Document accepted for processing',
+        documentId: documentId,
+        queuePosition: documentQueue.length
+      });
+      
+    } catch (error) {
+      console.error('[ERROR] Failed to extract document ID or fetch document:', error);
+      return res.status(200).send('Invalid document URL format');
+    }
+    
+  } catch (error) {
+    console.error('[ERROR] Error in webhook endpoint:', error);
+    res.status(200).send('Internal server error');
+  }
+});
+
 router.get('/dashboard', async (req, res) => {
   const tagCount = await paperlessService.getTagCount();
   const correspondentCount = await paperlessService.getCorrespondentCount();
@@ -1037,7 +1133,8 @@ router.post('/setup', express.json(), async (req, res) => {
       activateDocumentType,
       activateTitle,
       activateCustomFields,
-      customFields
+      customFields,
+      disableAutomaticProcessing
     } = req.body;
 
     console.log('Setup request received:', req.body);
@@ -1057,6 +1154,13 @@ router.post('/setup', express.json(), async (req, res) => {
     if (!isPaperlessValid) {
       return res.status(400).json({ 
         error: 'Paperless-ngx connection failed. Please check URL and Token.'
+      });
+    }
+
+    const isPermissionValid = await setupService.validateApiPermissions(paperlessUrl, paperlessToken);
+    if (!isPermissionValid.success) {
+      return res.status(400).json({
+        error: 'Paperless-ngx API permissions are insufficient. Error: ' + isPermissionValid.message
       });
     }
 
@@ -1136,7 +1240,8 @@ router.post('/setup', express.json(), async (req, res) => {
       ACTIVATE_CUSTOM_FIELDS: activateCustomFields ? 'yes' : 'no',
       CUSTOM_FIELDS: processedCustomFields.length > 0 
         ? JSON.stringify({ custom_fields: processedCustomFields }) 
-        : '{"custom_fields":[]}'
+        : '{"custom_fields":[]}',
+      DISABLE_AUTOMATIC_PROCESSING: disableAutomaticProcessing ? 'yes' : 'no'
     };
 
     // Validate AI provider config
@@ -1148,7 +1253,7 @@ router.post('/setup', express.json(), async (req, res) => {
         });
       }
       config.OPENAI_API_KEY = openaiKey;
-      config.OPENAI_MODEL = openaiModel || 'gpt-4-turbo-preview';
+      config.OPENAI_MODEL = openaiModel || 'gpt-4o-mini';
     } else if (aiProvider === 'ollama') {
       const isOllamaValid = await setupService.validateOllamaConfig(ollamaUrl, ollamaModel);
       if (!isOllamaValid) {
@@ -1157,7 +1262,7 @@ router.post('/setup', express.json(), async (req, res) => {
         });
       }
       config.OLLAMA_API_URL = ollamaUrl || 'http://localhost:11434';
-      config.OLLAMA_MODEL = ollamaModel || 'llama2';
+      config.OLLAMA_MODEL = ollamaModel || 'llama3.2';
     } else if (aiProvider === 'custom') {
       const isCustomValid = await setupService.validateCustomConfig(customBaseUrl, customApiKey, customModel);
       if (!isCustomValid) {
@@ -1222,7 +1327,8 @@ router.post('/settings', express.json(), async (req, res) => {
       activateDocumentType,
       activateTitle,
       activateCustomFields,
-      customFields  // Added parameter
+      customFields,  // Added parameter
+      disableAutomaticProcessing
     } = req.body;
 
     const currentConfig = {
@@ -1252,7 +1358,8 @@ router.post('/settings', express.json(), async (req, res) => {
       ACTIVATE_DOCUMENT_TYPE: process.env.ACTIVATE_DOCUMENT_TYPE || 'yes',
       ACTIVATE_TITLE: process.env.ACTIVATE_TITLE || 'yes',
       ACTIVATE_CUSTOM_FIELDS: process.env.ACTIVATE_CUSTOM_FIELDS || 'yes',
-      CUSTOM_FIELDS: process.env.CUSTOM_FIELDS || '{"custom_fields":[]}'  // Added default
+      CUSTOM_FIELDS: process.env.CUSTOM_FIELDS || '{"custom_fields":[]}',  // Added default
+      DISABLE_AUTOMATIC_PROCESSING: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no'
     };
 
     // Process custom fields
@@ -1347,6 +1454,7 @@ router.post('/settings', express.json(), async (req, res) => {
     if (customApiKey) updatedConfig.CUSTOM_API_KEY = customApiKey;
     if (customBaseUrl) updatedConfig.CUSTOM_BASE_URL = customBaseUrl;
     if (customModel) updatedConfig.CUSTOM_MODEL = customModel;
+    if (disableAutomaticProcessing) updatedConfig.DISABLE_AUTOMATIC_PROCESSING = disableAutomaticProcessing;
 
     // Update custom fields
     if (processedCustomFields.length > 0 || customFields) {

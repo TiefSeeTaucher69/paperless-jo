@@ -41,6 +41,29 @@ class SetupService {
     }
   }
 
+  async validateApiPermissions(url, token) {
+    for (const endpoint of ['correspondents', 'tags', 'documents', 'document_types', 'custom_fields', 'users']) {
+      try {
+        console.log(`Validating API permissions for ${url}/api/${endpoint}/`);
+        const response = await axios.get(`${url}/api/${endpoint}/`, {
+          headers: {
+            'Authorization': `Token ${token}`
+          }
+        });
+        console.log(`API permissions validated for ${endpoint}, ${response.status}`);
+        if (response.status !== 200) {
+          console.error(`API permissions validation failed for ${endpoint}`);
+          return { success: false, message: `API permissions validation failed for endpoint '/api/${endpoint}/'` };
+        }
+      } catch (error) {
+        console.error(`API permissions validation failed for ${endpoint}:`, error.message);
+        return { success: false, message: `API permissions validation failed for endpoint '/api/${endpoint}/'` };
+      }
+    }
+    return { success: true, message: 'API permissions validated successfully' };
+}
+
+
   async validateOpenAIConfig(apiKey) {
     if (config.CONFIGURED === false) {
       try {

@@ -355,12 +355,14 @@ async function startScanning() {
 
     console.log('Configured scan interval:', config.scanInterval);
     console.log(`Starting initial scan at ${new Date().toISOString()}`);
-    await scanInitial();
-
-    cron.schedule(config.scanInterval, async () => {
-      console.log(`Starting scheduled scan at ${new Date().toISOString()}`);
-      await scanDocuments();
-    });
+    if(config.disableAutomaticProcessing != 'yes') {
+      await scanInitial();
+  
+      cron.schedule(config.scanInterval, async () => {
+        console.log(`Starting scheduled scan at ${new Date().toISOString()}`);
+        await scanDocuments();
+      });
+    }
   } catch (error) {
     console.error('[ERROR] in startScanning:', error);
   }

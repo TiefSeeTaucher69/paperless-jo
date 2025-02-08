@@ -422,6 +422,30 @@
                                     </div>
                                 </div>
                                 <hr/>
+                                <!-- Automatic Processing Section -->
+                                <div class="border-t pt-4 space-y-4">
+                                    <div class="space-y-2">
+                                        <label for="disableAutomaticProcessing" class="text-sm font-medium">Disable automatic processing?</label>
+                                        <div class="border border-gray-200 shadow-sm rounded-lg hover:border-blue-500 transition-colors duration-200">
+                                            <label for="disableAutomaticProcessing" class="flex items-center p-4 cursor-pointer w-full">
+                                                <input type="checkbox" 
+                                                    id="disableAutomaticProcessing" 
+                                                    name="disableAutomaticProcessing" 
+                                                    class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                    <%= config.DISABLE_AUTOMATIC_PROCESSING === 'yes' ? 'checked' : '' %>>
+                                                <div class="ml-3">
+                                                    <div class="flex items-center text-gray-900 font-medium">
+                                                        <i class="fas fa-robot mr-2 text-blue-500"></i>
+                                                        Disable Automatic Processing
+                                                    </div>
+                                                    <p class="text-sm text-gray-500 mt-1">Determines if the AI will run on its own or every scan is started manually</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-6"/>
                                 <!-- Limit Functions Section -->
                                 <section class="space-y-6">
                                     <h2 class="text-xl font-bold flex items-center gap-2 text-primary mb-4">

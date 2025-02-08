@@ -26,8 +26,9 @@ console.log('Loaded environment variables:', {
 });
 
 module.exports = {
-  PAPERLESS_AI_VERSION: '2.5.0',
+  PAPERLESS_AI_VERSION: '2.5.2',
   CONFIGURED: false,
+  disableAutomaticProcessing: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
   paperless: {
     apiUrl: process.env.PAPERLESS_API_URL,

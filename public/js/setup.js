@@ -189,6 +189,97 @@ class FormManager {
     }
 }
 
+class TabManager {
+    constructor() {
+        this.currentTab = 0;
+        this.tabs = Array.from(document.querySelectorAll('.tab-button'));
+        this.contents = Array.from(document.querySelectorAll('.tab-content'));
+        this.prevBtn = document.getElementById('prevBtn');
+        this.nextBtn = document.getElementById('nextBtn');
+        this.submitBtn = document.getElementById('submitBtn');
+        
+        this.initialize();
+    }
+
+    initialize() {
+        // Add click handlers to tab buttons
+        this.tabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => this.showTab(index));
+        });
+
+        // Add click handlers to navigation buttons
+        this.prevBtn.addEventListener('click', () => this.navigate(-1));
+        this.nextBtn.addEventListener('click', () => this.navigate(1));
+
+        // Show initial tab
+        this.showTab(this.currentTab);
+    }
+
+    showTab(index) {
+        if (index < 0 || index >= this.tabs.length) return;
+
+        // Update active states
+        this.tabs.forEach(tab => tab.classList.remove('active'));
+        this.contents.forEach(content => content.classList.remove('active'));
+
+        this.tabs[index].classList.add('active');
+        this.contents[index].classList.add('active');
+
+        // Update navigation buttons
+        this.prevBtn.style.display = index === 0 ? 'none' : 'flex';
+        if (index === this.tabs.length - 1) {
+            this.nextBtn.style.display = 'none';
+            this.submitBtn.style.display = 'flex';
+        } else {
+            this.nextBtn.style.display = 'flex';
+            this.submitBtn.style.display = 'none';
+        }
+
+        this.currentTab = index;
+    }
+
+    navigate(direction) {
+        const newIndex = this.currentTab + direction;
+        if (newIndex >= 0 && newIndex < this.tabs.length) {
+            // Validate current tab before proceeding
+            if (direction > 0 && !this.validateTab(this.currentTab)) {
+                return;
+            }
+            this.showTab(newIndex);
+        }
+    }
+
+    validateTab(tabIndex) {
+        // Get all required fields in the current tab
+        const currentTabContent = this.contents[tabIndex];
+        const requiredFields = currentTabContent.querySelectorAll('[required]');
+        
+        let isValid = true;
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                isValid = false;
+                field.classList.add('error');
+                // Add error styling
+                field.style.borderColor = 'var(--error-text)';
+            } else {
+                field.classList.remove('error');
+                field.style.borderColor = '';
+            }
+        });
+
+        if (!isValid) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Required Fields',
+                text: 'Please fill in all required fields before proceeding.',
+                confirmButtonColor: 'var(--accent-primary)'
+            });
+        }
+
+        return isValid;
+    }
+}
+
 // Tags Management
 class TagsManager {
     constructor() {
@@ -598,6 +689,7 @@ class PasswordManager {
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     /* eslint-disable no-unused-vars */
+    const tabManager = new TabManager();
     const themeManager = new ThemeManager();
     const formManager = new FormManager();
     const tagsManager = new TagsManager();
@@ -611,4 +703,248 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', (event) => {
     const systemPromptTextarea = document.getElementById('systemPrompt');
     systemPromptTextarea.value = systemPromptTextarea.value.replace(/\\n/g, '\n');
+});
+
+// Custom Fields Management
+function toggleCurrencySelect() {
+    const fieldType = document.getElementById('newFieldType').value;
+    const currencySelect = document.getElementById('currencyCode');
+    currencySelect.style.display = fieldType === 'monetary' ? 'block' : 'none';
+}
+
+function updateCustomFieldsJson() {
+    const fieldItems = document.querySelectorAll('.custom-field-item');
+    const fields = Array.from(fieldItems).map(item => {
+        const fieldName = item.querySelector('p.font-medium').textContent;
+        const typeText = item.querySelector('p.text-gray-500').textContent;
+        const data_type = typeText.split('Type: ')[1].split(' ')[0];
+        const currency = typeText.includes('(') ? typeText.split('(')[1].split(')')[0] : null;
+        
+        const field = {
+            value: fieldName,
+            data_type: data_type
+        };
+        
+        if (currency) {
+            field.currency = currency;
+        }
+        
+        return field;
+    });
+    
+    document.getElementById('customFieldsJson').value = JSON.stringify({
+        custom_fields: fields
+    });
+}
+
+function createFieldElement(fieldName, data_type, currency = null) {
+    const div = document.createElement('div');
+    div.className = 'custom-field-item flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-200 transition-colors';
+    
+    let typeDisplay = `Type: ${data_type}`;
+    if (data_type === 'monetary' && currency) {
+        typeDisplay += ` (${currency})`;
+    }
+    
+    div.innerHTML = `
+        <div class="cursor-move text-gray-400">
+            <i class="fas fa-grip-vertical"></i>
+        </div>
+        <div class="flex-1 flex items-center gap-4">
+            <div class="flex-1">
+                <p class="font-medium">${fieldName}</p>
+                <p class="text-sm text-gray-500">${typeDisplay}</p>
+            </div>
+        </div>
+        <button type="button" 
+                onclick="removeCustomField(this)" 
+                class="text-gray-400 hover:text-red-500 transition-colors">
+            <i class="fas fa-trash"></i>
+        </button>
+    `;
+    return div;
+}
+
+function addCustomField() {
+    const nameInput = document.getElementById('newFieldName');
+    const typeSelect = document.getElementById('newFieldType');
+    const currencySelect = document.getElementById('currencyCode');
+    const fieldsList = document.getElementById('customFieldsList');
+    
+    const fieldName = nameInput.value.trim();
+    const data_type = typeSelect.value;
+    const currency = data_type === 'monetary' ? currencySelect.value : null;
+    
+    if (!fieldName) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Invalid Field Name',
+            text: 'Please enter a field name'
+        });
+        return;
+    }
+    
+    // Check for duplicates
+    const existingFields = document.querySelectorAll('.custom-field-item p.font-medium');
+    if (Array.from(existingFields).some(p => p.textContent === fieldName)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Duplicate Field',
+            text: 'A field with this name already exists'
+        });
+        return;
+    }
+    
+    const fieldElement = createFieldElement(fieldName, data_type, currency);
+    fieldsList.appendChild(fieldElement);
+    
+    // Reset inputs
+    nameInput.value = '';
+    
+    // Update hidden JSON input
+    updateCustomFieldsJson();
+}
+
+function removeCustomField(button) {
+    const fieldItem = button.closest('.custom-field-item');
+    Swal.fire({
+        title: 'Delete Field?',
+        text: 'Are you sure you want to delete this custom field?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fieldItem.remove();
+            updateCustomFieldsJson();
+        }
+    });
+}
+
+// Fix form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const setupForm = document.getElementById('setupForm');
+    if (setupForm) {
+        setupForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Check if processing all documents without specific tags
+            const showTags = document.getElementById('showTags').value;
+            if (showTags === 'no') {
+                const result = await Swal.fire({
+                    icon: 'warning',
+                    title: 'Attention!',
+                    html: `
+                        <p>You haven't selected any specific tags for document processing.</p>
+                        <p class="mt-4"><strong>This means ALL documents will be automatically processed by the AI system!</strong></p>
+                        <p class="mt-4">Do you want to continue?</p>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, continue',
+                    cancelButtonText: 'No, cancel',
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33'
+                });
+
+                if (!result.isConfirmed) {
+                    // User cancelled - set showTags to 'yes' and scroll to it
+                    document.getElementById('showTags').value = 'yes';
+                    // Trigger the change event to show the tags input section
+                    document.getElementById('showTags').dispatchEvent(new Event('change'));
+                    // Scroll to the element
+                    document.getElementById('showTags').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+            }
+
+            // Show loading state
+            const submitBtn = setupForm.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            try {
+                const formData = new FormData(setupForm);
+                const response = await fetch('/setup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(Object.fromEntries(formData))
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: result.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+
+                    if (result.restart) {
+                        let countdown = 5;
+                        const countdownInterval = setInterval(() => {
+                            Swal.fire({
+                                title: 'Restarting...',
+                                text: `Application will restart in ${countdown} seconds`,
+                                icon: 'info',
+                                showConfirmButton: false
+                            });
+                            countdown--;
+                            if (countdown < 0) {
+                                clearInterval(countdownInterval);
+                                window.location.href = '/dashboard';
+                            }
+                        }, 1000);
+                    }
+                } else {
+                    throw new Error(result.error || 'An unknown error occurred');
+                }
+            } catch (error) {
+                await Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: error.message
+                });
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            }
+        });
+    }
+
+    // Initialize Sortable.js for drag-and-drop
+    const fieldsList = document.getElementById('customFieldsList');
+    if (fieldsList) {
+        new Sortable(fieldsList, {
+            animation: 150,
+            handle: '.cursor-move',
+            onEnd: updateCustomFieldsJson
+        });
+    }
+    
+    // Initialize currency select visibility
+    toggleCurrencySelect();
+    
+    // Add keyboard event listener for the name input
+    const nameInput = document.getElementById('newFieldName');
+    if (nameInput) {
+        nameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomField();
+            }
+        });
+    }
+    
+    // Add change event listener for field type
+    const typeSelect = document.getElementById('newFieldType');
+    if (typeSelect) {
+        typeSelect.addEventListener('change', toggleCurrencySelect);
+    }
 });

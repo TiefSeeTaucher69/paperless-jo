@@ -454,3 +454,70 @@ textarea.disabled {
 [data-theme="dark"] .tippy-box[data-theme~='custom'] {
     background-color: var(--bg-secondary);
 }
+
+/* Tab Navigation Styles */
+.tab-navigation {
+    position: sticky;
+    top: 0;
+    background: var(--bg-primary);
+    z-index: 10;
+    padding-top: 1rem;
+}
+
+.tab-button {
+    position: relative;
+    transition: all 0.3s ease;
+    border-color: transparent;
+}
+
+.tab-button.active {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.tab-button:not(.active):hover {
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+/* Tab Content Styles */
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Navigation Button Styles */
+#prevBtn, #nextBtn, #submitBtn {
+    min-width: 120px;
+}
+
+/* Progress Indicator */
+.progress-bar {
+    height: 4px;
+    background: var(--border-color);
+    margin-top: 1rem;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    transition: width 0.3s ease;
+}
+
+/* Mobile Responsive Adjustments */
+@media (max-width: 640px) {
+    .tab-navigation {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-button {
+        white-space: nowrap;
+    }
+}
