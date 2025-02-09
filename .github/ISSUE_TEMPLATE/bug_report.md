@@ -20,6 +20,9 @@ Steps to reproduce the behavior:
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
+**Docker Container Logs**
+A concise log part of the error or a full error.
+
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
