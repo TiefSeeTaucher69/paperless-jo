@@ -18,7 +18,8 @@ It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query 
 - Gemini (Google)
 - ... and there are possibly many more
 
-![PPAI_SHOWCASE](https://github.com/user-attachments/assets/7ef22632-acd2-4e02-bcf7-0437e9b69036)
+![PPAI_SHOWCASE3](https://github.com/user-attachments/assets/1fc9f470-6e45-43e0-a212-b8fa6225e8dd)
+
 
 ## Features
 
