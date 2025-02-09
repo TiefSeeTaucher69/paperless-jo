@@ -29,7 +29,8 @@ class SetupService {
 
   async validatePaperlessConfig(url, token) {
     try {
-      const response = await axios.get(`${url}/api/documents/`, {
+      console.log('Validating Paperless config for:', url + '/api/documents/');
+      const response = await axios.get(`${url}/api/documents`, {
         headers: {
           'Authorization': `Token ${token}`
         }
@@ -113,7 +114,7 @@ class SetupService {
   async validateOllamaConfig(url, model) {
     try {
       const response = await axios.post(`${url}/api/generate`, {
-        model: model || 'llama2',
+        model: model || 'llama3.2',
         prompt: 'Test',
         stream: false
       });
@@ -126,8 +127,9 @@ class SetupService {
 
   async validateConfig(config) {
     // Validate Paperless config
+    const paperlessApiUrl = config.PAPERLESS_API_URL.replace(/\/api/g, '');
     const paperlessValid = await this.validatePaperlessConfig(
-      config.PAPERLESS_API_URL,
+      paperlessApiUrl,
       config.PAPERLESS_API_TOKEN
     );
     
