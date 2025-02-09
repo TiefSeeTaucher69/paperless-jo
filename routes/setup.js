@@ -615,7 +615,8 @@ router.get('/setup', async (req, res) => {
       PROMPT_TAGS: normalizeArray(process.env.PROMPT_TAGS),
       PAPERLESS_AI_VERSION: configFile.PAPERLESS_AI_VERSION || ' ',
       PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || 'yes',
-      USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no'
+      USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no',
+      DISABLE_AUTOMATIC_PROCESSING: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
     };
 
     // Check both configuration and users
@@ -1454,7 +1455,10 @@ router.post('/settings', express.json(), async (req, res) => {
     if (customApiKey) updatedConfig.CUSTOM_API_KEY = customApiKey;
     if (customBaseUrl) updatedConfig.CUSTOM_BASE_URL = customBaseUrl;
     if (customModel) updatedConfig.CUSTOM_MODEL = customModel;
-    if (disableAutomaticProcessing) updatedConfig.DISABLE_AUTOMATIC_PROCESSING = disableAutomaticProcessing;
+    if (disableAutomaticProcessing !== undefined) {
+      updatedConfig.DISABLE_AUTOMATIC_PROCESSING = disableAutomaticProcessing ? 'yes' : 'no';
+    }
+
 
     // Update custom fields
     if (processedCustomFields.length > 0 || customFields) {

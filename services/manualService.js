@@ -17,6 +17,28 @@ class ManualService {
             });
         }
     }
+
+    async writePromptToFile(systemPrompt, truncatedContent) {
+        const filePath = './logs/prompt.txt';
+        const maxSize = 10 * 1024 * 1024;
+      
+        try {
+          const stats = await fs.stat(filePath);
+          if (stats.size > maxSize) {
+            await fs.unlink(filePath); // Delete the file if is biger 10MB
+          }
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            console.warn('[WARNING] Error checking file size:', error);
+          }
+        }
+      
+        try {
+          await fs.appendFile(filePath, systemPrompt + truncatedContent + '\n\n');
+        } catch (error) {
+          console.error('[ERROR] Error writing to file:', error);
+        }
+      }
     
     async analyzeDocument(content, existingTags, provider) {
         try {
@@ -42,7 +64,7 @@ class ManualService {
             .join(', ');
     
         const systemPrompt = process.env.SYSTEM_PROMPT;
-    
+        await this.writePromptToFile(systemPrompt, content);
         const response = await this.openai.chat.completions.create({
             model: process.env.OPENAI_MODEL,
             messages: [
@@ -62,6 +84,15 @@ class ManualService {
         jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         
         const parsedResponse = JSON.parse(jsonContent);
+        try {
+            parsedResponse = JSON.parse(jsonContent);
+            fs.appendFile('./logs/response.txt', jsonContent, (err) => {
+                if (err) throw err;
+            });
+        } catch (error) {
+            console.error('Failed to parse JSON response:', error);
+            throw new Error('Invalid JSON response from API');
+        }
         
         if (!Array.isArray(parsedResponse.tags) || typeof parsedResponse.correspondent !== 'string') {
             throw new Error('Invalid response structure');
