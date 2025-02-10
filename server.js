@@ -65,17 +65,17 @@ app.use(cookieParser());
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Layout middleware
-app.use((req, res, next) => {
-  const originalRender = res.render;
-  res.render = function (view, locals = {}) {
-    originalRender.call(this, view, locals, (err, html) => {
-      if (err) return next(err);
-      originalRender.call(this, 'layout', { content: html, ...locals });
-    });
-  };
-  next();
-});
+// //Layout middleware
+// app.use((req, res, next) => {
+//   const originalRender = res.render;
+//   res.render = function (view, locals = {}) {
+//     originalRender.call(this, view, locals, (err, html) => {
+//       if (err) return next(err);
+//       originalRender.call(this, 'layout', { content: html, ...locals });
+//     });
+//   };
+//   next();
+// });
 
 
 // Initialize data directory

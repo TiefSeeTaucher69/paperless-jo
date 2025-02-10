@@ -354,8 +354,13 @@ router.get('/api/history', async (req, res) => {
       const dir = order.dir === 'asc' ? 1 : -1;
 
       filteredDocs.sort((a, b) => {
+        if (a[column] == null) return 1;
+        if (b[column] == null) return -1;
         if (column === 'created_at') {
           return dir * (new Date(a[column]) - new Date(b[column]));
+        }
+        if (column === 'document_id') {
+          return dir * (a[column] - b[column]);
         }
         return dir * a[column].localeCompare(b[column]);
       });

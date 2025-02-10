@@ -26,9 +26,11 @@
 body {
     background-color: var(--bg-secondary);
     color: var(--text-primary);
-    margin: 0;
     min-height: 100vh;
     transition: background-color 0.3s ease;
+    font-family: Arial, sans-serif; 
+    margin: 20px; 
+    line-height: 1.6;
 }
 
 .chat-container {

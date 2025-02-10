@@ -73,10 +73,12 @@ body {
     background-color: var(--bg-secondary);
     color: var(--text-primary);
     transition: background-color 0.3s ease, color 0.3s ease;
-    margin: 0;
     padding: 0;
     min-height: 100vh;
     position: relative;
+    font-family: Arial, sans-serif; 
+    margin: 20px; 
+    line-height: 1.6;
 }
 
 /* Layout */
