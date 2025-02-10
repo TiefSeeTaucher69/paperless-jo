@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css" />
     <script src="https://unpkg.com/@popperjs/core@2"></script>
-    <script src="https://unpkg.com/tippy.js@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.2/tippy.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 </head>
@@ -428,7 +428,6 @@
                                             <label for="disableAutomaticProcessing" class="flex items-center p-4 cursor-pointer w-full">
                                                 <input type="checkbox" 
                                                     id="disableAutomaticProcessing" 
-                                                    name="disableAutomaticProcessing" 
                                                     class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                                                     <%= config.DISABLE_AUTOMATIC_PROCESSING === 'yes' ? 'checked' : '' %>>
                                                 <div class="ml-3">

@@ -37,17 +37,20 @@ class FormManager {
         this.usePromptTags = document.getElementById('usePromptTags');
         this.systemPrompt = document.getElementById('systemPrompt');
         this.systemPromptBtn = document.getElementById('systemPromptBtn');
+        this.disableAutomaticProcessing = document.getElementById('disableAutomaticProcessing');
         this.initialize();
     }
 
     initialize() {
         this.toggleProviderSettings();
         this.toggleTagsInput();
+        this.handleDisableAutomaticProcessing();
         
         this.aiProvider.addEventListener('change', () => this.toggleProviderSettings());
         this.showTags.addEventListener('change', () => this.toggleTagsInput());
         this.aiProcessedTag.addEventListener('change', () => this.toggleAiTagInput());
         this.usePromptTags.addEventListener('change', () => this.togglePromptTagsInput());
+        this.disableAutomaticProcessing.addEventListener('change', () => this.handleDisableAutomaticProcessing());
         
         this.initializePasswordToggles();
 
@@ -57,6 +60,21 @@ class FormManager {
         
         this.toggleAiTagInput();
         this.togglePromptTagsInput();
+    }
+
+    handleDisableAutomaticProcessing() {
+        // Create a hidden input if it doesn't exist
+        let hiddenInput = document.getElementById('disableAutomaticProcessingValue');
+        if (!hiddenInput) {
+            hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.id = 'disableAutomaticProcessingValue';
+            hiddenInput.name = 'disableAutomaticProcessing';
+            this.form.appendChild(hiddenInput);
+        }
+        
+        // Update the hidden input value based on checkbox state
+        hiddenInput.value = this.disableAutomaticProcessing.checked ? 'yes' : 'no';
     }
 
     toggleProviderSettings() {

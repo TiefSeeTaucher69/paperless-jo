@@ -1455,10 +1455,7 @@ router.post('/settings', express.json(), async (req, res) => {
     if (customApiKey) updatedConfig.CUSTOM_API_KEY = customApiKey;
     if (customBaseUrl) updatedConfig.CUSTOM_BASE_URL = customBaseUrl;
     if (customModel) updatedConfig.CUSTOM_MODEL = customModel;
-    if (disableAutomaticProcessing !== undefined) {
-      updatedConfig.DISABLE_AUTOMATIC_PROCESSING = disableAutomaticProcessing ? 'yes' : 'no';
-    }
-
+    if (disableAutomaticProcessing) updatedConfig.DISABLE_AUTOMATIC_PROCESSING = disableAutomaticProcessing;
 
     // Update custom fields
     if (processedCustomFields.length > 0 || customFields) {
