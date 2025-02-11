@@ -26,7 +26,7 @@ console.log('Loaded environment variables:', {
 });
 
 module.exports = {
-  PAPERLESS_AI_VERSION: '2.5.9',
+  PAPERLESS_AI_VERSION: '2.6.0',
   CONFIGURED: false,
   disableAutomaticProcessing: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
