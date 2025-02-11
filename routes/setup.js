@@ -457,6 +457,7 @@ try {
 async function processDocument(doc, existingTags, existingCorrespondentList, ownUserId) {
   const isProcessed = await documentModel.isDocumentProcessed(doc.id);
   if (isProcessed) return null;
+  await documentModel.setProcessingStatus(doc.id, doc.title, 'processing');
 
   const documentOwnerId = await paperlessService.getOwnerOfDocument(doc.id);
   if (documentOwnerId !== ownUserId && documentOwnerId !== null) {
@@ -485,7 +486,7 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
   if (analysis.error) {
     throw new Error(`[ERROR] Document analysis failed: ${analysis.error}`);
   }
-
+  await documentModel.setProcessingStatus(doc.id, doc.title, 'complete');
   return { analysis, originalData };
 }
 
@@ -859,12 +860,35 @@ router.get('/dashboard', async (req, res) => {
   const documentCount = await paperlessService.getDocumentCount();
   const processedDocumentCount = await documentModel.getProcessedDocumentsCount();
   const metrics = await documentModel.getMetrics();
+  const processingTimeStats = await documentModel.getProcessingTimeStats();
+  const tokenDistribution = await documentModel.getTokenDistribution();
+  const documentTypes = await documentModel.getDocumentTypeStats();
+  
   const averagePromptTokens = metrics.length > 0 ? Math.round(metrics.reduce((acc, cur) => acc + cur.promptTokens, 0) / metrics.length) : 0;
   const averageCompletionTokens = metrics.length > 0 ? Math.round(metrics.reduce((acc, cur) => acc + cur.completionTokens, 0) / metrics.length) : 0;
   const averageTotalTokens = metrics.length > 0 ? Math.round(metrics.reduce((acc, cur) => acc + cur.totalTokens, 0) / metrics.length) : 0;
   const tokensOverall = metrics.length > 0 ? metrics.reduce((acc, cur) => acc + cur.totalTokens, 0) : 0;
+  
   const version = configFile.PAPERLESS_AI_VERSION || ' ';
-  res.render('dashboard', { paperless_data: { tagCount, correspondentCount, documentCount, processedDocumentCount }, openai_data: { averagePromptTokens, averageCompletionTokens, averageTotalTokens, tokensOverall }, version });
+  
+  res.render('dashboard', { 
+    paperless_data: { 
+      tagCount, 
+      correspondentCount, 
+      documentCount, 
+      processedDocumentCount,
+      processingTimeStats,
+      tokenDistribution,
+      documentTypes
+    }, 
+    openai_data: { 
+      averagePromptTokens, 
+      averageCompletionTokens, 
+      averageTotalTokens, 
+      tokensOverall 
+    }, 
+    version 
+  });
 });
 
 router.get('/settings', async (req, res) => {
@@ -1530,6 +1554,15 @@ router.post('/settings', express.json(), async (req, res) => {
     res.status(500).json({ 
       error: 'An error occurred: ' + error.message
     });
+  }
+});
+
+router.get('/api/processing-status', async (req, res) => {
+  try {
+      const status = await documentModel.getCurrentProcessingStatus();
+      res.json(status);
+  } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch processing status' });
   }
 });
 

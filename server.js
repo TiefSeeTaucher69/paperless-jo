@@ -93,6 +93,7 @@ async function initializeDataDirectory() {
 async function processDocument(doc, existingTags, existingCorrespondentList, ownUserId) {
   const isProcessed = await documentModel.isDocumentProcessed(doc.id);
   if (isProcessed) return null;
+  await documentModel.setProcessingStatus(doc.id, doc.title, 'processing');
 
   //Check if the Document can be edited
   const documentEditable = await paperlessService.getPermissionOfDocument(doc.id);
@@ -124,7 +125,7 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
   if (analysis.error) {
     throw new Error(`[ERROR] Document analysis failed: ${analysis.error}`);
   }
-
+  await documentModel.setProcessingStatus(doc.id, doc.title, 'complete');
   return { analysis, originalData };
 }
 

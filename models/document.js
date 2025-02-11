@@ -119,6 +119,36 @@ const getPaginatedHistoryDocuments = db.prepare(`
   LIMIT ? OFFSET ?
 `);
 
+const createProcessingStatus = db.prepare(`
+  CREATE TABLE IF NOT EXISTS processing_status (
+    id INTEGER PRIMARY KEY,
+    document_id INTEGER UNIQUE,
+    title TEXT,
+    start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    status TEXT
+  );
+`);
+createProcessingStatus.run();
+
+// Add with your other prepared statements
+const upsertProcessingStatus = db.prepare(`
+  INSERT INTO processing_status (document_id, title, status)
+  VALUES (?, ?, ?)
+  ON CONFLICT(document_id) DO UPDATE SET
+    status = excluded.status,
+    start_time = CURRENT_TIMESTAMP
+  WHERE document_id = excluded.document_id
+`);
+
+const clearProcessingStatus = db.prepare(`
+  DELETE FROM processing_status WHERE document_id = ?
+`);
+
+const getActiveProcessing = db.prepare(`
+  SELECT * FROM processing_status 
+  WHERE start_time >= datetime('now', '-30 seconds')
+  ORDER BY start_time DESC LIMIT 1
+`);
 
 
 module.exports = {
@@ -391,6 +421,123 @@ module.exports = {
       return [];
     }
   },
+
+  async getProcessingTimeStats() {
+    try {
+      return db.prepare(`
+        SELECT 
+          strftime('%H', processed_at) as hour,
+          COUNT(*) as count
+        FROM processed_documents 
+        WHERE date(processed_at) = date('now')
+        GROUP BY hour
+        ORDER BY hour
+      `).all();
+    } catch (error) {
+      console.error('[ERROR] getting processing time stats:', error);
+      return [];
+    }
+  },
+  
+  async  getTokenDistribution() {
+    try {
+      return db.prepare(`
+        SELECT 
+          CASE 
+            WHEN totalTokens < 1000 THEN '0-1k'
+            WHEN totalTokens < 2000 THEN '1k-2k'
+            WHEN totalTokens < 3000 THEN '2k-3k'
+            WHEN totalTokens < 4000 THEN '3k-4k'
+            WHEN totalTokens < 5000 THEN '4k-5k'
+            ELSE '5k+'
+          END as range,
+          COUNT(*) as count
+        FROM openai_metrics
+        GROUP BY range
+        ORDER BY range
+      `).all();
+    } catch (error) {
+      console.error('[ERROR] getting token distribution:', error);
+      return [];
+    }
+  },
+  
+  async getDocumentTypeStats() {
+    try {
+      return db.prepare(`
+        SELECT 
+          substr(title, 1, instr(title || ' ', ' ') - 1) as type,
+          COUNT(*) as count
+        FROM original_documents
+        GROUP BY type
+      `).all();
+    } catch (error) {
+      console.error('[ERROR] getting document type stats:', error);
+      return [];
+    }
+},
+
+async setProcessingStatus(documentId, title, status) {
+  try {
+      if (status === 'complete') {
+          const result = clearProcessingStatus.run(documentId);
+          return result.changes > 0;
+      } else {
+          const result = upsertProcessingStatus.run(documentId, title, status);
+          return result.changes > 0;
+      }
+  } catch (error) {
+      console.error('[ERROR] updating processing status:', error);
+      return false;
+  }
+},
+
+async getCurrentProcessingStatus() {
+  try {
+      const active = getActiveProcessing.get();
+      
+      // Get last processed document with explicit UTC time
+      const lastProcessed = db.prepare(`
+          SELECT 
+              document_id, 
+              title, 
+              datetime(processed_at) as processed_at 
+          FROM processed_documents 
+          ORDER BY processed_at DESC 
+          LIMIT 1`
+      ).get();
+
+      const processedToday = db.prepare(`
+          SELECT COUNT(*) as count 
+          FROM processed_documents 
+          WHERE date(processed_at) = date('now', 'localtime')`
+      ).get();
+
+      return {
+          currentlyProcessing: active ? {
+              documentId: active.document_id,
+              title: active.title,
+              startTime: active.start_time,
+              status: active.status
+          } : null,
+          lastProcessed: lastProcessed ? {
+              documentId: lastProcessed.document_id,
+              title: lastProcessed.title,
+              processed_at: lastProcessed.processed_at
+          } : null,
+          processedToday: processedToday.count,
+          isProcessing: !!active
+      };
+  } catch (error) {
+      console.error('[ERROR] getting current processing status:', error);
+      return {
+          currentlyProcessing: null,
+          lastProcessed: null,
+          processedToday: 0,
+          isProcessing: false
+      };
+  }
+},
 
 
   // Utility method to close the database connection
