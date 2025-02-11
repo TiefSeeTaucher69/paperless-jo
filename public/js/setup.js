@@ -1,4 +1,3 @@
-// Theme Management
 class ThemeManager {
     constructor() {
         this.themeToggle = document.getElementById('themeToggle');
@@ -21,6 +20,17 @@ class ThemeManager {
         // Update toggle button icon
         const icon = this.themeToggle.querySelector('i');
         icon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        
+        // Update any active Shepherd tour
+        this.updateShepherdTheme(theme);
+    }
+
+    updateShepherdTheme(theme) {
+        const activeTooltips = document.querySelectorAll('.shepherd-element');
+        activeTooltips.forEach(tooltip => {
+            tooltip.style.background = getComputedStyle(document.documentElement)
+                .getPropertyValue('--shepherd-bg');
+        });
     }
 
     toggleTheme() {

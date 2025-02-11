@@ -16,6 +16,11 @@
     --success-bg: #dcfce7;
     --success-border: #bbf7d0;
     --success-text: #16a34a;
+    --shepherd-bg: var(--bg-primary);
+    --shepherd-text: var(--text-primary);
+    --shepherd-border: var(--border-color);
+    --shepherd-button-primary: var(--accent-primary);
+    --shepherd-button-text: white;
 }
 
 :root[data-theme="dark"] {
@@ -35,6 +40,61 @@
     --success-bg: #14532d;
     --success-border: #166534;
     --success-text: #86efac;
+    --shepherd-bg: var(--bg-secondary);
+    --shepherd-text: var(--text-primary);
+    --shepherd-border: var(--border-color);
+    --shepherd-button-primary: var(--accent-primary);
+    --shepherd-button-text: white;
+}
+
+.shepherd-modal-overlay-container {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.shepherd-element {
+    background: var(--shepherd-bg) !important;
+    color: var(--shepherd-text) !important;
+    border: 1px solid var(--shepherd-border) !important;
+    border-radius: 0.5rem !important;
+}
+
+.shepherd-text {
+    color: var(--shepherd-text) !important;
+}
+
+.shepherd-header {
+    background: var(--shepherd-bg) !important;
+    border-bottom: 1px solid var(--shepherd-border) !important;
+}
+
+.shepherd-title {
+    color: var(--shepherd-text) !important;
+    font-size: 1.25rem !important;
+}
+
+.shepherd-cancel-icon {
+    color: var(--shepherd-text) !important;
+}
+
+.shepherd-button {
+    background: var(--shepherd-button-primary) !important;
+    color: var(--shepherd-button-text) !important;
+    border-radius: 0.375rem !important;
+}
+
+.shepherd-button:not(:disabled):hover {
+    background: var(--accent-secondary) !important;
+}
+
+.shepherd-button.shepherd-button-secondary {
+    background: transparent !important;
+    color: var(--shepherd-text) !important;
+    border: 1px solid var(--shepherd-border) !important;
+}
+
+.shepherd-arrow:before {
+    background: var(--shepherd-bg) !important;
+    border: 1px solid var(--shepherd-border) !important;
 }
 
 /* Base Styles */

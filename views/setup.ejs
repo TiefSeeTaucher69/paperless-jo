@@ -776,16 +776,25 @@
     const tour = new Shepherd.Tour({
         useModalOverlay: true,
         defaultStepOptions: {
-            classes: 'shadow-md bg-gray-800 text-white p-4',
+            classes: 'shadow-md', // Remove hardcoded background and text colors
             scrollTo: { behavior: 'smooth', block: 'center' },
             cancelIcon: {
                 enabled: true
             },
+            buttons: [{
+                classes: 'shepherd-button-secondary', // Add this class for secondary buttons
+                text: 'Exit',
+                type: 'cancel'
+            }, {
+                classes: 'shepherd-button-primary', // Add this class for primary buttons
+                text: 'Next',
+                type: 'next'
+            }],
             popperOptions: {
                 modifiers: [{
                     name: 'offset',
                     options: {
-                        offset: [0, 12] // [skidding (horizontal), distance (vertical)]
+                        offset: [0, 12]
                     }
                 }]
             }
