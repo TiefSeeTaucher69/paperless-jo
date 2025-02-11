@@ -520,7 +520,7 @@
     </script>
     <script>
         function formatTimeAgo(dateString) {
-            const date = new Date(dateString + 'Z'); // Append 'Z' to treat as UTC
+            const date = new Date(dateString + 'Z');
             const now = new Date();
             const seconds = Math.floor((now - date) / 1000);
 
@@ -562,7 +562,7 @@
                             : data.currentlyProcessing.title;
                         document.getElementById('currentDocTitle').textContent = data.currentlyProcessing.title;
                         
-                        // Show "Processing..." instead of duration
+                        // Show "Processing..."
                         document.getElementById('lastProcessed').innerHTML = `
                             <span class="text-blue-600">
                                 <i class="fas fa-spinner fa-spin"></i> Processing...
