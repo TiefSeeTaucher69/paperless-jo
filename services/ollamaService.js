@@ -19,6 +19,15 @@ class OllamaService {
         try {
             const now = new Date();
             const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+            //if process.env.CONTENT_MAX_LENGTH is set, truncate the content to the specified length
+            try {
+                if (process.env.CONTENT_MAX_LENGTH) {
+                    console.log('Truncating content to max length:', process.env.CONTENT_MAX_LENGTH);
+                    content = content.substring(0, process.env.CONTENT_MAX_LENGTH);
+                }
+            } catch (error) {
+                console.error('Error truncating content:', error);
+            }
             const prompt = this._buildPrompt(content, existingTags, existingCorrespondentList);
 
 
