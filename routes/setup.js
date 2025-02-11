@@ -533,6 +533,49 @@ async function buildUpdateData(analysis, doc) {
     }
   }
 
+  // Only process custom fields if custom fields detection is activated
+  if (config.limitFunctions?.activateCustomFields !== 'no' && analysis.document.custom_fields) {
+    const customFields = analysis.document.custom_fields;
+    const processedFields = [];
+
+    // Get existing custom fields
+    const existingFields = await paperlessService.getExistingCustomFields(doc.id);
+    console.log(`[DEBUG] Found existing fields:`, existingFields);
+
+    // Keep track of which fields we've processed to avoid duplicates
+    const processedFieldIds = new Set();
+
+    // First, add any new/updated fields
+    for (const key in customFields) {
+      const customField = customFields[key];
+      
+      if (!customField.field_name || !customField.value?.trim()) {
+        console.log(`[DEBUG] Skipping empty/invalid custom field`);
+        continue;
+      }
+
+      const fieldDetails = await paperlessService.findExistingCustomField(customField.field_name);
+      if (fieldDetails?.id) {
+        processedFields.push({
+          field: fieldDetails.id,
+          value: customField.value.trim()
+        });
+        processedFieldIds.add(fieldDetails.id);
+      }
+    }
+
+    // Then add any existing fields that weren't updated
+    for (const existingField of existingFields) {
+      if (!processedFieldIds.has(existingField.field)) {
+        processedFields.push(existingField);
+      }
+    }
+
+    if (processedFields.length > 0) {
+      updateData.custom_fields = processedFields;
+    }
+  }
+
   // Only process correspondent if correspondent detection is activated
   if (config.limitFunctions?.activateCorrespondents !== 'no' && analysis.document.correspondent) {
     try {

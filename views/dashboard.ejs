@@ -553,7 +553,10 @@
                         // Show processing state
                         processingContainer.classList.remove('hidden');
                         idleContainer.classList.add('hidden');
-                        
+
+                        // disable scanButton if processing
+                        document.getElementById('scanButton').disabled = true;
+                                                
                         // Update document info
                         document.getElementById('currentDocId').textContent = `#${data.currentlyProcessing.documentId}`;
                         // Trim title to 50 characters and add ... if longer
@@ -571,7 +574,8 @@
                         // Show idle state
                         processingContainer.classList.add('hidden');
                         idleContainer.classList.remove('hidden');
-                        
+                        // enable scanButton if idle
+                        document.getElementById('scanButton').disabled = false;
                         if (data.lastProcessed) {
                             const timeAgo = formatTimeAgo(data.lastProcessed.processed_at);
                             console.log('Last processed:', data.lastProcessed.processed_at);

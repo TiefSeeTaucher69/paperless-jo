@@ -125,6 +125,17 @@ class PaperlessService {
     }
   }
 
+  async getExistingCustomFields(documentId) {
+    try {
+      const response = await this.client.get(`/documents/${documentId}/`);
+      console.log('[DEBUG] Document response custom fields:', response.data.custom_fields);
+      return response.data.custom_fields || [];
+    } catch (error) {
+      console.error(`[ERROR] fetching document ${documentId}:`, error.message);
+      return [];
+    }
+  }
+  
   async findExistingCustomField(fieldName) {
     const normalizedName = fieldName.toLowerCase();
     
@@ -1130,19 +1141,19 @@ async getOrCreateDocumentType(name) {
         };
       }
 
-      // Handle custom fields update
-      if (updateData.custom_fields) {
-        console.log('[DEBUG] Custom fields update detected');
-        try {
-          // First, delete existing custom fields
-          console.log(`[DEBUG] Deleting existing custom fields for document ${documentId}`);
-          await this.client.delete(`/documents/${documentId}/custom_fields/`);
-        } catch (error) {
-          // If deletion fails, try updating with empty array first
-          console.warn('[WARN] Could not delete custom fields, trying to clear them:', error.message);
-          await this.client.patch(`/documents/${documentId}/`, { custom_fields: [] });
-        }
-      }
+      // // Handle custom fields update
+      // if (updateData.custom_fields) {
+      //   console.log('[DEBUG] Custom fields update detected');
+      //   try {
+      //     // First, delete existing custom fields
+      //     console.log(`[DEBUG] Deleting existing custom fields for document ${documentId}`);
+      //     await this.client.delete(`/documents/${documentId}/custom_fields/`);
+      //   } catch (error) {
+      //     // If deletion fails, try updating with empty array first
+      //     console.warn('[WARN] Could not delete custom fields, trying to clear them:', error.message);
+      //     await this.client.patch(`/documents/${documentId}/`, { custom_fields: [] });
+      //   }
+      // }
       
       console.log('[DEBUG] Final update data:', updateData);
       await this.client.patch(`/documents/${documentId}/`, updateData);
