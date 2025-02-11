@@ -1261,6 +1261,9 @@ router.post('/setup', express.json(), async (req, res) => {
       DISABLE_AUTOMATIC_PROCESSING: disableAutomaticProcessing ? 'yes' : 'no'
     };
 
+    //remove all = and ` chars from systemPrompt
+    config.SYSTEM_PROMPT = config.SYSTEM_PROMPT.replace(/=/g, '').replace(/`/g, '');
+    
     // Validate AI provider config
     if (aiProvider === 'openai') {
       const isOpenAIValid = await setupService.validateOpenAIConfig(openaiKey);
@@ -1347,6 +1350,8 @@ router.post('/settings', express.json(), async (req, res) => {
       customFields,  // Added parameter
       disableAutomaticProcessing
     } = req.body;
+
+    systemPrompt = systemPrompt.replace(/=/g, '').replace(/`/g, '');
 
     const currentConfig = {
       PAPERLESS_API_URL: process.env.PAPERLESS_API_URL || '',
@@ -1461,6 +1466,7 @@ router.post('/settings', express.json(), async (req, res) => {
     // Update general settings
     if (scanInterval) updatedConfig.SCAN_INTERVAL = scanInterval;
     if (systemPrompt) updatedConfig.SYSTEM_PROMPT = systemPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
+    if (systemPrompt) updatedConfig.SYSTEM_PROMPT = systemPrompt.replace(/=/g, '').replace(/`/g, '');
     if (showTags) updatedConfig.PROCESS_PREDEFINED_DOCUMENTS = showTags;
     if (tags !== undefined) updatedConfig.TAGS = normalizeArray(tags);
     if (aiProcessedTag) updatedConfig.ADD_AI_PROCESSED_TAG = aiProcessedTag;
