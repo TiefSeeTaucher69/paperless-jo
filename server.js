@@ -131,6 +131,8 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
 async function buildUpdateData(analysis, doc) {
   const updateData = {};
 
+  console.log('TEST: ', config.addAIProcessedTag)
+  console.log('TEST 2: ', config.addAIProcessedTags)
   // Only process tags if tagging is activated
   if (config.limitFunctions?.activateTagging !== 'no') {
     const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags);
@@ -138,6 +140,17 @@ async function buildUpdateData(analysis, doc) {
       console.warn('[ERROR] Some tags could not be processed:', errors);
     }
     updateData.tags = tagIds;
+  } else if (config.limitFunctions?.activateTagging === 'no' && config.addAIProcessedTag === 'yes') {
+    // Add AI processed tags to the document (processTags function awaits a tags array)
+    // get tags from .env file and split them by comma and make an array
+    console.log('[DEBUG] Tagging is deactivated but AI processed tag will be added');
+    const tags = config.addAIProcessedTags.split(',');
+    const { tagIds, errors } = await paperlessService.processTags(tags);
+    if (errors.length > 0) {
+      console.warn('[ERROR] Some tags could not be processed:', errors);
+    }
+    updateData.tags = tagIds;
+    console.log('[DEBUG] Tagging is deactivated');
   }
 
   // Only process title if title generation is activated
