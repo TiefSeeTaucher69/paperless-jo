@@ -10,7 +10,7 @@ class OllamaService {
         this.apiUrl = config.ollama.apiUrl;
         this.model = config.ollama.model;
         this.client = axios.create({
-            timeout: 1200000 // 10 minutes timeout
+            timeout: 1800000 // 30 minutes timeout
         });
     }
 
