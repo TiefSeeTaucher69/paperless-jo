@@ -4,29 +4,30 @@ title: "[Bug]: "
 labels: ["bug", "triage"]
 assignees:
   - ""
+projects: ["clusterzx/paperless-ai"]
 
 body:
   - type: markdown
     attributes:
       value: |
         ## 🐞 Bug Report
-        Please provide all necessary details to help us investigate and fix the issue.
+        Thanks for taking the time to report an issue! Please fill in as much detail as possible to help us investigate and fix it.
 
   - type: input
     id: bug_summary
     attributes:
-      label: "🔍 Describe the Bug"
-      description: "A clear and concise summary of the issue."
-      placeholder: "Bug description..."
+      label: "🔍 Bug Summary"
+      description: "Briefly describe the issue."
+      placeholder: "A short, clear summary of the bug..."
     validations:
       required: true
 
   - type: textarea
     id: bug_description
     attributes:
-      label: "📖 Detailed Description"
-      description: "Explain what the issue is in detail."
-      placeholder: "Provide more context about the bug, including any observations."
+      label: "📖 Description"
+      description: "Provide a detailed description of the bug, including any observations."
+      placeholder: "Explain the issue, expected behavior, and actual behavior."
     validations:
       required: true
 
@@ -34,7 +35,7 @@ body:
     id: reproduction_steps
     attributes:
       label: "🔄 Steps to Reproduce"
-      description: "Steps to reproduce the behavior."
+      description: "How do we reproduce the issue?"
       placeholder: |
         1. Go to '...'
         2. Click on '...'
@@ -47,18 +48,36 @@ body:
     id: expected_behavior
     attributes:
       label: "✅ Expected Behavior"
-      description: "Describe what you expected to happen."
-      placeholder: "Expected result..."
+      description: "What should happen instead?"
+      placeholder: "Describe the expected outcome."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: "❌ Actual Behavior"
+      description: "What actually happens?"
+      placeholder: "Describe what you see instead of the expected behavior."
     validations:
       required: true
 
   - type: textarea
     id: docker_logs
     attributes:
-      label: "📜 Docker Container Logs"
-      description: "Provide relevant logs from the Docker container. If possible, include only the error message."
-      placeholder: "Paste logs or error messages here..."
-      
+      label: "📜 Docker Logs"
+      description: "Upload Docker logs (or paste relevant log snippets)."
+      placeholder: "Drag & drop files here or paste logs."
+      render: shell
+
+  - type: textarea
+    id: paperless_ngx_logs
+    attributes:
+      label: "📜 Paperless-ngx Logs"
+      description: "Upload Paperless-ngx logs (or paste relevant log snippets)."
+      placeholder: "Drag & drop files here or paste logs."
+      render: shell
+
   - type: textarea
     id: screenshots
     attributes:
@@ -71,7 +90,6 @@ body:
     attributes:
       label: "🖥️ Desktop Environment"
       description: "Select the OS where the issue occurs."
-      multiple: false
       options:
         - "Windows"
         - "macOS"
@@ -84,21 +102,26 @@ body:
     id: os_version
     attributes:
       label: "💻 OS Version"
-      description: "Enter the version of your operating system."
+      description: "Enter your OS version."
       placeholder: "e.g. Windows 11, macOS 14, Ubuntu 22.04"
 
-  - type: input
+  - type: dropdown
     id: browser
     attributes:
       label: "🌐 Browser"
       description: "Which browser are you using (if applicable)?"
-      placeholder: "e.g. Chrome, Safari, Firefox"
+      options:
+        - "Chrome"
+        - "Safari"
+        - "Firefox"
+        - "Edge"
+        - "Other"
 
   - type: input
     id: browser_version
     attributes:
       label: "🔢 Browser Version"
-      description: "Enter the version of your browser (if applicable)."
+      description: "Enter your browser version (if applicable)."
       placeholder: "e.g. 120.0.6099.199"
 
   - type: dropdown
@@ -106,7 +129,6 @@ body:
     attributes:
       label: "📱 Smartphone (if applicable)"
       description: "Select the affected mobile device."
-      multiple: false
       options:
         - "Not applicable"
         - "iPhone"
@@ -136,6 +158,8 @@ body:
       description: "Select any that apply."
       options:
         - label: "I have checked existing issues and this is not a duplicate"
+          required: true
+        - label: "I am sure that this problem is affecting everyone, not only me"
           required: true
         - label: "I have tried debugging this issue on my own"
         - label: "I can provide a fix and submit a PR"
