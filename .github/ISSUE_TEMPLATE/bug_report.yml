@@ -81,8 +81,8 @@ body:
   - type: textarea
     id: screenshots
     attributes:
-      label: "🖼️ Screenshots"
-      description: "Attach screenshots if applicable."
+      label: "🖼️ Screenshots of your settings page"
+      description: "Attach screenshots of your currenct paperless-ai settings."
       placeholder: "Drag & drop images or provide a link."
 
   - type: dropdown
@@ -124,25 +124,6 @@ body:
       description: "Enter your browser version (if applicable)."
       placeholder: "e.g. 120.0.6099.199"
 
-  - type: dropdown
-    id: smartphone_device
-    attributes:
-      label: "📱 Smartphone (if applicable)"
-      description: "Select the affected mobile device."
-      options:
-        - "Not applicable"
-        - "iPhone"
-        - "iPad"
-        - "Samsung"
-        - "Pixel"
-        - "Other"
-
-  - type: input
-    id: smartphone_os
-    attributes:
-      label: "📱 Mobile OS Version"
-      description: "Specify the OS version of your smartphone (if applicable)."
-      placeholder: "e.g. iOS 17.1, Android 14"
 
   - type: input
     id: smartphone_browser
