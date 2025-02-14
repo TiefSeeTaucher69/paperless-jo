@@ -70,7 +70,7 @@ class OpenAIService {
     return text.slice(0, Math.floor(text.length * ratio));
   }
 
-  async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id) {
+  async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id, customPrompt = null) {
     const cachePath = path.join('./public/images', `${id}.png`);
     try {
       this.initialize();
@@ -150,6 +150,11 @@ class OpenAIService {
         systemPrompt = `
         Take these tags and try to match one or more to the document content.\n\n
         ` + config.specialPromptPreDefinedTags;
+      }
+
+      if (customPrompt) {
+        console.log('[DEBUG] Replace system prompt with custom prompt via WebHook');
+        systemPrompt = customPrompt + '\n\n' + config.mustHavePrompt;
       }
       
       // Rest of the function remains the same

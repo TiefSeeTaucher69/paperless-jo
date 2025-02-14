@@ -454,7 +454,7 @@ try {
   }
 });
 
-async function processDocument(doc, existingTags, existingCorrespondentList, ownUserId) {
+async function processDocument(doc, existingTags, existingCorrespondentList, ownUserId, customPrompt = null) {
   const isProcessed = await documentModel.isDocumentProcessed(doc.id);
   if (isProcessed) return null;
   await documentModel.setProcessingStatus(doc.id, doc.title, 'processing');
@@ -481,7 +481,12 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
   }
 
   const aiService = AIServiceFactory.getService();
-  const analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id);
+  let analysis;
+  if(customPrompt) {
+    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id, customPrompt);
+  }else{
+    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id);
+  }
   console.log('Repsonse from AI service:', analysis);
   if (analysis.error) {
     throw new Error(`[ERROR] Document analysis failed: ${analysis.error}`);
@@ -812,7 +817,11 @@ function extractDocumentId(url) {
   throw new Error('Could not extract document ID from URL');
 }
 
-async function processQueue() {
+async function processQueue(customPrompt) {
+  if (customPrompt) {
+    console.log('Using custom prompt:', customPrompt);
+  }
+
   if (isProcessing || documentQueue.length === 0) return;
   
   isProcessing = true;
@@ -840,7 +849,7 @@ async function processQueue() {
       const doc = documentQueue.shift();
       
       try {
-        const result = await processDocument(doc, existingTags, existingCorrespondentList, ownUserId);
+        const result = await processDocument(doc, existingTags, existingCorrespondentList, ownUserId, customPrompt);
         if (!result) continue;
 
         const { analysis, originalData } = result;
@@ -863,8 +872,8 @@ async function processQueue() {
 
 router.post('/api/webhook/document', async (req, res) => {
   try {
-    const { url } = req.body;
-    
+    const { url, prompt } = req.body;
+    let usePrompt = false;
     if (!url) {
       return res.status(400).send('Missing document URL');
     }
@@ -878,7 +887,14 @@ router.post('/api/webhook/document', async (req, res) => {
       }
       
       documentQueue.push(document);
-      processQueue();
+      if (prompt) {
+        usePrompt = true;
+        console.log('[DEBUG] Using custom prompt:', prompt);
+        processQueue(prompt);
+      } else {
+        processQueue();
+      }
+      
       
       res.status(202).send({
         message: 'Document accepted for processing',
