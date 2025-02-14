@@ -16,6 +16,7 @@
     --stats-box-highlight: #f0f9ff;
     --token-usage-bg: #eff6ff;
     --stats-border: #e2e8f0;
+    --image-invert: 0;
 }
 
 :root[data-theme="dark"] {
@@ -35,6 +36,13 @@
     --stats-box-highlight: #172554;
     --token-usage-bg: #1e3a8a;
     --stats-border: #1e40af;
+    --image-invert: 1;
+}
+
+/* Add image inversion for dark mode */
+[data-theme="dark"] img:not(.no-invert) {
+    filter: invert(var(--image-invert));
+    transition: filter 0.3s ease;
 }
 
 [data-theme="dark"] select,
@@ -66,6 +74,164 @@
     background-color: var(--stats-box-highlight);
     color: var(--text-primary);
     border-color: var(--stats-border);
+}
+
+
+/* Base chart container sizing */
+.material-card .chart-container {
+    position: relative;
+    width: 100%;
+    margin: 0 auto;
+}
+
+/* Token Distribution chart sizing */
+.material-card:has(#tokenDistribution) .chart-container {
+    height: 200px;
+    color: white;
+}
+
+/* Document Types chart sizing */
+.material-card:has(#documentTypes) .chart-container {
+    height: 200px;  /* Reduced height for donut chart */
+    max-width: 200px; /* Constrain width to maintain circular shape */
+    margin: 0 auto; /* Center the chart */
+}
+
+/* Task Runner Dark Mode Styles */
+/* Processing/Idle Container Background Override */
+[data-theme="dark"] .bg-white.rounded-xl.border.border-gray-100 {
+    background-color: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+[data-theme="dark"] .material-card {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+}
+
+/* Dark mode compatibility */
+[data-theme="dark"] .material-card .chart-container {
+    background-color: var(--card-bg);
+}
+
+[data-theme="dark"] .material-card:has(#documentTypes) .chart-container {
+    background-color: var(--card-bg);
+}
+
+/* Active Processing Card */
+[data-theme="dark"] #processingContainer .border-blue-100 {
+    border-color: #1e3a8a; /* Darker blue for spinner border */
+}
+
+[data-theme="dark"] #processingContainer .border-t-blue-500 {
+    border-top-color: var(--accent-primary);
+}
+
+[data-theme="dark"] #processingContainer .text-blue-500 {
+    color: var(--accent-primary);
+}
+
+[data-theme="dark"] #processingContainer .bg-blue-50 {
+    background-color: #1e3a8a !important;
+}
+
+[data-theme="dark"] #processingContainer .bg-gray-50,
+[data-theme="dark"] .bg-gray-50 {
+    background-color: var(--bg-secondary) !important;
+}
+
+[data-theme="dark"] #processingContainer .text-blue-700 {
+    color: #93c5fd;
+}
+
+[data-theme="dark"] #processingContainer .text-gray-600 {
+    color: var(--text-secondary);
+}
+
+/* Idle Container */
+[data-theme="dark"] #idleContainer .bg-gray-50 {
+    background-color: var(--bg-secondary);
+}
+
+[data-theme="dark"] #idleContainer .text-gray-400 {
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] #idleContainer .text-gray-600 {
+    color: var(--text-secondary);
+}
+
+/* Stats Grid */
+[data-theme="dark"] .grid-cols-2 .bg-white {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .text-gray-500 {
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] .text-gray-600 {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .font-bold {
+    color: var(--text-primary);
+}
+
+/* Status Last Updated */
+[data-theme="dark"] #statusLastUpdated.text-gray-500 {
+    color: var(--text-muted);
+}
+
+/* Chart Containers */
+[data-theme="dark"] .chart-container {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+}
+
+/* Add hover states for cards in dark mode */
+[data-theme="dark"] .material-card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
+                0 4px 6px -2px rgba(0, 0, 0, 0.15);
+}
+
+/* Ensure text remains visible in dark mode */
+[data-theme="dark"] .card-title {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .font-medium {
+    color: var(--text-primary);
+}
+
+/* Dark mode styles for tag spans */
+[data-theme="dark"] .inline-flex[data-tag-id] {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .inline-flex[data-tag-id] button {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .inline-flex[data-tag-id] button:hover {
+    color: var(--text-primary);
+}
+
+/* Style for tags with blue background */
+[data-theme="dark"] .bg-blue-100.inline-flex[data-tag-id] {
+    background-color: var(--token-usage-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--stats-border);
+}
+
+[data-theme="dark"] .bg-blue-100.inline-flex[data-tag-id] button {
+    color: var(--accent-primary);
+}
+
+[data-theme="dark"] .bg-blue-100.inline-flex[data-tag-id] button:hover {
+    color: var(--accent-secondary);
 }
 
 /* Base Styles */

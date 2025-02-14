@@ -468,7 +468,7 @@ module.exports = {
         SELECT 
           substr(title, 1, instr(title || ' ', ' ') - 1) as type,
           COUNT(*) as count
-        FROM original_documents
+        FROM processed_documents
         GROUP BY type
       `).all();
     } catch (error) {

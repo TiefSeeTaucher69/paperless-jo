@@ -13,6 +13,64 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.2/tippy.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <style>
+        /* Content Header Dark Mode Fixes */
+        .content-header {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        [data-theme="light"] .content-header {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .content-header {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        /* API Key Container Dark Mode Fixes */
+        [data-theme="light"] #apiKeyContainer {
+            background-color: var(--stat-box-bg);
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] #apiKeyContainer {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        /* Regenerate Button Dark Mode Fixes */
+        [data-theme="dark"] #regenerateBtn {
+            background-color: var(--accent-primary);
+        }
+
+        [data-theme="dark"] #regenerateBtn:hover {
+            background-color: var(--accent-secondary);
+        }
+
+        /* Copy Notification Dark Mode Fixes */
+        [data-theme="light"] #copyNotification {
+            background-color: #ecfdf5;
+            border-color: #d1fae5;
+            color: #065f46;
+        }
+
+        [data-theme="dark"] #copyNotification {
+            background-color: rgba(6, 95, 70, 0.2);
+            border-color: rgba(6, 95, 70, 0.3);
+            color: #34d399;
+        }
+
+        /* Content Title Dark Mode Fixes */
+        [data-theme="light"] .content-title {
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .content-title {
+            color: var(--text-primary);
+        }
+    </style>
 </head>
 <body class="h-full">
     
@@ -29,7 +87,7 @@
         <div id="sidebarOverlay" class="sidebar-overlay"></div>
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="/favicon.ico" alt="Paperless AI Logo" style="height: 60px;">
+                <img src="/favicon.ico" class="no-invert" alt="Paperless AI Logo" style="height: 60px;">
                 <h1 class="brand-title">Paperless-AI<small style="display: block;"><%= version %></small></h1>
             </div>
 

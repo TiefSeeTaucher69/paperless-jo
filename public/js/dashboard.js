@@ -8,7 +8,7 @@ class ThemeManager {
     initialize() {
         const savedTheme = localStorage.getItem('theme') || 'light';
         this.setTheme(savedTheme);
-        
+        console.log('Theme initialized');
         this.themeToggle.addEventListener('click', () => this.toggleTheme());
     }
 
@@ -24,6 +24,7 @@ class ThemeManager {
         const currentTheme = document.documentElement.getAttribute('data-theme');
         const newTheme = currentTheme === 'light' ? 'dark' : 'light';
         this.setTheme(newTheme);
+        console.log('Theme toggled to: ' + newTheme);
     }
 }
 

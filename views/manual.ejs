@@ -22,7 +22,7 @@
         <div id="sidebarOverlay" class="sidebar-overlay"></div>
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="/favicon.ico" alt="Paperless AI Logo" style="height: 60px;">
+                <img src="/favicon.ico" class="no-invert" alt="Paperless AI Logo" style="height: 60px;">
                 <h1 class="brand-title">Paperless-AI<small style="display: block;"><%= version %></small></h1>
             </div>
 
@@ -532,28 +532,9 @@ async function updateDocumentTags() {
     }
 }
 
-// Theme Toggle Functions
-function setupThemeToggle() {
-    const themeToggle = document.getElementById('themeToggle');
-    if (themeToggle) {
-        themeToggle.addEventListener('click', () => {
-            const html = document.documentElement;
-            const isDark = html.getAttribute('data-theme') === 'dark';
-            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            localStorage.setItem('theme', isDark ? 'light' : 'dark');
-        });
-
-        // Set initial theme
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-    }
-}
 
 // Initialize everything when the DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Setup theme toggle
-    setupThemeToggle();
-
     // Document selection
     document.getElementById('documentSelect').addEventListener('change', (e) => {
         handleDocumentSelection(e.target.value);

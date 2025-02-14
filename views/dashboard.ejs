@@ -22,7 +22,7 @@
         <div id="sidebarOverlay" class="sidebar-overlay"></div>
         <aside class="sidebar">
             <div class="sidebar-header">
-                    <img src="/favicon.ico" alt="Paperless AI Logo" style="height: 60px;">
+                    <img src="/favicon.ico" class="no-invert" alt="Paperless AI Logo" style="height: 60px;">
                 <h1 class="brand-title">Paperless-AI<small style="display: block;"><%= version %></small></h1>
             </div>
 
@@ -371,22 +371,50 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             // Current Workload
-            
+            // Function to get the current theme
+            function getCurrentTheme() {
+                //return current theme (light or dark)
+                return localStorage.getItem('theme') || 'light';
+            }
+
+            // Function to get the axis text color based on the current theme
+            function getAxisTextColor() {
+                return getCurrentTheme() === 'dark' ? '#ffffff' : '#000000';
+            }
 
             // Token Distribution Chart
             new Chart(document.getElementById('tokenDistribution'), {
                 type: 'bar',
                 data: {
-                labels: <%- JSON.stringify(paperless_data.tokenDistribution.map(dist => dist.range)) %>,
-                datasets: [{
-                    label: 'Number of Documents',
-                    data: <%- JSON.stringify(paperless_data.tokenDistribution.map(dist => dist.count)) %>,
-                    backgroundColor: '#60a5fa'
-                }]
+                    labels: <%- JSON.stringify(paperless_data.tokenDistribution.map(dist => dist.range)) %>,
+                    datasets: [{
+                        label: 'Number of Documents',
+                        data: <%- JSON.stringify(paperless_data.tokenDistribution.map(dist => dist.count)) %>,
+                        backgroundColor: '#60a5fa'
+                    }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: true
+                    maintainAspectRatio: true,
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: getAxisTextColor() // Set X-axis text color based on theme
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                color: getAxisTextColor() // Set Y-axis text color based on theme
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: getAxisTextColor() // Set legend text color based on theme
+                            }
+                        }
+                    }
                 }
             });
 

@@ -10,6 +10,12 @@ class ThemeManager {
         this.setTheme(savedTheme);
         
         this.themeToggle.addEventListener('click', () => this.toggleTheme());
+        
+        // Add logo to no-invert class
+        const logo = document.querySelector('.sidebar-header img');
+        if (logo) {
+            logo.classList.add('no-invert');
+        }
     }
 
     setTheme(theme) {
