@@ -33,7 +33,7 @@ class OllamaService {
             if(!customPrompt) {
                 prompt = this._buildPrompt(content, existingTags, existingCorrespondentList);
             }else{
-                prompt = customPrompt;
+                prompt = customPrompt + "\n\n" + JSON.stringify(content);
                 console.log('[DEBUG] Ollama Service started with custom prompt');
             }
 
