@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const paperlessService = require('./paperlessService');
 const os = require('os');
+const { Console } = require('console');
 
 class OllamaService {
     constructor() {
@@ -14,7 +15,7 @@ class OllamaService {
         });
     }
 
-    async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id) {
+    async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id, customPrompt = null) {
         const cachePath = path.join('./public/images', `${id}.png`);
         try {
             const now = new Date();
@@ -28,7 +29,13 @@ class OllamaService {
             } catch (error) {
                 console.error('Error truncating content:', error);
             }
-            const prompt = this._buildPrompt(content, existingTags, existingCorrespondentList);
+            let prompt;
+            if(!customPrompt) {
+                prompt = this._buildPrompt(content, existingTags, existingCorrespondentList);
+            }else{
+                prompt = customPrompt;
+                console.log('[DEBUG] Ollama Service started with custom prompt');
+            }
 
 
             // Parse CUSTOM_FIELDS from environment variable

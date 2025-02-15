@@ -483,6 +483,7 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
   const aiService = AIServiceFactory.getService();
   let analysis;
   if(customPrompt) {
+    console.log('[DEBUG] Starting document analysis with custom prompt');
     analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id, customPrompt);
   }else{
     analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id);
@@ -890,9 +891,9 @@ router.post('/api/webhook/document', async (req, res) => {
       if (prompt) {
         usePrompt = true;
         console.log('[DEBUG] Using custom prompt:', prompt);
-        processQueue(prompt);
+        await processQueue(prompt);
       } else {
-        processQueue();
+        await processQueue();
       }
       
       
