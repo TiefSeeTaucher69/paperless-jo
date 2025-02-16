@@ -9,9 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send Discord Notification
-        uses: sarisia/actions-for-discord@v2
+        uses: sarisia/actions-status-discord@v1.15.3
         with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
           username: "GitHub Bot 🤖"
           avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
           content: |
