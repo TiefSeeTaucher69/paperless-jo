@@ -4,6 +4,7 @@ const setupService = require('../services/setupService.js');
 const paperlessService = require('../services/paperlessService.js');
 const openaiService = require('../services/openaiService.js');
 const ollamaService = require('../services/ollamaService.js');
+const azureService = require('../services/azureService.js');
 const documentModel = require('../models/document.js');
 const AIServiceFactory = require('../services/aiServiceFactory');
 const debugService = require('../services/debugService.js');
@@ -1235,7 +1236,11 @@ router.post('/setup', express.json(), async (req, res) => {
       activateTitle,
       activateCustomFields,
       customFields,
-      disableAutomaticProcessing
+      disableAutomaticProcessing,
+      azureEndpoint,
+      azureApiKey,
+      azureDeploymentName,
+      azureApiVersion
     } = req.body;
 
     console.log('Setup request received:', req.body);
@@ -1342,7 +1347,11 @@ router.post('/setup', express.json(), async (req, res) => {
       CUSTOM_FIELDS: processedCustomFields.length > 0 
         ? JSON.stringify({ custom_fields: processedCustomFields }) 
         : '{"custom_fields":[]}',
-      DISABLE_AUTOMATIC_PROCESSING: disableAutomaticProcessing ? 'yes' : 'no'
+      DISABLE_AUTOMATIC_PROCESSING: disableAutomaticProcessing ? 'yes' : 'no',
+      AZURE_ENDPOINT: azureEndpoint || '',
+      AZURE_API_KEY: azureApiKey || '',
+      AZURE_DEPLOYMENT_NAME: azureDeploymentName || '',
+      AZURE_API_VERSION: azureApiVersion || ''
     };
     
     // Validate AI provider config
@@ -1374,6 +1383,13 @@ router.post('/setup', express.json(), async (req, res) => {
       config.CUSTOM_BASE_URL = customBaseUrl;
       config.CUSTOM_API_KEY = customApiKey;
       config.CUSTOM_MODEL = customModel;
+    } else if (aiProvider === 'azure') {
+      const isAzureValid = await setupService.validateAzureConfig(azureApiKey, azureEndpoint, azureDeploymentName, azureApiVersion);
+      if (!isAzureValid) {
+        return res.status(400).json({
+          error: 'Azure connection failed. Please check URL, API Key, Deployment Name and API Version.'
+        });
+      }
     }
 
     // Save configuration

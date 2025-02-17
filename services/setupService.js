@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const { OpenAI } = require('openai');
 const config = require('../config/config');
+const AzureOpenAI = require('openai').AzureOpenAI;
 
 class SetupService {
   constructor() {
@@ -125,6 +126,31 @@ class SetupService {
     }
   }
 
+  async validateAzureConfig(apiKey, endpoint, deploymentName, apiVersion) {
+    console.log('Endpoint: ', endpoint);
+    if (config.CONFIGURED === false) {
+      try {
+        const openai = new AzureOpenAI({ apiKey: apiKey,
+                endpoint: endpoint,
+                deploymentName: deploymentName,
+                apiVersion: apiVersion });
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: "Test" }],
+        });
+        const now = new Date();
+        const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+        console.log(`[DEBUG] [${timestamp}] OpenAI request sent`);
+        return response.choices && response.choices.length > 0;
+      } catch (error) {
+        console.error('OpenAI validation error:', error.message);
+        return false;
+      }
+    }else{
+      return true;
+    }
+  }
+
   async validateConfig(config) {
     // Validate Paperless config
     const paperlessApiUrl = config.PAPERLESS_API_URL.replace(/\/api/g, '');
@@ -139,6 +165,8 @@ class SetupService {
 
     // Validate AI provider config
     const aiProvider = config.AI_PROVIDER || 'openai';
+
+    console.log('AI provider:', aiProvider);
     
     if (aiProvider === 'openai') {
       const openaiValid = await this.validateOpenAIConfig(config.OPENAI_API_KEY);
@@ -162,7 +190,18 @@ class SetupService {
       if (!customValid) {
         throw new Error('Invalid Custom AI configuration');
       }
+    } else if (aiProvider === 'azure') {
+      const azureValid = await this.validateAzureConfig(
+        config.AZURE_API_KEY,
+        config.AZURE_ENDPOINT,
+        config.AZURE_DEPLOYMENT_NAME,
+        config.AZURE_API_VERSION
+      );
+      if (!azureValid) {
+        throw new Error('Invalid Azure configuration');
+      }
     }
+
 
     return true;
   }
