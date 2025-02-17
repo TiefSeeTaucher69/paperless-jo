@@ -1077,6 +1077,9 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
     } else if (process.env.AI_PROVIDER === 'custom') {
       const analyzeDocument = await customService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
+    } else if (process.env.AI_PROVIDER === 'azure') {
+      const analyzeDocument = await azureService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      return res.json(analyzeDocument);
     } else {
       return res.status(500).json({ error: 'AI provider not configured' });
     }

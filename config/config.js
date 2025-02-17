@@ -48,6 +48,12 @@ module.exports = {
     apiKey: process.env.CUSTOM_API_KEY || '',
     model: process.env.CUSTOM_MODEL || ''
   },
+  azure: {
+    apiKey: process.env.AZURE_API_KEY || '',
+    endpoint: process.env.AZURE_ENDPOINT || '',
+    deploymentName: process.env.AZURE_DEPLOYMENT_NAME || '',
+    apiVersion: process.env.AZURE_API_VERSION || '2023-05-15'
+  },
   customFields: process.env.CUSTOM_FIELDS || '',
   aiProvider: process.env.AI_PROVIDER || 'openai',
   scanInterval: process.env.SCAN_INTERVAL || '*/30 * * * *',

@@ -114,7 +114,7 @@ class OpenAIService {
 
       let systemPrompt = '';
       let promptTags = '';
-      const model = process.env.OPENAI_MODEL;
+      const model = process.env.AZURE_DEPLOYMENT_NAME;
       
       // Parse CUSTOM_FIELDS from environment variable
       let customFieldsObj;
