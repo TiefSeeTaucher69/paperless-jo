@@ -898,17 +898,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (result.restart) {
                         let countdown = 5;
+                        Swal.fire({
+                            title: 'Restarting...',
+                            text: `Application will restart in ${countdown} seconds`,
+                            icon: 'info',
+                            showConfirmButton: false,
+                            allowOutsideClick: false
+                        });
+
                         const countdownInterval = setInterval(() => {
-                            Swal.fire({
-                                title: 'Restarting...',
-                                text: `Application will restart in ${countdown} seconds`,
-                                icon: 'info',
-                                showConfirmButton: false
-                            });
                             countdown--;
                             if (countdown < 0) {
                                 clearInterval(countdownInterval);
                                 window.location.href = '/dashboard';
+                            } else {
+                                Swal.update({
+                                    text: `Application will restart in ${countdown} seconds`
+                                });
                             }
                         }, 1000);
                     }
