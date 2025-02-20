@@ -21,7 +21,7 @@ const limitFunctions = {
 
 console.log('Loaded environment variables:', {
   PAPERLESS_API_URL: process.env.PAPERLESS_API_URL,
-  PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN,
+  PAPERLESS_API_TOKEN: '******',
   LIMIT_FUNCTIONS: limitFunctions
 });
 
