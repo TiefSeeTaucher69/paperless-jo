@@ -1238,7 +1238,16 @@ router.post('/setup', express.json(), async (req, res) => {
       disableAutomaticProcessing
     } = req.body;
 
-    console.log('Setup request received:', req.body);
+    // Log setup request with sensitive data redacted
+    const sensitiveKeys = ['paperlessToken', 'openaiKey', 'customApiKey', 'password', 'confirmPassword'];
+    const redactedBody = Object.fromEntries(
+      Object.entries(req.body).map(([key, value]) => [
+      key,
+      sensitiveKeys.includes(key) ? '******' : value
+      ])
+    );
+    console.log('Setup request received:', redactedBody);
+
 
     // Initialize paperlessService with the new credentials
     const paperlessApiUrl = paperlessUrl + '/api';
