@@ -213,44 +213,79 @@ class SetupService {
       return this.configured;
     }
 
-    try {
-      // Check data directory and .env file
-      const dataDir = path.dirname(this.envPath);
-      try {
-        await fs.access(dataDir, fs.constants.F_OK);
-      } catch (err) {
-        console.log('Creating data directory...');
-        await fs.mkdir(dataDir, { recursive: true });
-      }
+    const maxAttempts = 60; // 5 minutes = 300 seconds, attempting every 5 seconds = 60 attempts
+    const delayBetweenAttempts = 5000; // 5 seconds in milliseconds
+    let attempts = 0;
 
-      // Check .env file
+    // First check if .env exists and if PAPERLESS_API_URL is set
+    try {
+      // Check if .env file exists
       try {
         await fs.access(this.envPath, fs.constants.F_OK);
       } catch (err) {
+        console.log('No .env file found. Starting setup process...');
         this.configured = false;
         return false;
       }
 
+      // Load and check for PAPERLESS_API_URL
       const config = await this.loadConfig();
-      if (!config) {
-        this.configured = false;
-        return false;
-      }
-
-      try {
-        await this.validateConfig(config);
-        this.configured = true;
-        return true;
-      } catch (error) {
-        console.error('Configuration validation failed:', error.message);
+      if (!config || !config.PAPERLESS_API_URL) {
+        console.log('PAPERLESS_API_URL not set. Starting setup process...');
         this.configured = false;
         return false;
       }
     } catch (error) {
-      console.error('Error checking configuration:', error.message);
+      console.error('Error checking initial configuration:', error.message);
       this.configured = false;
       return false;
     }
+
+    const attemptConfiguration = async () => {
+      try {
+        // Check data directory and create if needed
+        const dataDir = path.dirname(this.envPath);
+        try {
+          await fs.access(dataDir, fs.constants.F_OK);
+        } catch (err) {
+          console.log('Creating data directory...');
+          await fs.mkdir(dataDir, { recursive: true });
+        }
+
+        // Load and validate full configuration
+        const config = await this.loadConfig();
+        if (!config) {
+          throw new Error('Failed to load configuration');
+        }
+
+        await this.validateConfig(config);
+        this.configured = true;
+        return true;
+      } catch (error) {
+        console.error('Configuration attempt failed:', error.message);
+        throw error;
+      }
+    };
+
+    // Only enter retry loop if we have PAPERLESS_API_URL set
+    while (attempts < maxAttempts) {
+      try {
+        const result = await attemptConfiguration();
+        return result;
+      } catch (error) {
+        attempts++;
+        if (attempts === maxAttempts) {
+          console.error('Max configuration attempts reached. Final error:', error.message);
+          this.configured = false;
+          return false;
+        }
+        console.log(`Retrying configuration (attempt ${attempts}/${maxAttempts}) in 5 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
+      }
+    }
+
+    this.configured = false;
+    return false;
   }
 }
 

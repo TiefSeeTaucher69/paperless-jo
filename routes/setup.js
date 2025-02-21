@@ -409,7 +409,7 @@ router.post('/api/scan/now', async (req, res) => {
 try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
-      console.log('Setup not completed. Visit http://your-ip-or-host.com:3000/setup to complete setup.');
+      console.log(`Setup not completed. Visit http://your-machine-ip:${process.env.PAPERLESS_PORT || 3000}/setup to complete setup.`);
       return;
     }
 
@@ -830,7 +830,7 @@ async function processQueue(customPrompt) {
   try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
-      console.log('Setup not completed. Visit http://your-ip-or-host.com:3000/setup to complete setup.');
+      console.log(`Setup not completed. Visit http://your-machine-ip:${process.env.PAPERLESS_PORT || 3000}/setup to complete setup.`);
       return;
     }
 
