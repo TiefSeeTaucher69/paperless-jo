@@ -199,7 +199,7 @@ class AzureOpenAIService {
         throw new Error('Invalid API response structure');
       }
       
-      console.log(`[DEBUG] [${timestamp}] OpenAI request sent`);
+      console.log(`[DEBUG] [${timestamp}] Azure request sent`);
       console.log(`[DEBUG] [${timestamp}] Total tokens: ${response.usage.total_tokens}`);
       
       const usage = response.usage;

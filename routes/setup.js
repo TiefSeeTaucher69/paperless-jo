@@ -1127,6 +1127,15 @@ router.post('/manual/playground', express.json(), async (req, res) => {
         analyzeDocument.metrics.totalTokens
       )
       return res.json(analyzeDocument);
+    } else if (process.env.AI_PROVIDER === 'azure') {
+      const analyzeDocument = await azureService.analyzePlayground(content, prompt);
+      await documentModel.addOpenAIMetrics(
+        documentId, 
+        analyzeDocument.metrics.promptTokens,
+        analyzeDocument.metrics.completionTokens,
+        analyzeDocument.metrics.totalTokens
+      )
+      return res.json(analyzeDocument);
     } else {
       return res.status(500).json({ error: 'AI provider not configured' });
     }
