@@ -144,7 +144,16 @@ class ChatService {
           messages: chatData.messages,
           stream: true
         };
-      } else {
+      } else if (process.env.AI_PROVIDER === 'azure') {
+        apiUrl = `${process.env.AZURE_ENDPOINT}/openai/deployments/${process.env.AZURE_DEPLOYMENT_NAME}/chat/completions?api-version=${process.env.AZURE_API_VERSION}`;
+        headers['api-key'] = process.env.AZURE_API_KEY;
+        //headers['Content-Type'] = 'application/json';
+        requestBody = {
+          model: process.env.AZURE_DEPLOYMENT_NAME,
+          messages: chatData.messages,
+          stream: true
+        };
+      }else {
         throw new Error('AI Provider not configured');
       }
 
