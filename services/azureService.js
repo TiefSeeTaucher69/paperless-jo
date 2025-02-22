@@ -6,7 +6,7 @@ const paperlessService = require('./paperlessService');
 const fs = require('fs').promises;
 const path = require('path');
 
-class OpenAIService {
+class AzureOpenAIService {
   constructor() {
     this.client = null;
     this.tokenizer = null;
@@ -362,4 +362,4 @@ class OpenAIService {
   }
 }
 
-module.exports = new OpenAIService();
+module.exports = new AzureOpenAIService();
