@@ -459,11 +459,13 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
   if (isProcessed) return null;
   await documentModel.setProcessingStatus(doc.id, doc.title, 'processing');
 
-  const documentOwnerId = await paperlessService.getOwnerOfDocument(doc.id);
-  if (documentOwnerId !== ownUserId && documentOwnerId !== null) {
-    console.log(`[DEBUG] Document belongs to: ${documentOwnerId}, skipping analysis`);
-    console.log(`[DEBUG] Document ${doc.id} not owned by user, skipping analysis`);
+  const documentEditable = await paperlessService.getPermissionOfDocument(doc.id);
+  if (!documentEditable) {
+    console.log(`[DEBUG] Document belongs to: ${documentEditable}, skipping analysis`);
+    console.log(`[DEBUG] Document ${doc.id} Not Editable by Paper-Ai User, skipping analysis`);
     return null;
+  }else {
+    console.log(`[DEBUG] Document ${doc.id} rights for AI User - processed`);
   }
 
   let [content, originalData] = await Promise.all([
