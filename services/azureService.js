@@ -87,7 +87,7 @@ class AzureOpenAIService {
       const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
       
       if (!this.client) {
-        throw new Error('OpenAI client not initialized');
+        throw new Error('AzureOpenAI client not initialized');
       }
 
       // Handle thumbnail caching
