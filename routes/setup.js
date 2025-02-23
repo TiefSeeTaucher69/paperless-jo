@@ -410,7 +410,7 @@ router.post('/api/scan/now', async (req, res) => {
 try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
-      console.log('Setup not completed. Visit http://your-ip-or-host.com:3000/setup to complete setup.');
+      console.log(`Setup not completed. Visit http://your-machine-ip:${process.env.PAPERLESS_PORT || 3000}/setup to complete setup.`);
       return;
     }
 
@@ -460,11 +460,13 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
   if (isProcessed) return null;
   await documentModel.setProcessingStatus(doc.id, doc.title, 'processing');
 
-  const documentOwnerId = await paperlessService.getOwnerOfDocument(doc.id);
-  if (documentOwnerId !== ownUserId && documentOwnerId !== null) {
-    console.log(`[DEBUG] Document belongs to: ${documentOwnerId}, skipping analysis`);
-    console.log(`[DEBUG] Document ${doc.id} not owned by user, skipping analysis`);
+  const documentEditable = await paperlessService.getPermissionOfDocument(doc.id);
+  if (!documentEditable) {
+    console.log(`[DEBUG] Document belongs to: ${documentEditable}, skipping analysis`);
+    console.log(`[DEBUG] Document ${doc.id} Not Editable by Paper-Ai User, skipping analysis`);
     return null;
+  }else {
+    console.log(`[DEBUG] Document ${doc.id} rights for AI User - processed`);
   }
 
   let [content, originalData] = await Promise.all([
@@ -835,7 +837,7 @@ async function processQueue(customPrompt) {
   try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
-      console.log('Setup not completed. Visit http://your-ip-or-host.com:3000/setup to complete setup.');
+      console.log(`Setup not completed. Visit http://your-machine-ip:${process.env.PAPERLESS_PORT || 3000}/setup to complete setup.`);
       return;
     }
 
@@ -1263,7 +1265,16 @@ router.post('/setup', express.json(), async (req, res) => {
       azureApiVersion
     } = req.body;
 
-    console.log('Setup request received:', req.body);
+    // Log setup request with sensitive data redacted
+    const sensitiveKeys = ['paperlessToken', 'openaiKey', 'customApiKey', 'password', 'confirmPassword'];
+    const redactedBody = Object.fromEntries(
+      Object.entries(req.body).map(([key, value]) => [
+      key,
+      sensitiveKeys.includes(key) ? '******' : value
+      ])
+    );
+    console.log('Setup request received:', redactedBody);
+
 
     // Initialize paperlessService with the new credentials
     const paperlessApiUrl = paperlessUrl + '/api';

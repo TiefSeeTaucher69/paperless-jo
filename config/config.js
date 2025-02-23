@@ -21,12 +21,12 @@ const limitFunctions = {
 
 console.log('Loaded environment variables:', {
   PAPERLESS_API_URL: process.env.PAPERLESS_API_URL,
-  PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN,
+  PAPERLESS_API_TOKEN: '******',
   LIMIT_FUNCTIONS: limitFunctions
 });
 
 module.exports = {
-  PAPERLESS_AI_VERSION: '2.6.5',
+  PAPERLESS_AI_VERSION: '2.6.6',
   CONFIGURED: false,
   disableAutomaticProcessing: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,

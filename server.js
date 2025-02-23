@@ -371,8 +371,7 @@ async function startScanning() {
   try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
-      console.log('Setup not completed. Visit http://your-ip-or-host.com:3000/setup to complete setup.');
-      return;
+      console.log(`Setup not completed. Visit http://your-machine-ip:${process.env.PAPERLESS_PORT || 3000}/setup to complete setup.`);
     }
 
     const userId = await paperlessService.getOwnUserID();
@@ -439,10 +438,11 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start server
 async function startServer() {
+  const port = process.env.PAPERLESS_PORT || 3000;
   try {
     await initializeDataDirectory();
-    app.listen(3000, () => {
-      console.log('Server running on port 3000');
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
       startScanning();
     });
   } catch (error) {
