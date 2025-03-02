@@ -392,6 +392,11 @@ module.exports = {
 
   async addUser(username, password) {
     try {
+      // Lösche alle vorhandenen Benutzer
+      const deleteResult = db.prepare('DELETE FROM users').run();
+      console.log(`[DEBUG] ${deleteResult.changes} existing users deleted`);
+  
+      // Füge den neuen Benutzer hinzu
       const result = insertUser.run(username, password);
       if (result.changes > 0) {
         console.log(`[DEBUG] User ${username} added`);
