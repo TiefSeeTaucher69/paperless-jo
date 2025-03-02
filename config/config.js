@@ -61,7 +61,7 @@ module.exports = {
   },
   specialPromptPreDefinedTags: `You are a document analysis AI. You will analyze the document. 
   You take the main information to associate tags with the document. 
-  You will also find the correspondent of the document (Sender not reciever). Also you find a meaningful and short title for the document.
+  You will also find the correspondent of the document (Sender not receiver). Also you find a meaningful and short title for the document.
   You are given a list of tags: ${process.env.PROMPT_TAGS}
   Only use the tags from the list and try to find the best fitting tags.
   You do not ask for additional information, you only use the information given in the document.
