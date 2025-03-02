@@ -83,6 +83,7 @@ class FormManager {
         const openaiSettings = document.getElementById('openaiSettings');
         const ollamaSettings = document.getElementById('ollamaSettings');
         const customSettings = document.getElementById('customSettings');
+        const azureSettings = document.getElementById('azureSettings');
         
         // Get all required fields
         const openaiKey = document.getElementById('openaiKey');
@@ -91,11 +92,16 @@ class FormManager {
         const customBaseUrl = document.getElementById('customBaseUrl');
         const customApiKey = document.getElementById('customApiKey');
         const customModel = document.getElementById('customModel');
+        const azureApiKey = document.getElementById('azureApiKey');
+        const azureEndpoint = document.getElementById('azureEndpoint');
+        const azureModel = document.getElementById('azureApiVersion');
+        const azureDeployment = document.getElementById('azureDeploymentName');
         
         // Hide all settings first
         openaiSettings.style.display = 'none';
         ollamaSettings.style.display = 'none';
         customSettings.style.display = 'none';
+        azureSettings.style.display = 'none';
         
         // Reset all required attributes
         openaiKey.required = false;
@@ -104,6 +110,10 @@ class FormManager {
         customBaseUrl.required = false;
         customApiKey.required = false;
         customModel.required = false;
+        azureApiKey.required = false;
+        azureEndpoint.required = false;
+        azureModel.required = false;
+        azureDeployment.required = false;
         
         // Show and set required fields based on selected provider
         switch (provider) {
@@ -121,6 +131,13 @@ class FormManager {
                 customBaseUrl.required = true;
                 customApiKey.required = true;
                 customModel.required = true;
+                break;
+            case 'azure':
+                azureSettings.style.display = 'block';
+                azureApiKey.required = true;
+                azureEndpoint.required = true;
+                azureModel.required = true;
+                azureDeployment.required = true;
                 break;
         }
     }

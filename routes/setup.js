@@ -4,6 +4,7 @@ const setupService = require('../services/setupService.js');
 const paperlessService = require('../services/paperlessService.js');
 const openaiService = require('../services/openaiService.js');
 const ollamaService = require('../services/ollamaService.js');
+const azureService = require('../services/azureService.js');
 const documentModel = require('../models/document.js');
 const AIServiceFactory = require('../services/aiServiceFactory');
 const debugService = require('../services/debugService.js');
@@ -685,6 +686,10 @@ router.get('/setup', async (req, res) => {
       PROCESS_ONLY_NEW_DOCUMENTS: process.env.PROCESS_ONLY_NEW_DOCUMENTS || 'yes',
       USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no',
       DISABLE_AUTOMATIC_PROCESSING: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
+      AZURE_ENDPOINT: process.env.AZURE_ENDPOINT|| '',
+      AZURE_API_KEY: process.env.AZURE_API_KEY || '',
+      AZURE_DEPLOYMENT_NAME: process.env.AZURE_DEPLOYMENT_NAME || '',
+      AZURE_API_VERSION: process.env.AZURE_API_VERSION || ''
     };
 
     // Check both configuration and users
@@ -993,7 +998,11 @@ router.get('/settings', async (req, res) => {
     USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no',
     CUSTOM_API_KEY: process.env.CUSTOM_API_KEY || '',
     CUSTOM_BASE_URL: process.env.CUSTOM_BASE_URL || '',
-    CUSTOM_MODEL: process.env.CUSTOM_MODEL || ''
+    CUSTOM_MODEL: process.env.CUSTOM_MODEL || '',
+    AZURE_ENDPOINT: process.env.AZURE_ENDPOINT|| '',
+    AZURE_API_KEY: process.env.AZURE_API_KEY || '',
+    AZURE_DEPLOYMENT_NAME: process.env.AZURE_DEPLOYMENT_NAME || '',
+    AZURE_API_VERSION: process.env.AZURE_API_VERSION || ''
   };
   
   if (isConfigured) {
@@ -1078,6 +1087,9 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
     } else if (process.env.AI_PROVIDER === 'custom') {
       const analyzeDocument = await customService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
+    } else if (process.env.AI_PROVIDER === 'azure') {
+      const analyzeDocument = await azureService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      return res.json(analyzeDocument);
     } else {
       return res.status(500).json({ error: 'AI provider not configured' });
     }
@@ -1110,6 +1122,15 @@ router.post('/manual/playground', express.json(), async (req, res) => {
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'custom') {
       const analyzeDocument = await customService.analyzePlayground(content, prompt);
+      await documentModel.addOpenAIMetrics(
+        documentId, 
+        analyzeDocument.metrics.promptTokens,
+        analyzeDocument.metrics.completionTokens,
+        analyzeDocument.metrics.totalTokens
+      )
+      return res.json(analyzeDocument);
+    } else if (process.env.AI_PROVIDER === 'azure') {
+      const analyzeDocument = await azureService.analyzePlayground(content, prompt);
       await documentModel.addOpenAIMetrics(
         documentId, 
         analyzeDocument.metrics.promptTokens,
@@ -1237,7 +1258,11 @@ router.post('/setup', express.json(), async (req, res) => {
       activateTitle,
       activateCustomFields,
       customFields,
-      disableAutomaticProcessing
+      disableAutomaticProcessing,
+      azureEndpoint,
+      azureApiKey,
+      azureDeploymentName,
+      azureApiVersion
     } = req.body;
 
     // Log setup request with sensitive data redacted
@@ -1353,7 +1378,11 @@ router.post('/setup', express.json(), async (req, res) => {
       CUSTOM_FIELDS: processedCustomFields.length > 0 
         ? JSON.stringify({ custom_fields: processedCustomFields }) 
         : '{"custom_fields":[]}',
-      DISABLE_AUTOMATIC_PROCESSING: disableAutomaticProcessing ? 'yes' : 'no'
+      DISABLE_AUTOMATIC_PROCESSING: disableAutomaticProcessing ? 'yes' : 'no',
+      AZURE_ENDPOINT: azureEndpoint || '',
+      AZURE_API_KEY: azureApiKey || '',
+      AZURE_DEPLOYMENT_NAME: azureDeploymentName || '',
+      AZURE_API_VERSION: azureApiVersion || ''
     };
     
     // Validate AI provider config
@@ -1385,6 +1414,13 @@ router.post('/setup', express.json(), async (req, res) => {
       config.CUSTOM_BASE_URL = customBaseUrl;
       config.CUSTOM_API_KEY = customApiKey;
       config.CUSTOM_MODEL = customModel;
+    } else if (aiProvider === 'azure') {
+      const isAzureValid = await setupService.validateAzureConfig(azureApiKey, azureEndpoint, azureDeploymentName, azureApiVersion);
+      if (!isAzureValid) {
+        return res.status(400).json({
+          error: 'Azure connection failed. Please check URL, API Key, Deployment Name and API Version.'
+        });
+      }
     }
 
     // Save configuration
@@ -1440,7 +1476,11 @@ router.post('/settings', express.json(), async (req, res) => {
       activateTitle,
       activateCustomFields,
       customFields,  // Added parameter
-      disableAutomaticProcessing
+      disableAutomaticProcessing,
+      azureEndpoint,
+      azureApiKey,
+      azureDeploymentName,
+      azureApiVersion
     } = req.body;
 
     //replace equal char in system prompt
@@ -1477,7 +1517,11 @@ router.post('/settings', express.json(), async (req, res) => {
       ACTIVATE_TITLE: process.env.ACTIVATE_TITLE || 'yes',
       ACTIVATE_CUSTOM_FIELDS: process.env.ACTIVATE_CUSTOM_FIELDS || 'yes',
       CUSTOM_FIELDS: process.env.CUSTOM_FIELDS || '{"custom_fields":[]}',  // Added default
-      DISABLE_AUTOMATIC_PROCESSING: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no'
+      DISABLE_AUTOMATIC_PROCESSING: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
+      AZURE_ENDPOINT: process.env.AZURE_ENDPOINT|| '',
+      AZURE_API_KEY: process.env.AZURE_API_KEY || '',
+      AZURE_DEPLOYMENT_NAME: process.env.AZURE_DEPLOYMENT_NAME || '',
+      AZURE_API_VERSION: process.env.AZURE_API_VERSION || ''
     };
 
     // Process custom fields
@@ -1556,6 +1600,17 @@ router.post('/settings', express.json(), async (req, res) => {
         }
         if (ollamaUrl) updatedConfig.OLLAMA_API_URL = ollamaUrl;
         if (ollamaModel) updatedConfig.OLLAMA_MODEL = ollamaModel;
+      } else if (aiProvider === 'azure') {
+        const isAzureValid = await setupService.validateAzureConfig(azureApiKey, azureEndpoint, azureDeploymentName, azureApiVersion);
+        if (!isAzureValid) {
+          return res.status(400).json({
+            error: 'Azure connection failed. Please check URL, API Key, Deployment Name and API Version.'
+          });
+        }
+        if(azureEndpoint) updatedConfig.AZURE_ENDPOINT = azureEndpoint;
+        if(azureApiKey) updatedConfig.AZURE_API_KEY = azureApiKey;
+        if(azureDeploymentName) updatedConfig.AZURE_DEPLOYMENT_NAME = azureDeploymentName;
+        if(azureApiVersion) updatedConfig.AZURE_API_VERSION = azureApiVersion;
       }
     }
 
