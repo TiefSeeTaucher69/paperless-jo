@@ -6,6 +6,46 @@ const paperlessService = require('./paperlessService');
 const os = require('os');
 const { Console } = require('console');
 
+// JSON schema for document analysis output
+const documentAnalysisSchema = {
+    type: "object",
+    properties: {
+        title: {
+            type: "string",
+            description: "The title of the document"
+        },
+        correspondent: {
+            type: "string",
+            description: "The correspondent (sender) of the document"
+        },
+        tags: {
+            type: "array",
+            items: {
+                type: "string"
+            },
+            description: "List of tags associated with the document"
+        },
+        document_type: {
+            type: "string",
+            description: "Type of document (e.g., Invoice, Contract, etc.)"
+        },
+        document_date: {
+            type: "string",
+            description: "Date of the document in YYYY-MM-DD format"
+        },
+        language: {
+            type: "string",
+            description: "Language of the document (e.g., en, de, es)"
+        },
+        custom_fields: {
+            type: "object",
+            additionalProperties: true,
+            description: "Custom fields with their values"
+        }
+    },
+    required: ["title", "correspondent", "tags", "document_type", "document_date", "language"]
+};
+
 class OllamaService {
     constructor() {
         this.apiUrl = config.ollama.apiUrl;
@@ -129,59 +169,84 @@ class OllamaService {
             systemPromptFinal = systemPromptFinal.replace('%CUSTOMFIELDS%', customFieldsStr);
 
             const numCtx = calculateNumCtx(promptTokenCount, expectedResponseTokens);
+            // Create a modified schema with custom fields if needed
+            let analysisSchema = { ...documentAnalysisSchema };
+            
             const response = await this.client.post(`${this.apiUrl}/api/generate`, {
                 model: this.model,
                 prompt: prompt,
                 system: systemPromptFinal,
-                    stream: false,
-                    options: {
-                        temperature: 0.7, 
-                        top_p: 0.9,
-                        repeat_penalty: 1.1,
-                        top_k: 7,
-                        num_predict: 256,
-                        num_ctx: numCtx 
-                    }
-                    //   options: {
-                        //     temperature: 0.3,        // Moderately low for balance between consistency and creativity
-                        //     top_p: 0.7,             // More reasonable value to allow sufficient token diversity
-                        //     repeat_penalty: 1.1,     // Return to original value as 1.2 might be too restrictive
-                        //     top_k: 40,              // Increased from 10 to allow more token options
-                        //     num_predict: 512,        // Reduced from 1024 to a more stable value
-                        //     num_ctx: 2048           // Reduced context window for more stable processing
-                        // }
-                    });
-                    
-                    if (!response.data || !response.data.response) {
-                        throw new Error('Invalid response from Ollama API');
-                    }
-                    
-                    const parsedResponse = this._parseResponse(response.data.response);
-                    //console.log('Ollama response:', parsedResponse);
-                    if(parsedResponse.tags.length === 0 && parsedResponse.correspondent === null) {
-                        console.warn('No tags or correspondent found in response from Ollama for Document.\nPlease review your prompt or switch to OpenAI for better results.',);
-                    }
-                    
-                    await this.writePromptToFile(prompt + "\n\n" + JSON.stringify(parsedResponse));
-                    // Match the OpenAI service response structure
-                    return {
-                        document: parsedResponse,
-                        metrics: {
-                            promptTokens: 0,  // Ollama doesn't provide token metrics
-                            completionTokens: 0,
-                            totalTokens: 0
-                        },
-                        truncated: false
+                stream: false,
+                format: analysisSchema,
+                options: {
+                    temperature: 0.7, 
+                    top_p: 0.9,
+                    repeat_penalty: 1.1,
+                    top_k: 7,
+                    num_predict: 256,
+                    num_ctx: numCtx 
+                }
+                //   options: {
+                    //     temperature: 0.3,        // Moderately low for balance between consistency and creativity
+                    //     top_p: 0.7,             // More reasonable value to allow sufficient token diversity
+                    //     repeat_penalty: 1.1,     // Return to original value as 1.2 might be too restrictive
+                    //     top_k: 40,              // Increased from 10 to allow more token options
+                    //     num_predict: 512,        // Reduced from 1024 to a more stable value
+                    //     num_ctx: 2048           // Reduced context window for more stable processing
+                    // }
+                });
+                
+                if (!response.data) {
+                    throw new Error('Invalid response from Ollama API');
+                }
+                
+                let parsedResponse;
+                // Check if we got a structured response or need to parse from text
+                if (response.data.response && typeof response.data.response === 'object') {
+                    // We got a structured response directly
+                    console.log('Using structured output response');
+                    parsedResponse = {
+                        tags: Array.isArray(response.data.response.tags) ? response.data.response.tags : [],
+                        correspondent: response.data.response.correspondent || null,
+                        title: response.data.response.title || null,
+                        document_date: response.data.response.document_date || null,
+                        document_type: response.data.response.document_type || null,
+                        language: response.data.response.language || null,
+                        custom_fields: response.data.response.custom_fields || null
                     };
-                    
-                } catch (error) {
-                    console.error('Error analyzing document with Ollama:', error);
-                    return {
-                        document: { tags: [], correspondent: null },
-                        metrics: null,
-                error: error.message
-            };
-        }
+                } else if (response.data.response) {
+                    // Fall back to parsing from text response
+                    console.log('Falling back to text response parsing');
+                    parsedResponse = this._parseResponse(response.data.response);
+                } else {
+                    throw new Error('No response data from Ollama API');
+                }
+                
+                //console.log('Ollama response:', parsedResponse);
+                if(parsedResponse.tags.length === 0 && parsedResponse.correspondent === null) {
+                    console.warn('No tags or correspondent found in response from Ollama for Document.\nPlease review your prompt or switch to OpenAI for better results.',);
+                }
+                
+                await this.writePromptToFile(prompt + "\n\n" + JSON.stringify(parsedResponse));
+                // Match the OpenAI service response structure
+                return {
+                    document: parsedResponse,
+                    metrics: {
+                        promptTokens: 0,  // Ollama doesn't provide token metrics
+                        completionTokens: 0,
+                        totalTokens: 0
+                    },
+                    truncated: false
+                };
+                
+            } catch (error) {
+                console.error('Error analyzing document with Ollama:', error);
+                return {
+                    document: { tags: [], correspondent: null },
+                    metrics: null,
+                    error: error.message
+                };
+            }
     }
     
     
@@ -241,47 +306,87 @@ class OllamaService {
             
             const numCtx = calculateNumCtx(promptTokenCount, expectedResponseTokens);
           
+          // Create a simplified schema for playground analysis
+          const playgroundSchema = {
+              type: "object",
+              properties: {
+                  title: { type: "string" },
+                  correspondent: { type: "string" },
+                  tags: { 
+                      type: "array", 
+                      items: { type: "string" } 
+                  },
+                  document_type: { type: "string" },
+                  document_date: { type: "string" },
+                  language: { type: "string" }
+              },
+              required: ["title", "correspondent", "tags", "document_type", "document_date", "language"]
+          };
+          
+          const systemPrompt = `
+            You are a document analyzer. Your task is to analyze documents and extract relevant information. You do not ask back questions. 
+            YOU MUSTNOT: Ask for additional information or clarification, or ask questions about the document, or ask for additional context.
+            YOU MUSTNOT: Return a response without the desired JSON format.
+            YOU MUST: Analyze the document content and extract the following information into this structured JSON format and only this format!:         {
+            "title": "xxxxx",
+            "correspondent": "xxxxxxxx",
+            "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
+            "document_type": "Invoice/Contract/...",
+            "document_date": "YYYY-MM-DD",
+            "language": "en/de/es/..."
+            }
+            ALWAYS USE THE INFORMATION TO FILL OUT THE JSON OBJECT. DO NOT ASK BACK QUESTIONS.
+            `;
+            
             const response = await this.client.post(`${this.apiUrl}/api/generate`, {
                 model: this.model,
                 prompt: prompt + "\n\n" + JSON.stringify(content),
-                system: `
-                You are a document analyzer. Your task is to analyze documents and extract relevant information. You do not ask back questions. 
-                YOU MUSTNOT: Ask for additional information or clarification, or ask questions about the document, or ask for additional context.
-                YOU MUSTNOT: Return a response without the desired JSON format.
-                YOU MUST: Analyze the document content and extract the following information into this structured JSON format and only this format!:         {
-                "title": "xxxxx",
-                "correspondent": "xxxxxxxx",
-                "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
-                "document_type": "Invoice/Contract/...",
-                "document_date": "YYYY-MM-DD",
-                "language": "en/de/es/..."
-                }
-                ALWAYS USE THE INFORMATION TO FILL OUT THE JSON OBJECT. DO NOT ASK BACK QUESTIONS.
-                `,
+                system: systemPrompt,
                 stream: false,
+                format: playgroundSchema,
                 options: {
-                  temperature: 0.7, 
-                  top_p: 0.9,
-                  repeat_penalty: 1.1,
-                  top_k: 7,
-                  num_predict: 256,
-                  num_ctx: numCtx
+                    temperature: 0.7, 
+                    top_p: 0.9,
+                    repeat_penalty: 1.1,
+                    top_k: 7,
+                    num_predict: 256,
+                    num_ctx: numCtx
                 }
-              //   options: {
-              //     temperature: 0.3,        // Moderately low for balance between consistency and creativity
-              //     top_p: 0.7,             // More reasonable value to allow sufficient token diversity
-              //     repeat_penalty: 1.1,     // Return to original value as 1.2 might be too restrictive
-              //     top_k: 40,              // Increased from 10 to allow more token options
-              //     num_predict: 512,        // Reduced from 1024 to a more stable value
-              //     num_ctx: 2048           // Reduced context window for more stable processing
-              // }
+                //   options: {
+                //     temperature: 0.3,        // Moderately low for balance between consistency and creativity
+                //     top_p: 0.7,             // More reasonable value to allow sufficient token diversity
+                //     repeat_penalty: 1.1,     // Return to original value as 1.2 might be too restrictive
+                //     top_k: 40,              // Increased from 10 to allow more token options
+                //     num_predict: 512,        // Reduced from 1024 to a more stable value
+                //     num_ctx: 2048           // Reduced context window for more stable processing
+                // }
             });
 
-            if (!response.data || !response.data.response) {
+            if (!response.data) {
                 throw new Error('Invalid response from Ollama API');
             }
 
-            const parsedResponse = this._parseResponse(response.data.response);
+            let parsedResponse;
+            // Check if we got a structured response or need to parse from text
+            if (response.data.response && typeof response.data.response === 'object') {
+                // We got a structured response directly
+                console.log('Using structured output response for playground');
+                parsedResponse = {
+                    tags: Array.isArray(response.data.response.tags) ? response.data.response.tags : [],
+                    correspondent: response.data.response.correspondent || null,
+                    title: response.data.response.title || null,
+                    document_date: response.data.response.document_date || null,
+                    document_type: response.data.response.document_type || null,
+                    language: response.data.response.language || null
+                };
+            } else if (response.data.response) {
+                // Fall back to parsing from text response
+                console.log('Falling back to text response parsing for playground');
+                parsedResponse = this._parseResponse(response.data.response);
+            } else {
+                throw new Error('No response data from Ollama API');
+            }
+            
             //console.log('Ollama response:', parsedResponse);
             if(parsedResponse.tags.length === 0 && parsedResponse.correspondent === null) {
                 console.warn('No tags or correspondent found in response from Ollama for Document.\nPlease review your prompt or switch to OpenAI for better results.',);
