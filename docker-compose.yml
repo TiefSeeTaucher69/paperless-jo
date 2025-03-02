@@ -1,20 +1,21 @@
-version: '3.8'
-
 services:
   paperless-ai:
-    build: .
+    image: clusterzx/paperless-ai
     container_name: paperless-ai
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-    ports:
-      - "3000:3000"
-    environment:
-      - CONFIG_PATH=/app/config
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    network_mode: bridge
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges=true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - PAPERLESS_AI_PORT=${PAPERLESS_AI_PORT:-3000}
+    ports:
+      - "3000:${PAPERLESS_AI_PORT:-3000}"
+    volumes:
+      - paperless-ai_data:/app/data
+
+volumes:
+  paperless-ai_data:

@@ -1,102 +1,50 @@
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/t/clusterzx/paperless-ai) ![Docker Pulls](https://img.shields.io/docker/pulls/clusterzx/paperless-ai) ![GitHub User's stars](https://img.shields.io/github/stars/clusterzx) ![GitHub License](https://img.shields.io/github/license/clusterzx/paperless-ai?cacheSeconds=1)
 
+# Paperless-AI
 
+An automated document analyzer for Paperless-ngx using OpenAI API, Ollama and all OpenAI API compatible Services to automatically analyze and tag your documents. \
+It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query your documents with AI, a modern and intuitive Webinterface. \
+\
+**Following Services and OpenAI API compatible services have been successfully tested:**
+- Ollama
+- OpenAI
+- DeepSeek.ai
+- OpenRouter.ai
+- Perplexity.ai
+- Together.ai
+- VLLM
+- LiteLLM
+- Fastchat
+- Gemini (Google)
+- ... and there are possibly many more
 
-# Paperless-Ai
+![PPAI_SHOWCASE3](https://github.com/user-attachments/assets/1fc9f470-6e45-43e0-a212-b8fa6225e8dd)
 
-An automated document analyzer for Paperless-ngx using OpenAI API and Ollama (Mistral, llama, phi 3, gemma 2) to automatically analyze and tag your documents.
 
 ## Features
 
-- 🔍 Automatic document scanning in Paperless-ngx
+### Automated Document Management
+- **Automatic Scanning**: Identifies and processes new documents within Paperless-ngx.
+- **AI-Powered Analysis**: Leverages OpenAI API and Ollama (Mistral, Llama, Phi 3, Gemma 2) for precise document analysis.
+- **Metadata Assignment**: Automatically assigns titles, tags, document_type and correspondent details.
 
-- 🤖 AI-powered document analysis using OpenAI API and Ollama (Mistral, llama, phi 3, gemma 2)
-- 🏷️ Automatic title, tag and correspondent assignment
-  - 🏷️ Predefine what documents will be processed based on existing tags (optional).
-- 🔨 (NEW) Manual mode to do analysing by hand with help of AI.
-- 🚀 Easy setup through web interface
-- 📊 Document processing dashboard
-- 🔄 Automatic restart and health monitoring
-- 🛡️ Error handling and graceful shutdown
-- 🐳 Docker support with health checks
+### Advanced Customization Options
+- **Predefined Processing Rules**: Specify which documents to process based on existing tags. *(Optional)* 🆕
+- **Selective Tag Assignment**: Use only selected tags for processing. *(Disables the prompt dialog)* 🆕
+- **Custom Tagging**: Assign a specific tag (of your choice) to AI-processed documents for easy identification. 🆕
 
-## Prerequisites
+### Manual Mode
+- **AI-Assisted Analysis**: Manually analyze documents with AI support in a modern web interface. *(Accessible via the `/manual` endpoint)* 🆕
 
-- Docker and Docker Compose
-- Access to a Paperless-ngx installation
-- OpenAI API key or your own Ollama instance with your chosen model running and reachable.
-- Basic understanding of cron syntax (for scan interval configuration)
+### Interactive Chat Functionality
+- **Document Querying**: Ask questions about your documents and receive accurate, AI-generated answers. 🆕
 
 ## Installation
 
-### You can use Docker Pull for easy setup:
-```bash
-docker pull clusterzx/paperless-ai
-```
+Visit the Wiki for installation:\
+[Click here for Installation](https://github.com/clusterzx/paperless-ai/wiki/2.-Installation)
+-------------------------------------------
 
-### Or you can do it manually by yourself:
-
-1. Clone the repository:
-```bash
-git clone https://github.com/clusterzx/paperless-ai.git
-cd paperless-ai
-```
-
-2. Start the container:
-```bash
-docker-compose up -d
-```
-
-3. Open your browser and navigate to:
-```
-http://localhost:3000
-```
-
-4. Complete the setup by providing:
-- Paperless-ngx API URL
-- Paperless-ngx API Token
-- Ollama API Data
-    OR
-- OpenAI API Key
-- Scan interval (default: every 30 minutes)
-
-## How it Works
-
-1. **Document Discovery**
-   - Periodically scans Paperless-ngx for new documents
-   - Tracks processed documents in a local SQLite database
-
-2. **AI Analysis**
-   - Sends document content to OpenAI API or Ollama for analysis
-   - Extracts relevant tags and correspondent information
-   - Uses GPT-4o-mini or your custom Ollama model for accurate document understanding
-
-3. **Automatic Organization**
-   - Creates new tags if they don't exist
-   - Creates new correspondents if they don't exist
-   - Updates documents with analyzed information
-   - Marks documents as processed to avoid duplicate analysis
-
-## NEW! Manual Mode
-You can now manually analyze your files by hand with the help of AI in a beautiful Webinterface.
-Reachable via the ```/manual``` endpoint from the webinterface.
-
-Preview:
-![Preview Image](./preview.png)
-
-## Configuration Options
-
-The application can be configured through environment variables:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| PAPERLESS_API_URL | URL to your Paperless-ngx API | - |
-| PAPERLESS_API_TOKEN | API Token from Paperless-ngx | - |
-| AI_PROVIDER | AI provider to use (openai or ollama) | openai |
-| OPENAI_API_KEY | Your OpenAI API key (required if using openai) | - |
-| OLLAMA_API_URL | URL to your Ollama instance | http://localhost:11434 |
-| OLLAMA_MODEL | Ollama model to use (e.g. llama2, mistral) | llama2 |
-| SCAN_INTERVAL | Cron expression for scan interval | */30 * * * * |
 
 ## Docker Support
 
@@ -107,81 +55,6 @@ The application comes with full Docker support:
 - Volume persistence for database
 - Resource management
 - Graceful shutdown handling
-
-### Docker Commands
-
-```bash
-# Start the container
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Restart container
-docker-compose restart
-
-# Stop container
-docker-compose down
-
-# Rebuild and start
-docker-compose up -d --build
-```
-
-## Health Checks
-
-The application provides a health check endpoint at `/health` that returns:
-
-```json
-# Healthy system
-{
-  "status": "healthy"
-}
-
-# System not configured
-{
-  "status": "not_configured",
-  "message": "Application setup not completed"
-}
-
-# Database error
-{
-  "status": "database_error",
-  "message": "Database check failed"
-}
-```
-
-## Debug Interface
-
-The application includes a debug interface accessible via `/debug` that helps administrators monitor and troubleshoot the system's data:
-
-- 🔍 View all system tags
-- 📄 Inspect processed documents
-- 👥 Review correspondent information
-
-### Accessing the Debug Interface
-
-1. Navigate to:
-```
-http://your-instance:3000/debug
-```
-
-2. The interface provides:
-   - Interactive dropdown to select data category
-   - Tree view visualization of JSON responses
-   - Color-coded data representation
-   - Collapsible/expandable data nodes
-
-### Available Debug Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| /debug/tags | Lists all tags in the system |
-| /debug/documents | Shows processed document information |
-| /debug/correspondents | Displays correspondent data |
-
-### Health Check Integration
-
-The debug interface also integrates with the health check system, showing a configuration warning if the system is not properly set up.
 
 ## Development
 
@@ -205,14 +78,6 @@ npm run test
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## Security Considerations
-
-- Store API keys securely
-- Restrict container access
-- Monitor API usage
-- Regularly update dependencies
-- Back up your database
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -231,11 +96,11 @@ If you encounter any issues or have questions:
 2. Create a new issue if yours isn't already listed
 3. Provide detailed information about your setup and the problem
 
-## Roadmap
+## Roadmap (DONE)
 
 - [x] Support for custom AI models
 - [x] Support for multiple language analysis
 - [x] Advanced tag matching algorithms
-- [ ] Custom rules for document processing
-- [ ] Enhanced web interface with statistics
+- [x] Custom rules for document processing
+- [x] Enhanced web interface with statistics
 

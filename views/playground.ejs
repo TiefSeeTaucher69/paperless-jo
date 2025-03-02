@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paperless-AI Documents</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <script src="js/playground-analyzer.js"></script>
+    <style>
+        .document-card {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        #messageArea {
+            position: relative;
+            z-index: 100;
+        }
+        
+        #analysisPrompt {
+            font-family: monospace;
+        }
+        
+        #analyzeButton:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        /* Add smooth transition for image inversion */
+        img {
+            transition: filter 0.3s ease;
+        }
+        </style>
+</head>
+<body class="h-full">
+    <button id="themeToggle" class="theme-toggle">
+        <i class="fas fa-moon dark:fas fa-sun"></i>
+    </button>
+
+    <div class="layout-container">
+        <button id="mobileMenuButton" class="mobile-menu-button">
+            <i class="fas fa-bars"></i>
+        </button>
+        <!-- Sidebar -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="/favicon.ico" alt="Paperless AI Logo" style="height: 60px;">
+                <h1 class="brand-title">Paperless-AI<small style="display: block;"><%= version %></small></h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <a href="/dashboard" class="sidebar-link">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/manual" class="sidebar-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Manual</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/chat" class="sidebar-link">
+                            <i class="fa-solid fa-comment"></i>
+                            <span>Chat</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/playground" class="sidebar-link active">
+                            <i class="fa-solid fa-flask-vial"></i>
+                            <span>Playground</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/history" class="sidebar-link">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <span>History</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/settings" class="sidebar-link">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/logout" class="sidebar-link">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            <span>Logout</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+         
+        <main class="main-content p-6">
+            <div class="mb-6">
+                <h1 class="text-2xl font-bold mb-4">Documents</h1>
+                <!-- Analysis Section -->
+                <div class="material-card mb-8">
+                    <h2 class="card-title">Document Analysis</h2>
+                    <div class="space-y-4">
+                        <textarea 
+                            id="analysisPrompt"
+                            placeholder="Enter your analysis prompt here..."
+                            style="width: 100%; min-height: 128px; padding: 1rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; resize: vertical;"
+                        ></textarea>
+                        <button 
+                            id="analyzeButton"
+                            style="padding: 0.75rem 1.5rem; background: var(--accent-primary); color: white; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s ease;"
+                            onmouseover="this.style.background = 'var(--accent-secondary)'"
+                            onmouseout="this.style.background = 'var(--accent-primary)'"
+                        >
+                            Analyze Documents
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Documents Grid -->
+                <div class="grid grid-cols-4 gap-4" id="documentsGrid">
+                    <% documents.forEach(function(doc) { %>
+                        <div class="material-card document-card" data-document-id="<%= doc.id %>">
+                            <!-- Thumbnail -->
+                            <div class="relative aspect-[3/4]">
+                                <img src="/thumb/<%= doc.id %>" 
+                                     alt="<%= doc.title %>"
+                                     class="w-full h-full object-cover rounded-lg">
+                                
+                                <!-- Tags Container -->
+                                <div class="tags-container absolute top-2 left-2 right-2 flex flex-wrap gap-1">
+                                    <% doc.tags.forEach(function(tagId) { %>
+                                    <span class="tag text-xs px-2 py-1 rounded-full bg-blue-600 text-white" 
+                                          data-tag-id="<%= tagId %>">
+                                        <%= tagNames[tagId] || 'Unknown' %>
+                                    </span>
+                                    <% }); %>
+                                </div>
+                            </div>
+                            
+                            <!-- Document Info -->
+                            <div class="document-info">
+                                <div class="info-container">
+                                    <div class="info-item">
+                                        <h3 class="text-sm font-medium truncate"><%= doc.title %></h3>
+                                    </div>
+                                    
+                                    <div class="info-item">
+                                        <p class="text-xs text-gray-600 truncate">
+                                            <%= new Date(doc.created).toLocaleDateString() %>
+                                        </p>
+                                        
+                                        <% if (doc.correspondent) { %>
+                                        <p class="text-xs text-gray-600 truncate" 
+                                           data-correspondent="<%= doc.correspondent %>">
+                                            <%= correspondentNames[doc.correspondent] || 'Unknown' %>
+                                        </p>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal -->
+    <div id="detailsModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title"></h3>
+                <button class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-content">
+                <div class="modal-loader hidden">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Loading...
+                </div>
+                <div class="modal-data"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuButton = document.getElementById('mobileMenuButton');
+            const sidebar = document.querySelector('.sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            function toggleSidebar(event) {
+                event.stopPropagation(); // Prevent event bubbling
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+                
+                // Toggle menu icon
+                const icon = mobileMenuButton.querySelector('i');
+                if (sidebar.classList.contains('active')) {
+                    icon.classList.remove('fa-bars');
+                    icon.classList.add('fa-times');
+                } else {
+                    icon.classList.remove('fa-times');
+                    icon.classList.add('fa-bars');
+                }
+            }
+
+            // Toggle sidebar when clicking the menu button
+            mobileMenuButton.addEventListener('click', toggleSidebar);
+
+            // Close sidebar when clicking the overlay
+            sidebarOverlay.addEventListener('click', function(event) {
+                event.stopPropagation(); // Prevent event bubbling
+                if (sidebar.classList.contains('active')) {
+                    toggleSidebar(event);
+                }
+            });
+
+            // Prevent sidebar from closing when clicking inside it
+            sidebar.addEventListener('click', function(event) {
+                event.stopPropagation();
+            });
+
+            // Handle links in sidebar
+            const sidebarLinks = document.querySelectorAll('.sidebar-link');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', function(event) {
+                    // Don't prevent default here to allow navigation
+                    event.stopPropagation();
+                });
+            });
+        });
+    </script>
+    <script src="js/playground.js"></script>
+</body>
+</html>

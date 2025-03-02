@@ -14,3 +14,14 @@ data_*/
 preview.png
 .env.bak
 data bak/
+.env*
+docker-compose-dev.yml
+public/images/
+delete_all.js
+documents.json
+apitest.js
+logs/*
+api_correspondent.js
+prompt.txt
+api_test_r1.js
+openrouter.js
