@@ -26,11 +26,7 @@ console.log('Loaded environment variables:', {
 });
 
 module.exports = {
-<<<<<<< Updated upstream
-  PAPERLESS_AI_VERSION: '2.7.0',
-=======
   PAPERLESS_AI_VERSION: '2.7.2',
->>>>>>> Stashed changes
   CONFIGURED: false,
   disableAutomaticProcessing: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
@@ -51,6 +47,12 @@ module.exports = {
     apiUrl: process.env.CUSTOM_BASE_URL || '',
     apiKey: process.env.CUSTOM_API_KEY || '',
     model: process.env.CUSTOM_MODEL || ''
+  },
+  azure: {
+    apiKey: process.env.AZURE_API_KEY || '',
+    endpoint: process.env.AZURE_ENDPOINT || '',
+    deploymentName: process.env.AZURE_DEPLOYMENT_NAME || '',
+    apiVersion: process.env.AZURE_API_VERSION || '2023-05-15'
   },
   customFields: process.env.CUSTOM_FIELDS || '',
   aiProvider: process.env.AI_PROVIDER || 'openai',

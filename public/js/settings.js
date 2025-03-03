@@ -82,7 +82,8 @@ class FormManager {
         const openaiSettings = document.getElementById('openaiSettings');
         const ollamaSettings = document.getElementById('ollamaSettings');
         const customSettings = document.getElementById('customSettings');
-        
+        const azureSettings = document.getElementById('azureSettings');
+
         // Get all provider-specific fields
         const openaiKey = document.getElementById('openaiKey');
         const ollamaUrl = document.getElementById('ollamaUrl');
@@ -90,11 +91,16 @@ class FormManager {
         const customBaseUrl = document.getElementById('customBaseUrl');
         const customApiKey = document.getElementById('customApiKey');
         const customModel = document.getElementById('customModel');
+        const azureApiKey = document.getElementById('azureApiKey');
+        const azureEndpoint = document.getElementById('azureEndpoint');
+        const azureDeploymentName = document.getElementById('azureDeploymentName');
+        const azureApiVersion = document.getElementById('azureApiVersion');
         
         // Hide all settings sections first
         openaiSettings.classList.add('hidden');
         ollamaSettings.classList.add('hidden');
         customSettings.classList.add('hidden');
+        azureSettings.classList.add('hidden');
         
         // Reset all required fields
         openaiKey.required = false;
@@ -103,6 +109,10 @@ class FormManager {
         customBaseUrl.required = false;
         customApiKey.required = false;
         customModel.required = false;
+        azureApiKey.required = false;
+        azureEndpoint.required = false;
+        azureDeploymentName.required = false;
+        azureApiVersion.required = false;
         
         // Show and set required fields based on selected provider
         switch (provider) {
@@ -120,6 +130,13 @@ class FormManager {
                 customBaseUrl.required = true;
                 customApiKey.required = true;
                 customModel.required = true;
+                break;
+            case 'azure':
+                azureSettings.classList.remove('hidden');
+                azureApiKey.required = true;
+                azureEndpoint.required = true;
+                azureDeploymentName.required = true;
+                azureApiVersion.required = true;
                 break;
         }
     }

@@ -1,6 +1,7 @@
 const axios = require('axios');
 const OpenAI = require('openai');
 const config = require('../config/config');
+const AzureOpenAI = require('openai').AzureOpenAI;
 const emptyVar = null;
 
 class ManualService {
@@ -10,7 +11,14 @@ class ManualService {
                 apiKey: config.custom.apiKey,
                 baseUrl: config.custom.apiUrl
             });
-        }else{            
+        }else if (config.aiProvider === 'azure'){
+            this.openai = new AzureOpenAI({
+                    apiKey: config.azure.apiKey,
+                    endpoint: config.azure.endpoint,
+                    deploymentName: config.azure.deploymentName,
+                    apiVersion: config.azure.apiVersion
+                  });
+        } else {            
             this.openai = new OpenAI({ apiKey: config.openai.apiKey });
             this.ollama = axios.create({
             timeout: 300000
@@ -48,6 +56,8 @@ class ManualService {
             return this._analyzeOllama(content, existingTags);
         } else if (provider === 'custom') {
             return this._analyzeCustom(content, existingTags);
+        } else if (provider === 'azure') {
+            return this._analyzeAzure(content, existingTags);
         } else {            
             throw new Error('Invalid provider');
         }
@@ -67,6 +77,54 @@ class ManualService {
         await this.writePromptToFile(systemPrompt, content);
         const response = await this.openai.chat.completions.create({
             model: process.env.OPENAI_MODEL,
+            messages: [
+            {
+                role: "system",
+                content: systemPrompt
+            },
+            {
+                role: "user",
+                content: content
+            }
+            ],
+            temperature: 0.3,
+        });
+    
+        let jsonContent = response.choices[0].message.content;
+        jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        
+        const parsedResponse = JSON.parse(jsonContent);
+        try {
+            parsedResponse = JSON.parse(jsonContent);
+            fs.appendFile('./logs/response.txt', jsonContent, (err) => {
+                if (err) throw err;
+            });
+        } catch (error) {
+            console.error('Failed to parse JSON response:', error);
+            throw new Error('Invalid JSON response from API');
+        }
+        
+        if (!Array.isArray(parsedResponse.tags) || typeof parsedResponse.correspondent !== 'string') {
+            throw new Error('Invalid response structure');
+        }
+        
+        return parsedResponse;
+        } catch (error) {
+        console.error('Failed to analyze document with OpenAI:', error);
+        return { tags: [], correspondent: null };
+        }
+    }
+
+    async _analyzeAzure(content, existingTags) {
+        try {
+        const existingTagsList = existingTags
+            .map(tag => tag.name)
+            .join(', ');
+    
+        const systemPrompt = process.env.SYSTEM_PROMPT;
+        await this.writePromptToFile(systemPrompt, content);
+        const response = await this.openai.chat.completions.create({
+            model: process.env.AZURE_DEPLOYMENT_NAME,
             messages: [
             {
                 role: "system",

@@ -2,6 +2,7 @@ const config = require('../config/config');
 const openaiService = require('./openaiService');
 const ollamaService = require('./ollamaService');
 const customService = require('./customService');
+const azureService = require('./azureService');
 
 class AIServiceFactory {
   static getService() {
@@ -13,6 +14,8 @@ class AIServiceFactory {
         return openaiService;
       case 'custom':
         return customService;
+      case 'azure':
+        return azureService;
     }
   }
 }
