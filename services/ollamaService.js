@@ -23,37 +23,18 @@ class OllamaService {
         this.documentAnalysisSchema = {
             type: "object",
             properties: {
-                title: {
-                    type: "string",
-                    description: "The title of the document"
+                title: { type: "string" },
+                correspondent: { type: "string" },
+                tags: { 
+                    type: "array", 
+                    items: { type: "string" } 
                 },
-                correspondent: {
-                    type: "string",
-                    description: "The correspondent (sender) of the document"
-                },
-                tags: {
-                    type: "array",
-                    items: {
-                        type: "string"
-                    },
-                    description: "List of tags associated with the document"
-                },
-                document_type: {
-                    type: "string",
-                    description: "Type of document (e.g., Invoice, Contract, etc.)"
-                },
-                document_date: {
-                    type: "string",
-                    description: "Date of the document in YYYY-MM-DD format"
-                },
-                language: {
-                    type: "string",
-                    description: "Language of the document (e.g., en, de, es)"
-                },
+                document_type: { type: "string" },
+                document_date: { type: "string" },
+                language: { type: "string" },
                 custom_fields: {
                     type: "object",
-                    additionalProperties: true,
-                    description: "Custom fields with their values"
+                    additionalProperties: true
                 }
             },
             required: ["title", "correspondent", "tags", "document_type", "document_date", "language"]
