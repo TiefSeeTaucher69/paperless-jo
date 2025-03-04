@@ -22,6 +22,114 @@ const customService = require('../services/customService.js');
 const config = require('../config/config.js');
 require('dotenv').config({ path: '../data/.env' });
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Authentication
+ *     description: User authentication and authorization endpoints, including login, logout, and token management
+ *   - name: Documents
+ *     description: Document management and processing endpoints for interacting with Paperless-ngx documents
+ *   - name: History
+ *     description: Document processing history and tracking of AI-generated metadata
+ *   - name: Navigation
+ *     description: General navigation endpoints for the web interface
+ *   - name: System
+ *     description: System configuration, health checks, and administrative functions
+ *   - name: Chat
+ *     description: Document chat functionality for interacting with document content using AI
+ *   - name: Setup
+ *     description: Application setup and configuration endpoints
+ *   - name: Metadata
+ *     description: Endpoints for managing document metadata like tags, correspondents, and document types
+ */
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Error:
+ *       type: object
+ *       properties:
+ *         error:
+ *           type: string
+ *           description: Error message
+ *           example: Error resetting documents
+ *     User:
+ *       type: object
+ *       required:
+ *         - username
+ *         - password
+ *       properties:
+ *         username:
+ *           type: string
+ *           description: User's username
+ *         password:
+ *           type: string
+ *           format: password
+ *           description: User's password (will be hashed)
+ *     Document:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *           description: Document ID
+ *           example: 123
+ *         title:
+ *           type: string
+ *           description: Document title
+ *           example: Invoice #12345
+ *         tags:
+ *           type: array
+ *           items:
+ *             type: integer
+ *           description: Array of tag IDs
+ *           example: [1, 4, 7]
+ *         correspondent:
+ *           type: integer
+ *           description: Correspondent ID
+ *           example: 5
+ *     HistoryItem:
+ *       type: object
+ *       properties:
+ *         document_id:
+ *           type: integer
+ *           description: Document ID
+ *           example: 123
+ *         title:
+ *           type: string
+ *           description: Document title
+ *           example: Invoice #12345
+ *         created_at:
+ *           type: string
+ *           format: date-time
+ *           description: Date and time when the processing occurred
+ *         tags:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Tag'
+ *         correspondent:
+ *           type: string
+ *           description: Document correspondent name
+ *           example: Acme Corp
+ *         link:
+ *           type: string
+ *           description: Link to the document in Paperless-ngx
+ *     Tag:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *           description: Tag ID
+ *           example: 5
+ *         name:
+ *           type: string
+ *           description: Tag name
+ *           example: Invoice
+ *         color:
+ *           type: string
+ *           description: Tag color (hex code)
+ *           example: "#FF5733"
+ */
 
 // API endpoints that should not redirect
 const API_ENDPOINTS = ['/health'];
@@ -95,6 +203,43 @@ const protectApiRoute = (req, res, next) => {
   }
 };
 
+/**
+ * @swagger
+ * /login:
+ *   get:
+ *     summary: Render login page or redirect to setup if no users exist
+ *     description: |
+ *       Serves the login page for user authentication to the Paperless-AI application.
+ *       If no users exist in the database, the endpoint automatically redirects to the setup page
+ *       to complete the initial application configuration.
+ *       
+ *       This endpoint handles both new user sessions and returning users whose
+ *       sessions have expired.
+ *     tags:
+ *       - Authentication
+ *       - Navigation
+ *     responses:
+ *       200:
+ *         description: Login page rendered successfully
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               description: HTML content of the login page
+ *       302:
+ *         description: Redirect to setup page if no users exist, or to dashboard if already authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/setup"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/login', (req, res) => {
   //check if a user exists beforehand
   documentModel.getUsers().then((users) => {
@@ -107,6 +252,82 @@ router.get('/login', (req, res) => {
 });
 
 // Login page route
+/**
+ * @swagger
+ * /login:
+ *   post:
+ *     summary: Authenticate user with username and password
+ *     description: |
+ *       Authenticates a user using their username and password credentials.
+ *       If authentication is successful, a JWT token is generated and stored in a secure HTTP-only
+ *       cookie for subsequent requests.
+ *       
+ *       Failed login attempts are logged for security purposes, and multiple failures
+ *       may result in temporary account lockout depending on configuration.
+ *     tags:
+ *       - Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 description: User's login name
+ *                 example: "admin"
+ *               password:
+ *                 type: string
+ *                 description: User's password
+ *                 example: "securepassword"
+ *               rememberMe:
+ *                 type: boolean
+ *                 description: Whether to extend the session lifetime
+ *                 example: false
+ *     responses:
+ *       200:
+ *         description: Authentication successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 redirect:
+ *                   type: string
+ *                   description: URL to redirect to after successful login
+ *                   example: "/dashboard"
+ *         headers:
+ *           Set-Cookie:
+ *             schema:
+ *               type: string
+ *               description: HTTP-only cookie containing JWT token
+ *       401:
+ *         description: Authentication failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid username or password"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -152,13 +373,114 @@ router.post('/login', async (req, res) => {
   }
 });
 
-
 // Logout route
+/**
+ * @swagger
+ * /logout:
+ *   get:
+ *     summary: Log out user and clear JWT cookie
+ *     description: |
+ *       Terminates the current user session by invalidating and clearing the JWT authentication
+ *       cookie. After logging out, the user is redirected to the login page.
+ *       
+ *       This endpoint also clears any session-related data stored on the server side
+ *       for the current user.
+ *     tags:
+ *       - Authentication
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       302:
+ *         description: Logout successful, redirected to login page
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *           Set-Cookie:
+ *             schema:
+ *               type: string
+ *               description: HTTP-only cookie with cleared JWT token and immediate expiration
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/logout', (req, res) => {
   res.clearCookie('jwt');
   res.redirect('/login');
 });
 
+/**
+ * @swagger
+ * /sampleData/{id}:
+ *   get:
+ *     summary: Get sample data for a document
+ *     description: |
+ *       Retrieves sample data extracted from a document, including processed text content
+ *       and any metadata that has been extracted or processed by the AI.
+ *       
+ *       This endpoint is commonly used for previewing document data in the UI before
+ *       completing document processing or updating metadata.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Document ID to retrieve sample data for
+ *         example: 123
+ *     responses:
+ *       200:
+ *         description: Document sample data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 content:
+ *                   type: string
+ *                   description: Extracted text content from the document
+ *                   example: "Invoice from Acme Corp. Total amount: $125.00, Due date: 2023-08-15"
+ *                 metadata:
+ *                   type: object
+ *                   description: Any metadata that has been extracted from the document
+ *                   properties:
+ *                     title:
+ *                       type: string
+ *                       example: "Acme Corp Invoice - August 2023"
+ *                     tags:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["Invoice", "Finance"]
+ *                     correspondent:
+ *                       type: string
+ *                       example: "Acme Corp"
+ *       404:
+ *         description: Document not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Document not found"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/sampleData/:id', async (req, res) => {
   try {
     //get all correspondents from one document by id
@@ -172,6 +494,48 @@ router.get('/sampleData/:id', async (req, res) => {
 });
 
 // Documents view route
+/**
+ * @swagger
+ * /playground:
+ *   get:
+ *     summary: AI playground testing environment
+ *     description: |
+ *       Renders the AI playground page for experimenting with document analysis.
+ *       
+ *       This interactive environment allows users to test different AI providers and prompts
+ *       on document content without affecting the actual document processing workflow.
+ *       Users can paste document text, customize prompts, and see raw AI responses
+ *       to better understand how the AI models analyze document content.
+ *       
+ *       The playground is useful for fine-tuning prompts and testing AI capabilities
+ *       before applying them to actual document processing.
+ *     tags:
+ *       - Navigation
+ *       - Documents
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Playground page rendered successfully
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               description: HTML content of the AI playground interface
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/playground', protectApiRoute, async (req, res) => {
   try {
     const {
@@ -197,6 +561,56 @@ router.get('/playground', protectApiRoute, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /thumb/{documentId}:
+ *   get:
+ *     summary: Get document thumbnail
+ *     description: |
+ *       Retrieves the thumbnail image for a specific document from the Paperless-ngx system.
+ *       This endpoint proxies the request to the Paperless-ngx API and returns the thumbnail
+ *       image for display in the UI.
+ *       
+ *       The thumbnail is returned as an image file in the format provided by Paperless-ngx,
+ *       typically JPEG or PNG.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID of the document to retrieve thumbnail for
+ *         example: 123
+ *     responses:
+ *       200:
+ *         description: Thumbnail retrieved successfully
+ *         content:
+ *           image/*:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Document or thumbnail not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Thumbnail not found"
+ *       500:
+ *         description: Server error or Paperless-ngx connection failure
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/thumb/:documentId', async (req, res) => {
   const cachePath = path.join('./public/images', `${req.params.documentId}.png`);
 
@@ -236,6 +650,52 @@ router.get('/thumb/:documentId', async (req, res) => {
 });
 
 // Hauptseite mit Dokumentenliste
+/**
+ * @swagger
+ * /chat:
+ *   get:
+ *     summary: Chat interface page
+ *     description: |
+ *       Renders the chat interface page where users can interact with document-specific AI assistants.
+ *       This page displays a list of available documents and the chat interface for the selected document.
+ *     tags: 
+ *       - Navigation
+ *       - Chat
+ *     parameters:
+ *       - in: query
+ *         name: open
+ *         schema:
+ *           type: string
+ *         description: ID of document to open immediately in chat
+ *         required: false
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Chat interface page rendered successfully
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Invalid or expired token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/chat', async (req, res) => {
   try {
       const {open} = req.query;
@@ -248,7 +708,91 @@ router.get('/chat', async (req, res) => {
   }
 });
 
-// Chat initialisieren
+/**
+ * @swagger
+ * /chat/init:
+ *   get:
+ *     summary: Initialize chat for a document via query parameter
+ *     description: |
+ *       Initializes a chat session for a specific document identified by the query parameter.
+ *       Loads document content and prepares it for the chat interface.
+ *       This endpoint returns the document content, chat history if available, and initial context.
+ *     tags: 
+ *       - API
+ *       - Chat
+ *     parameters:
+ *       - in: query
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the document to initialize chat for
+ *         example: "123"
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Chat session initialized successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 documentId:
+ *                   type: string
+ *                   description: ID of the document
+ *                   example: "123"
+ *                 content:
+ *                   type: string
+ *                   description: Content of the document
+ *                   example: "This is the document content"
+ *                 title:
+ *                   type: string
+ *                   description: Title of the document
+ *                   example: "Invoice #12345"
+ *                 history:
+ *                   type: array
+ *                   description: Previous chat messages if any
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       role:
+ *                         type: string
+ *                         example: "user"
+ *                       content:
+ *                         type: string
+ *                         example: "What is this document about?"
+ *       400:
+ *         description: Missing document ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Invalid or expired token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Document not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/chat/init', async (req, res) => {
   const documentId = req.query.documentId;
   const result = await ChatService.initializeChat(documentId);
@@ -256,6 +800,83 @@ router.get('/chat/init', async (req, res) => {
 });
 
 // Nachricht senden
+/**
+ * @swagger
+ * /chat/message:
+ *   post:
+ *     summary: Send message to document chat
+ *     description: |
+ *       Sends a user message to the document-specific chat AI assistant.
+ *       The message is processed in the context of the specified document.
+ *       Returns a streaming response with the AI's reply chunks.
+ *     tags: 
+ *       - API
+ *       - Chat
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - documentId
+ *               - message
+ *             properties:
+ *               documentId:
+ *                 type: string
+ *                 description: ID of the document to chat with
+ *                 example: "123"
+ *               message:
+ *                 type: string
+ *                 description: User message to send to the chat
+ *                 example: "What is this document about?"
+ *     responses:
+ *       200:
+ *         description: |
+ *           Response streaming started. Each event contains a message chunk.
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *               example: |
+ *                 data: {"chunk":"This document appears to be"}
+ *                 
+ *                 data: {"chunk":" an invoice from"}
+ *                 
+ *                 data: {"done":true}
+ *       400:
+ *         description: Missing document ID or message
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Invalid or expired token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Document not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.post('/chat/message', async (req, res) => {
   try {
     const { documentId, message } = req.body;
@@ -271,6 +892,91 @@ router.post('/chat/message', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /chat/init/{documentId}:
+ *   get:
+ *     summary: Initialize chat for a document via path parameter
+ *     description: |
+ *       Initializes a chat session for a specific document identified by the path parameter.
+ *       Loads document content and prepares it for the chat interface.
+ *       This endpoint returns the document content, chat history if available, and initial context.
+ *     tags: 
+ *       - API
+ *       - Chat
+ *     parameters:
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the document to initialize chat for
+ *         example: "123"
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Chat session initialized successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 documentId:
+ *                   type: string
+ *                   description: ID of the document
+ *                   example: "123"
+ *                 content:
+ *                   type: string
+ *                   description: Content of the document
+ *                   example: "This is the document content"
+ *                 title:
+ *                   type: string
+ *                   description: Title of the document
+ *                   example: "Invoice #12345"
+ *                 history:
+ *                   type: array
+ *                   description: Previous chat messages if any
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       role:
+ *                         type: string
+ *                         example: "user"
+ *                       content:
+ *                         type: string
+ *                         example: "What is this document about?"
+ *       400:
+ *         description: Missing document ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Invalid or expired token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Document not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/chat/init/:documentId', async (req, res) => {
   try {
       const { documentId } = req.params;
@@ -285,6 +991,47 @@ router.get('/chat/init/:documentId', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /history:
+ *   get:
+ *     summary: Document history page
+ *     description: |
+ *       Renders the document history page with filtering options.
+ *       This page displays a list of all documents that have been processed by Paperless-AI,
+ *       showing the changes made to the documents through AI processing.
+ *       
+ *       The page includes filtering capabilities by correspondent, tag, and free text search,
+ *       allowing users to easily find specific documents or categories of processed documents.
+ *       Each entry includes links to the original document in Paperless-ngx.
+ *     tags:
+ *       - History
+ *       - Navigation
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: History page rendered successfully
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               description: HTML content of the history page with filtering controls and document list
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/history', async (req, res) => {
   try {
     const allTags = await paperlessService.getTags();
@@ -308,6 +1055,158 @@ router.get('/history', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/history:
+ *   get:
+ *     summary: Get processed document history
+ *     description: |
+ *       Returns a paginated list of documents that have been processed by Paperless-AI.
+ *       Supports filtering by tag, correspondent, and search term.
+ *       Designed for integration with DataTables jQuery plugin.
+ *       
+ *       This endpoint provides comprehensive information about each processed document,
+ *       including its metadata before and after AI processing, allowing users to track
+ *       changes made by the system.
+ *     tags:
+ *       - History
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: draw
+ *         schema:
+ *           type: integer
+ *         description: Draw counter for DataTables (prevents XSS)
+ *         example: 1
+ *       - in: query
+ *         name: start
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Starting record index for pagination
+ *         example: 0
+ *       - in: query
+ *         name: length
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of records to return per page
+ *         example: 10
+ *       - in: query
+ *         name: search[value]
+ *         schema:
+ *           type: string
+ *         description: Global search term (searches title, correspondent and tags)
+ *         example: "invoice"
+ *       - in: query
+ *         name: tag
+ *         schema:
+ *           type: string
+ *         description: Filter by tag ID
+ *         example: "5"
+ *       - in: query
+ *         name: correspondent
+ *         schema:
+ *           type: string
+ *         description: Filter by correspondent name
+ *         example: "Acme Corp"
+ *       - in: query
+ *         name: order[0][column]
+ *         schema:
+ *           type: integer
+ *         description: Index of column to sort by (0=document_id, 1=title, etc.)
+ *         example: 1
+ *       - in: query
+ *         name: order[0][dir]
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: Sort direction (ascending or descending)
+ *         example: "desc"
+ *     responses:
+ *       200:
+ *         description: Document history returned successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 draw:
+ *                   type: integer
+ *                   description: Echo of the draw parameter
+ *                   example: 1
+ *                 recordsTotal:
+ *                   type: integer
+ *                   description: Total number of records in the database
+ *                   example: 100
+ *                 recordsFiltered:
+ *                   type: integer
+ *                   description: Number of records after filtering
+ *                   example: 20
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       document_id:
+ *                         type: integer
+ *                         description: Document ID
+ *                         example: 123
+ *                       title:
+ *                         type: string
+ *                         description: Document title
+ *                         example: "Invoice #12345"
+ *                       created_at:
+ *                         type: string
+ *                         format: date-time
+ *                         description: Date and time when the processing occurred
+ *                         example: "2023-07-15T14:30:45Z"
+ *                       tags:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             id:
+ *                               type: integer
+ *                               example: 5
+ *                             name:
+ *                               type: string
+ *                               example: "Invoice"
+ *                             color:
+ *                               type: string
+ *                               example: "#FF5733"
+ *                       correspondent:
+ *                         type: string
+ *                         description: Document correspondent name
+ *                         example: "Acme Corp"
+ *                       link:
+ *                         type: string
+ *                         description: Link to the document in Paperless-ngx
+ *                         example: "http://paperless.example.com/documents/123/"
+ *       401:
+ *         description: Unauthorized - authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Authentication required"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Error loading history data"
+ */
 router.get('/api/history', async (req, res) => {
   try {
     const draw = parseInt(req.query.draw);
@@ -379,6 +1278,55 @@ router.get('/api/history', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/reset-all-documents:
+ *   post:
+ *     summary: Reset all processed documents
+ *     description: |
+ *       Deletes all processing records from the database, allowing documents to be processed again.
+ *       This doesn't delete the actual documents from Paperless-ngx, only their processing status in Paperless-AI.
+ *       
+ *       This operation can be useful when changing AI models or prompts, as it allows reprocessing
+ *       all documents with the updated configuration.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: All documents successfully reset
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       401:
+ *         description: Unauthorized - authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Authentication required"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Error resetting documents"
+ */
 router.post('/api/reset-all-documents', async (req, res) => {
   try {
     await documentModel.deleteAllDocuments();
@@ -390,6 +1338,80 @@ router.post('/api/reset-all-documents', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/reset-documents:
+ *   post:
+ *     summary: Reset specific documents
+ *     description: |
+ *       Deletes processing records for specific documents, allowing them to be processed again.
+ *       This doesn't delete the actual documents from Paperless-ngx, only their processing status in Paperless-AI.
+ *       
+ *       This operation is useful when you want to reprocess only selected documents after changes to
+ *       the AI model, prompt, or document metadata configuration.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Array of document IDs to reset
+ *                 example: [123, 456, 789]
+ *     responses:
+ *       200:
+ *         description: Documents successfully reset
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *       400:
+ *         description: Invalid request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Invalid document IDs"
+ *       401:
+ *         description: Unauthorized - authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Authentication required"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Error resetting documents"
+ */
 router.post('/api/reset-documents', async (req, res) => {
   try {
     const { ids } = req.body;
@@ -406,6 +1428,57 @@ router.post('/api/reset-documents', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/scan/now:
+ *   post:
+ *     summary: Trigger immediate document scan
+ *     description: |
+ *       Initiates an immediate scan of documents in Paperless-ngx that haven't been processed yet.
+ *       This endpoint can be used to manually trigger processing without waiting for the scheduled interval.
+ *       
+ *       The scan will:
+ *       - Connect to Paperless-ngx API
+ *       - Fetch all unprocessed documents
+ *       - Process each document with the configured AI service
+ *       - Update documents in Paperless-ngx with generated metadata
+ *       
+ *       The process respects the function limitations set in the configuration.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Scan initiated successfully
+ *         content:
+ *           text/plain:
+ *             schema:
+ *               type: string
+ *               example: "Task completed"
+ *       401:
+ *         description: Unauthorized - authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Authentication required"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Error during document scan"
+ */
 router.post('/api/scan/now', async (req, res) => {
 try {
     const isConfigured = await setupService.isConfigured();
@@ -622,6 +1695,58 @@ async function saveDocumentChanges(docId, updateData, analysis, originalData) {
   ]);
 }
 
+/**
+ * @swagger
+ * /api/key-regenerate:
+ *   post:
+ *     summary: Regenerate API key
+ *     description: |
+ *       Generates a new random API key for the application and updates the .env file.
+ *       The previous API key will be invalidated immediately after generation.
+ *       
+ *       This API key can be used for programmatic access to the API endpoints
+ *       by sending it in the `x-api-key` header of subsequent requests.
+ *       
+ *       **Security Notice**: This operation invalidates any existing API key.
+ *       All systems using the previous key will need to be updated.
+ *     tags:
+ *       - System
+ *       - Authentication
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: API key regenerated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: string
+ *                   description: The newly generated API key
+ *                   example: "3f7a8d6e2c1b5a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5"
+ *       401:
+ *         description: Unauthorized - JWT authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Authentication required"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Error regenerating API key"
+ */
 router.post('/api/key-regenerate', async (req, res) => {
   try {
     const fs = require('fs');
@@ -662,6 +1787,47 @@ const normalizeArray = (value) => {
   return [];
 };
 
+/**
+ * @swagger
+ * /setup:
+ *   get:
+ *     summary: Application setup page
+ *     description: |
+ *       Renders the application setup page for initial configuration.
+ *       
+ *       This page allows configuring the connection to Paperless-ngx, AI services,
+ *       and other application settings. It loads existing configuration if available
+ *       and redirects to dashboard if setup is already complete.
+ *       
+ *       The setup page is the entry point for new installations and guides users through
+ *       the process of connecting to Paperless-ngx, configuring AI providers, and setting up
+ *       admin credentials.
+ *     tags:
+ *       - Navigation
+ *       - Setup
+ *       - System
+ *     responses:
+ *       200:
+ *         description: Setup page rendered successfully
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               description: HTML content of the application setup page
+ *       302:
+ *         description: Redirects to dashboard if setup is already complete
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/dashboard"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/setup', async (req, res) => {
   try {
     // Base configuration object - load this FIRST, before any checks
@@ -747,6 +1913,79 @@ router.get('/setup', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /manual/preview/{id}:
+ *   get:
+ *     summary: Document preview
+ *     description: |
+ *       Fetches and returns the content of a specific document from Paperless-ngx 
+ *       for preview in the manual document review interface.
+ *       
+ *       This endpoint retrieves document details including content, title, ID, and tags,
+ *       allowing users to view the document text before applying changes or processing
+ *       it with AI tools. The document content is retrieved directly from Paperless-ngx
+ *       using the system's configured API credentials.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The document ID from Paperless-ngx
+ *         example: 123
+ *     responses:
+ *       200:
+ *         description: Document content retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 content:
+ *                   type: string
+ *                   description: The document content
+ *                   example: "Invoice from ACME Corp. Amount: $1,234.56"
+ *                 title:
+ *                   type: string
+ *                   description: The document title
+ *                   example: "ACME Corp Invoice #12345"
+ *                 id:
+ *                   type: integer
+ *                   description: The document ID
+ *                   example: 123
+ *                 tags:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Array of tag names assigned to the document
+ *                   example: ["Invoice", "ACME Corp", "2023"]
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       404:
+ *         description: Document not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error or Paperless connection error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/manual/preview/:id', async (req, res) => {
   try {
     const documentId = req.params.id;
@@ -780,7 +2019,47 @@ router.get('/manual/preview/:id', async (req, res) => {
   }
 });
 
-
+/**
+ * @swagger
+ * /manual:
+ *   get:
+ *     summary: Document review page
+ *     description: |
+ *       Renders the manual document review page that allows users to browse, 
+ *       view and manually process documents from Paperless-ngx.
+ *       
+ *       This interface enables users to review documents, view their content, and 
+ *       manage tags, correspondents, and document metadata without AI assistance.
+ *       Users can apply manual changes to documents based on their own judgment,
+ *       which is particularly useful for correction or verification of AI-processed documents.
+ *     tags:
+ *       - Navigation
+ *       - Documents
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Manual document review page rendered successfully
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               description: HTML content of the manual document review interface
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/manual', async (req, res) => {
   const version = configFile.PAPERLESS_AI_VERSION || ' ';
   res.render('manual', {
@@ -794,21 +2073,212 @@ router.get('/manual', async (req, res) => {
   });
 });
 
+/**
+ * @swagger
+ * /manual/tags:
+ *   get:
+ *     summary: Get all tags
+ *     description: |
+ *       Retrieves all tags from Paperless-ngx for use in the manual document review interface.
+ *       
+ *       This endpoint returns a complete list of all available tags that can be applied to documents,
+ *       including their IDs, names, and colors. The tags are retrieved directly from Paperless-ngx
+ *       and used for tag selection in the UI when manually updating document metadata.
+ *     tags:
+ *       - Documents
+ *       - API
+ *       - Metadata
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Tags retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Tag'
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error or Paperless connection error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/manual/tags', async (req, res) => {
   const getTags = await paperlessService.getTags();
   res.json(getTags);
 });
 
+/**
+ * @swagger
+ * /manual/documents:
+ *   get:
+ *     summary: Get all documents
+ *     description: |
+ *       Retrieves all documents from Paperless-ngx for display in the manual document review interface.
+ *       
+ *       This endpoint returns a list of all available documents that can be manually reviewed,
+ *       including their basic metadata such as ID, title, and creation date. The documents are
+ *       retrieved directly from Paperless-ngx and presented in the UI for selection and processing.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Documents retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Document'
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error or Paperless connection error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/manual/documents', async (req, res) => {
   const getDocuments = await paperlessService.getDocuments();
   res.json(getDocuments);
 });
 
+/**
+ * @swagger
+ * /api/correspondentsCount:
+ *   get:
+ *     summary: Get count of correspondents
+ *     description: |
+ *       Retrieves the list of correspondents with their document counts.
+ *       This endpoint returns all correspondents in the system along with 
+ *       the number of documents associated with each correspondent.
+ *     tags: 
+ *       - API
+ *       - Metadata
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of correspondents with document counts retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                     description: ID of the correspondent
+ *                     example: 1
+ *                   name:
+ *                     type: string
+ *                     description: Name of the correspondent
+ *                     example: "ACME Corp"
+ *                   count:
+ *                     type: integer
+ *                     description: Number of documents associated with this correspondent
+ *                     example: 5
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Invalid or expired token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/api/correspondentsCount', async (req, res) => {
   const correspondents = await paperlessService.listCorrespondentsNames();
   res.json(correspondents);
 });
 
+/**
+ * @swagger
+ * /api/tagsCount:
+ *   get:
+ *     summary: Get count of tags
+ *     description: |
+ *       Retrieves the list of tags with their document counts.
+ *       This endpoint returns all tags in the system along with 
+ *       the number of documents associated with each tag.
+ *     tags: 
+ *       - API
+ *       - Metadata
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of tags with document counts retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                     description: ID of the tag
+ *                     example: 1
+ *                   name:
+ *                     type: string
+ *                     description: Name of the tag
+ *                     example: "Invoice"
+ *                   count:
+ *                     type: integer
+ *                     description: Number of documents associated with this tag
+ *                     example: 12
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Invalid or expired token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/api/tagsCount', async (req, res) => {
   const tags = await paperlessService.listTagNames();
   res.json(tags);
@@ -878,6 +2348,98 @@ async function processQueue(customPrompt) {
   }
 }
 
+/**
+ * @swagger
+ * /api/webhook/document:
+ *   post:
+ *     summary: Webhook for document updates
+ *     description: |
+ *       Processes incoming webhook notifications from Paperless-ngx about document
+ *       changes, additions, or deletions. The webhook allows Paperless-AI to respond
+ *       to document changes in real-time.
+ *       
+ *       When a new document is added or updated in Paperless-ngx, this endpoint can
+ *       trigger automatic AI processing for metadata extraction.
+ *     tags:
+ *       - Documents
+ *       - API
+ *       - System
+ *     security:
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - event_type
+ *               - document_id
+ *             properties:
+ *               event_type:
+ *                 type: string
+ *                 description: Type of event that occurred
+ *                 enum: ["added", "updated", "deleted"]
+ *                 example: "added"
+ *               document_id:
+ *                 type: integer
+ *                 description: ID of the affected document
+ *                 example: 123
+ *               document_info:
+ *                 type: object
+ *                 description: Additional information about the document (optional)
+ *                 properties:
+ *                   title:
+ *                     type: string
+ *                     example: "Invoice"
+ *     responses:
+ *       200:
+ *         description: Webhook processed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Document event processed"
+ *                 processing_queued:
+ *                   type: boolean
+ *                   description: Whether AI processing was queued for this document
+ *                   example: true
+ *       400:
+ *         description: Invalid webhook payload
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "Missing required fields: event_type, document_id"
+ *       401:
+ *         description: Unauthorized - invalid or missing API key
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Unauthorized: Invalid API key"
+ *       500:
+ *         description: Server error processing webhook
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.post('/api/webhook/document', async (req, res) => {
   try {
     const { url, prompt } = req.body;
@@ -921,6 +2483,47 @@ router.post('/api/webhook/document', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /dashboard:
+ *   get:
+ *     summary: Main dashboard page
+ *     description: |
+ *       Renders the main dashboard page of the application with summary statistics and visualizations.
+ *       The dashboard provides an overview of processed documents, system metrics, and important statistics
+ *       about document processing including tag counts, correspondent counts, and token usage.
+ *       
+ *       The page displays visualizations for document processing status, token distribution, 
+ *       processing time statistics, and document type categorization to help administrators
+ *       understand system performance and document processing patterns.
+ *     tags:
+ *       - Navigation
+ *       - System
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard page rendered successfully
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               description: HTML content of the dashboard page
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/dashboard', async (req, res) => {
   const tagCount = await paperlessService.getTagCount();
   const correspondentCount = await paperlessService.getCorrespondentCount();
@@ -958,6 +2561,50 @@ router.get('/dashboard', async (req, res) => {
   });
 });
 
+/**
+ * @swagger
+ * /settings:
+ *   get:
+ *     summary: Application settings page
+ *     description: |
+ *       Renders the application settings page where users can modify configuration
+ *       after initial setup.
+ *       
+ *       This page allows administrators to update connections to Paperless-ngx, 
+ *       AI provider settings, processing parameters, feature toggles, and custom fields.
+ *       The interface provides validation for connection settings and displays the current
+ *       configuration values.
+ *       
+ *       Changes made on this page require application restart to take full effect.
+ *     tags:
+ *       - Navigation
+ *       - Setup
+ *       - System
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Settings page rendered successfully
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               description: HTML content of the application settings page
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/settings', async (req, res) => {
   const processSystemPrompt = (prompt) => {
     if (!prompt) return '';
@@ -1029,6 +2676,48 @@ router.get('/settings', async (req, res) => {
   });
 });
 
+/**
+ * @swagger
+ * /debug:
+ *   get:
+ *     summary: Debug interface
+ *     description: |
+ *       Renders a debug interface for testing and troubleshooting Paperless-ngx connections
+ *       and API responses.
+ *       
+ *       This page provides a simple UI for executing API calls to Paperless-ngx endpoints
+ *       and viewing the raw responses. It's primarily used for diagnosing connection issues
+ *       and understanding the structure of data returned by the Paperless-ngx API.
+ *       
+ *       The debug interface should only be accessible to administrators and is not intended
+ *       for regular use in production environments.
+ *     tags:
+ *       - Navigation
+ *       - System
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Debug interface rendered successfully
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               description: HTML content of the debug interface
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/debug', async (req, res) => {
   //const isConfigured = await setupService.isConfigured();
   //if (!isConfigured) {
@@ -1047,21 +2736,229 @@ router.get('/debug', async (req, res) => {
 //   res.send(correspondent);
 // });
 
+/**
+ * @swagger
+ * /debug/tags:
+ *   get:
+ *     summary: Debug tags API
+ *     description: |
+ *       Returns the raw tags data from Paperless-ngx for debugging purposes.
+ *       
+ *       This endpoint performs a direct API call to the Paperless-ngx tags endpoint
+ *       and returns the unmodified response. It's used for diagnosing tag-related issues
+ *       and verifying proper connection to Paperless-ngx.
+ *     tags:
+ *       - System
+ *       - API
+ *       - Metadata
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Tags data retrieved successfully from Paperless-ngx
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               description: Raw response from Paperless-ngx tags API
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error or Paperless connection error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/debug/tags', async (req, res) => {
   const tags = await debugService.getTags();
   res.json(tags);
 });
 
+/**
+ * @swagger
+ * /debug/documents:
+ *   get:
+ *     summary: Debug documents API
+ *     description: |
+ *       Returns the raw documents data from Paperless-ngx for debugging purposes.
+ *       
+ *       This endpoint performs a direct API call to the Paperless-ngx documents endpoint
+ *       and returns the unmodified response. It's used for diagnosing document-related issues
+ *       and verifying proper connection to Paperless-ngx.
+ *     tags:
+ *       - System
+ *       - API
+ *       - Documents
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Documents data retrieved successfully from Paperless-ngx
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               description: Raw response from Paperless-ngx documents API
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error or Paperless connection error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/debug/documents', async (req, res) => {
   const documents = await debugService.getDocuments();
   res.json(documents);
 });
 
+/**
+ * @swagger
+ * /debug/correspondents:
+ *   get:
+ *     summary: Debug correspondents API
+ *     description: |
+ *       Returns the raw correspondents data from Paperless-ngx for debugging purposes.
+ *       
+ *       This endpoint performs a direct API call to the Paperless-ngx correspondents endpoint
+ *       and returns the unmodified response. It's used for diagnosing correspondent-related issues
+ *       and verifying proper connection to Paperless-ngx.
+ *     tags:
+ *       - System
+ *       - API
+ *       - Metadata
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Correspondents data retrieved successfully from Paperless-ngx
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               description: Raw response from Paperless-ngx correspondents API
+ *       401:
+ *         description: Unauthorized - user not authenticated
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: "/login"
+ *       500:
+ *         description: Server error or Paperless connection error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/debug/correspondents', async (req, res) => {
   const correspondents = await debugService.getCorrespondents();
   res.json(correspondents);
 });
 
+/**
+ * @swagger
+ * /manual/analyze:
+ *   post:
+ *     summary: Analyze document content manually
+ *     description: |
+ *       Analyzes document content using the configured AI provider and returns structured metadata.
+ *       This endpoint processes the document text to extract relevant information such as tags,
+ *       correspondent, and document type based on content analysis.
+ *       
+ *       The analysis is performed using the AI provider configured in the application settings.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - content
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 description: The document text content to analyze
+ *                 example: "Invoice from Acme Corp. Total amount: $125.00, Due date: 2023-08-15"
+ *               existingTags:
+ *                 type: array
+ *                 description: List of existing tags in the system to help with tag matching
+ *                 items:
+ *                   type: string
+ *                 example: ["Invoice", "Finance", "Acme Corp"]
+ *               id:
+ *                 type: string
+ *                 description: Optional document ID for tracking metrics
+ *                 example: "doc_123"
+ *     responses:
+ *       200:
+ *         description: Document analysis results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 correspondent:
+ *                   type: string
+ *                   description: Detected correspondent name
+ *                   example: "Acme Corp"
+ *                 title:
+ *                   type: string
+ *                   description: Suggested document title
+ *                   example: "Acme Corp Invoice - August 2023"
+ *                 tags:
+ *                   type: array
+ *                   description: Suggested tags for the document
+ *                   items:
+ *                     type: string
+ *                   example: ["Invoice", "Finance"]
+ *                 documentType:
+ *                   type: string
+ *                   description: Detected document type
+ *                   example: "Invoice"
+ *                 metrics:
+ *                   type: object
+ *                   description: Token usage metrics (when using OpenAI)
+ *                   properties:
+ *                     promptTokens:
+ *                       type: number
+ *                       example: 350
+ *                     completionTokens:
+ *                       type: number
+ *                       example: 120
+ *                     totalTokens:
+ *                       type: number
+ *                       example: 470
+ *       400:
+ *         description: Invalid request parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error or AI provider not configured
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.post('/manual/analyze', express.json(), async (req, res) => {
   try {
     const { content, existingTags, id } = req.body;
@@ -1099,6 +2996,82 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /manual/playground:
+ *   post:
+ *     summary: Process document using a custom prompt in playground mode
+ *     description: |
+ *       Analyzes document content using a custom user-provided prompt.
+ *       This endpoint is primarily used for testing and experimenting with different prompts
+ *       without affecting the actual document processing workflow.
+ *       
+ *       The analysis is performed using the AI provider configured in the application settings,
+ *       but with a custom prompt that overrides the default system prompt.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - content
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 description: The document text content to analyze
+ *                 example: "Invoice from Acme Corp. Total amount: $125.00, Due date: 2023-08-15"
+ *               prompt:
+ *                 type: string
+ *                 description: Custom prompt to use for analysis
+ *                 example: "Extract the company name, invoice amount, and due date from this document."
+ *               documentId:
+ *                 type: string
+ *                 description: Optional document ID for tracking metrics
+ *                 example: "doc_123"
+ *     responses:
+ *       200:
+ *         description: Document analysis results using the custom prompt
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 result:
+ *                   type: string
+ *                   description: The raw AI response using the custom prompt
+ *                   example: "Company: Acme Corp\nAmount: $125.00\nDue Date: 2023-08-15"
+ *                 metrics:
+ *                   type: object
+ *                   description: Token usage metrics (when using OpenAI)
+ *                   properties:
+ *                     promptTokens:
+ *                       type: number
+ *                       example: 350
+ *                     completionTokens:
+ *                       type: number
+ *                       example: 120
+ *                     totalTokens:
+ *                       type: number
+ *                       example: 470
+ *       400:
+ *         description: Invalid request parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error or AI provider not configured
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.post('/manual/playground', express.json(), async (req, res) => {
   try {
     const { content, existingTags, prompt, documentId } = req.body;
@@ -1147,6 +3120,84 @@ router.post('/manual/playground', express.json(), async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /manual/updateDocument:
+ *   post:
+ *     summary: Update document metadata in Paperless-ngx
+ *     description: |
+ *       Updates document metadata such as tags, correspondent and title in the Paperless-ngx system.
+ *       This endpoint handles the translation between tag names and IDs, and manages the creation of
+ *       new tags or correspondents if they don't exist in the system.
+ *       
+ *       The endpoint also removes any unused tags from the document to keep the metadata clean.
+ *     tags:
+ *       - Documents
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - documentId
+ *             properties:
+ *               documentId:
+ *                 type: number
+ *                 description: ID of the document to update in Paperless-ngx
+ *                 example: 123
+ *               tags:
+ *                 type: array
+ *                 description: List of tags to apply (can be tag IDs or names)
+ *                 items:
+ *                   oneOf:
+ *                     - type: number
+ *                     - type: string
+ *                 example: ["Invoice", 42, "Finance"]
+ *               correspondent:
+ *                 type: string
+ *                 description: Correspondent name to assign to the document
+ *                 example: "Acme Corp"
+ *               title:
+ *                 type: string
+ *                 description: New title for the document
+ *                 example: "Acme Corp Invoice - August 2023"
+ *     responses:
+ *       200:
+ *         description: Document successfully updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Document updated successfully"
+ *       400:
+ *         description: Invalid request parameters or tag processing errors
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 errors:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   example: ["Failed to create tag: Invalid tag name"]
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.post('/manual/updateDocument', express.json(), async (req, res) => {
   try {
     var { documentId, tags, correspondent, title } = req.body;
@@ -1199,6 +3250,60 @@ router.post('/manual/updateDocument', express.json(), async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: System health check endpoint
+ *     description: |
+ *       Provides information about the current system health status.
+ *       This endpoint checks database connectivity and returns system operational status.
+ *       Used for monitoring and automated health checks.
+ *     tags: 
+ *       - System
+ *     responses:
+ *       200:
+ *         description: System is healthy and operational
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   description: Health status of the system
+ *                   example: "healthy"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   description: Status indicating an error
+ *                   example: "error"
+ *                 message:
+ *                   type: string
+ *                   description: Error message details
+ *                   example: "Internal server error"
+ *       503:
+ *         description: Service unavailable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   description: Status indicating database error
+ *                   example: "database_error"
+ *                 message:
+ *                   type: string
+ *                   description: Details about the service unavailability
+ *                   example: "Database check failed"
+ */
 router.get('/health', async (req, res) => {
   try {
     // const isConfigured = await setupService.isConfigured();
@@ -1220,13 +3325,193 @@ router.get('/health', async (req, res) => {
     res.json({ status: 'healthy' });
   } catch (error) {
     console.error('Health check failed:', error);
-    res.status(503).json({ 
+    res.status(500).json({ 
       status: 'error', 
       message: error.message 
     });
   }
 });
 
+/**
+ * @swagger
+ * /setup:
+ *   post:
+ *     summary: Submit initial application setup configuration
+ *     description: |
+ *       Configures the initial setup of the Paperless-AI application, including connections
+ *       to Paperless-ngx, AI provider settings, processing parameters, and user authentication.
+ *       
+ *       This endpoint is primarily used during the first-time setup of the application and
+ *       creates the necessary configuration files and database tables.
+ *     tags:
+ *       - System
+ *       - Setup
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - paperlessUrl
+ *               - paperlessToken
+ *               - aiProvider
+ *               - username
+ *               - password
+ *             properties:
+ *               paperlessUrl:
+ *                 type: string
+ *                 description: URL of the Paperless-ngx instance
+ *                 example: "https://paperless.example.com"
+ *               paperlessToken:
+ *                 type: string
+ *                 description: API token for Paperless-ngx access
+ *                 example: "abc123def456"
+ *               paperlessUsername:
+ *                 type: string
+ *                 description: Username for Paperless-ngx (alternative to token authentication)
+ *                 example: "admin"
+ *               aiProvider:
+ *                 type: string
+ *                 description: Selected AI provider for document analysis
+ *                 enum: ["openai", "ollama", "custom", "azure"]
+ *                 example: "openai"
+ *               openaiKey:
+ *                 type: string
+ *                 description: API key for OpenAI (required when aiProvider is 'openai')
+ *                 example: "sk-abc123def456"
+ *               openaiModel:
+ *                 type: string
+ *                 description: OpenAI model to use for analysis
+ *                 example: "gpt-4"
+ *               ollamaUrl:
+ *                 type: string
+ *                 description: URL for Ollama API (required when aiProvider is 'ollama')
+ *                 example: "http://localhost:11434"
+ *               ollamaModel:
+ *                 type: string
+ *                 description: Ollama model to use for analysis
+ *                 example: "llama2"
+ *               customApiKey:
+ *                 type: string
+ *                 description: API key for custom LLM provider
+ *                 example: "api-key-123"
+ *               customBaseUrl:
+ *                 type: string
+ *                 description: Base URL for custom LLM provider
+ *                 example: "https://api.customllm.com"
+ *               customModel:
+ *                 type: string
+ *                 description: Model name for custom LLM provider
+ *                 example: "custom-model"
+ *               scanInterval:
+ *                 type: number
+ *                 description: Interval in minutes for scanning new documents
+ *                 example: 15
+ *               systemPrompt:
+ *                 type: string
+ *                 description: Custom system prompt for document analysis
+ *                 example: "Extract key information from the following document..."
+ *               showTags:
+ *                 type: boolean
+ *                 description: Whether to show tags in the UI
+ *                 example: true
+ *               tags:
+ *                 type: string
+ *                 description: Comma-separated list of tags to use for filtering
+ *                 example: "Invoice,Receipt,Contract"
+ *               aiProcessedTag:
+ *                 type: boolean
+ *                 description: Whether to add a tag for AI-processed documents
+ *                 example: true
+ *               aiTagName:
+ *                 type: string
+ *                 description: Tag name to use for AI-processed documents
+ *                 example: "AI-Processed"
+ *               usePromptTags:
+ *                 type: boolean
+ *                 description: Whether to use tags in prompts
+ *                 example: true
+ *               promptTags:
+ *                 type: string
+ *                 description: Comma-separated list of tags to use in prompts
+ *                 example: "Invoice,Receipt"
+ *               username:
+ *                 type: string
+ *                 description: Admin username for Paperless-AI
+ *                 example: "admin"
+ *               password:
+ *                 type: string
+ *                 description: Admin password for Paperless-AI
+ *                 example: "securepassword"
+ *               useExistingData:
+ *                 type: boolean
+ *                 description: Whether to use existing data from a previous setup
+ *                 example: false
+ *               activateTagging:
+ *                 type: boolean
+ *                 description: Enable AI-based tag suggestions
+ *                 example: true
+ *               activateCorrespondents:
+ *                 type: boolean
+ *                 description: Enable AI-based correspondent suggestions
+ *                 example: true
+ *               activateDocumentType:
+ *                 type: boolean
+ *                 description: Enable AI-based document type suggestions
+ *                 example: true
+ *               activateTitle:
+ *                 type: boolean
+ *                 description: Enable AI-based title suggestions
+ *                 example: true
+ *               activateCustomFields:
+ *                 type: boolean
+ *                 description: Enable AI-based custom field extraction
+ *                 example: false
+ *     responses:
+ *       200:
+ *         description: Setup completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: ["success"]
+ *                   example: "success"
+ *                 message:
+ *                   type: string
+ *                   example: "Configuration saved successfully"
+ *       400:
+ *         description: Invalid configuration parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: ["error"]
+ *                   example: "error"
+ *                 message:
+ *                   type: string
+ *                   example: "Missing required configuration parameters"
+ *       500:
+ *         description: Server error during setup
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: ["error"]
+ *                   example: "error"
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to save configuration: Database error"
+ */
 router.post('/setup', express.json(), async (req, res) => {
   try {
     const { 
@@ -1447,6 +3732,183 @@ router.post('/setup', express.json(), async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /settings:
+ *   post:
+ *     summary: Update application settings
+ *     description: |
+ *       Updates the configuration settings of the Paperless-AI application after initial setup.
+ *       This endpoint allows administrators to modify connections to Paperless-ngx, 
+ *       AI provider settings, processing parameters, and feature toggles.
+ *       
+ *       Changes made through this endpoint are applied immediately and affect all future
+ *       document processing operations.
+ *     tags:
+ *       - System
+ *       - Setup
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               paperlessUrl:
+ *                 type: string
+ *                 description: URL of the Paperless-ngx instance
+ *                 example: "https://paperless.example.com"
+ *               paperlessToken:
+ *                 type: string
+ *                 description: API token for Paperless-ngx access
+ *                 example: "abc123def456"
+ *               paperlessUsername:
+ *                 type: string
+ *                 description: Username for Paperless-ngx (alternative to token authentication)
+ *                 example: "admin"
+ *               aiProvider:
+ *                 type: string
+ *                 description: Selected AI provider for document analysis
+ *                 enum: ["openai", "ollama", "custom", "azure"]
+ *                 example: "openai"
+ *               openaiKey:
+ *                 type: string
+ *                 description: API key for OpenAI (required when aiProvider is 'openai')
+ *                 example: "sk-abc123def456"
+ *               openaiModel:
+ *                 type: string
+ *                 description: OpenAI model to use for analysis
+ *                 example: "gpt-4"
+ *               ollamaUrl:
+ *                 type: string
+ *                 description: URL for Ollama API (required when aiProvider is 'ollama')
+ *                 example: "http://localhost:11434"
+ *               ollamaModel:
+ *                 type: string
+ *                 description: Ollama model to use for analysis
+ *                 example: "llama2"
+ *               customApiKey:
+ *                 type: string
+ *                 description: API key for custom LLM provider
+ *                 example: "api-key-123"
+ *               customBaseUrl:
+ *                 type: string
+ *                 description: Base URL for custom LLM provider
+ *                 example: "https://api.customllm.com"
+ *               customModel:
+ *                 type: string
+ *                 description: Model name for custom LLM provider
+ *                 example: "custom-model"
+ *               scanInterval:
+ *                 type: number
+ *                 description: Interval in minutes for scanning new documents
+ *                 example: 15
+ *               systemPrompt:
+ *                 type: string
+ *                 description: Custom system prompt for document analysis
+ *                 example: "Extract key information from the following document..."
+ *               showTags:
+ *                 type: boolean
+ *                 description: Whether to show tags in the UI
+ *                 example: true
+ *               tags:
+ *                 type: string
+ *                 description: Comma-separated list of tags to use for filtering
+ *                 example: "Invoice,Receipt,Contract"
+ *               aiProcessedTag:
+ *                 type: boolean
+ *                 description: Whether to add a tag for AI-processed documents
+ *                 example: true
+ *               aiTagName:
+ *                 type: string
+ *                 description: Tag name to use for AI-processed documents
+ *                 example: "AI-Processed"
+ *               usePromptTags:
+ *                 type: boolean
+ *                 description: Whether to use tags in prompts
+ *                 example: true
+ *               promptTags:
+ *                 type: string
+ *                 description: Comma-separated list of tags to use in prompts
+ *                 example: "Invoice,Receipt"
+ *               useExistingData:
+ *                 type: boolean
+ *                 description: Whether to use existing data from a previous setup
+ *                 example: false
+ *               activateTagging:
+ *                 type: boolean
+ *                 description: Enable AI-based tag suggestions
+ *                 example: true
+ *               activateCorrespondents:
+ *                 type: boolean
+ *                 description: Enable AI-based correspondent suggestions
+ *                 example: true
+ *               activateDocumentType:
+ *                 type: boolean
+ *                 description: Enable AI-based document type suggestions
+ *                 example: true
+ *               activateTitle:
+ *                 type: boolean
+ *                 description: Enable AI-based title suggestions
+ *                 example: true
+ *               activateCustomFields:
+ *                 type: boolean
+ *                 description: Enable AI-based custom field extraction
+ *                 example: false
+ *               customFields:
+ *                 type: string
+ *                 description: JSON string defining custom fields to extract
+ *                 example: '{"invoice_number":{"type":"string"},"total_amount":{"type":"number"}}'
+ *               disableAutomaticProcessing:
+ *                 type: boolean
+ *                 description: Disable automatic document processing
+ *                 example: false
+ *     responses:
+ *       200:
+ *         description: Settings updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: ["success"]
+ *                   example: "success"
+ *                 message:
+ *                   type: string
+ *                   example: "Settings updated successfully"
+ *       400:
+ *         description: Invalid configuration parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: ["error"]
+ *                   example: "error"
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid settings: AI provider required when automatic processing is enabled"
+ *       500:
+ *         description: Server error while updating settings
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: ["error"]
+ *                   example: "error"
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to update settings: Database error"
+ */
 router.post('/settings', express.json(), async (req, res) => {
   try {
     const { 
@@ -1683,6 +4145,78 @@ router.post('/settings', express.json(), async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/processing-status:
+ *   get:
+ *     summary: Get document processing status
+ *     description: |
+ *       Returns the current status of document processing operations.
+ *       This endpoint provides information about documents in the processing queue
+ *       and the current processing state (active/idle).
+ *       
+ *       The status information can be used by UIs to display progress indicators
+ *       and provide real-time feedback about background processing operations.
+ *     tags:
+ *       - Documents
+ *       - System
+ *       - API
+ *     security:
+ *       - BearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Processing status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 isProcessing:
+ *                   type: boolean
+ *                   description: Whether documents are currently being processed
+ *                   example: true
+ *                 queueLength:
+ *                   type: integer
+ *                   description: Number of documents waiting in the processing queue
+ *                   example: 5
+ *                 currentDocument:
+ *                   type: object
+ *                   description: Details about the document currently being processed (if any)
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       description: Document ID
+ *                       example: 123
+ *                     title:
+ *                       type: string
+ *                       description: Document title
+ *                       example: "Invoice #12345"
+ *                     status:
+ *                       type: string
+ *                       description: Current processing status
+ *                       example: "processing"
+ *       401:
+ *         description: Unauthorized - authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Authentication required"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to fetch processing status"
+ */
 router.get('/api/processing-status', async (req, res) => {
   try {
       const status = await documentModel.getCurrentProcessingStatus();

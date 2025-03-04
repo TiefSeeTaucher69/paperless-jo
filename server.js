@@ -12,6 +12,8 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const Logger = require('./services/loggerService');
 const { max } = require('date-fns');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swagger');
 
 const htmlLogger = new Logger({
   logFile: 'logs.html',
@@ -61,6 +63,68 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cookieParser());
 
+// Swagger documentation route
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  swaggerOptions: {
+    url: '/api-docs/openapi.json'
+  }
+}));
+
+/**
+ * @swagger
+ * /api-docs/openapi.json:
+ *   get:
+ *     summary: Retrieve the OpenAPI specification
+ *     description: |
+ *       Returns the complete OpenAPI specification for the Paperless-AI API.
+ *       This endpoint attempts to serve a static OpenAPI JSON file first, falling back
+ *       to dynamically generating the specification if the file cannot be read.
+ *       
+ *       The OpenAPI specification document contains all API endpoints, parameters,
+ *       request bodies, responses, and schemas for the entire application.
+ *     tags: [API, System]
+ *     responses:
+ *       200:
+ *         description: OpenAPI specification returned successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               description: The complete OpenAPI specification
+ *       404:
+ *         description: OpenAPI specification file not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Server error occurred while retrieving the OpenAPI specification
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+app.get('/api-docs/openapi.json', (req, res) => {
+  const openApiPath = path.join(process.cwd(), 'OPENAPI', 'openapi.json');
+  res.setHeader('Content-Type', 'application/json');
+  
+  // Try to serve the static file first
+  fs.readFile(openApiPath)
+    .then(data => {
+      res.send(JSON.parse(data));
+    })
+    .catch(err => {
+      console.warn('Error reading OpenAPI file, generating dynamically:', err.message);
+      // Fallback to generating the spec if file can't be read
+      res.send(swaggerSpec);
+    });
+});
+
+// Add a redirect for the old endpoint for backward compatibility
+app.get('/api-docs.json', (req, res) => {
+  res.redirect('/api-docs/openapi.json');
+});
+
 // View engine setup
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -86,6 +150,29 @@ async function initializeDataDirectory() {
   } catch {
     console.log('Creating data directory...');
     await fs.mkdir(dataDir, { recursive: true });
+  }
+}
+
+// Save OpenAPI specification to file
+async function saveOpenApiSpec() {
+  const openApiDir = path.join(process.cwd(), 'OPENAPI');
+  const openApiPath = path.join(openApiDir, 'openapi.json');
+  try {
+    // Ensure the directory exists
+    try {
+      await fs.access(openApiDir);
+    } catch {
+      console.log('Creating OPENAPI directory...');
+      await fs.mkdir(openApiDir, { recursive: true });
+    }
+    
+    // Write the specification to file
+    await fs.writeFile(openApiPath, JSON.stringify(swaggerSpec, null, 2));
+    console.log(`OpenAPI specification saved to ${openApiPath}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to save OpenAPI specification:', error);
+    return false;
   }
 }
 
@@ -330,6 +417,31 @@ async function scanDocuments() {
 // Routes
 app.use('/', setupRoutes);
 
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: Root endpoint that redirects to the dashboard
+ *     description: |
+ *       This endpoint serves as the entry point for the application.
+ *       When accessed, it automatically redirects the user to the dashboard page.
+ *       No parameters or authentication are required for this redirection.
+ *     tags: [Navigation, System]
+ *     responses:
+ *       302:
+ *         description: Redirects to the dashboard page
+ *         content:
+ *           text/html:
+ *             schema:
+ *               type: string
+ *               example: "<html><body>Redirecting to dashboard...</body></html>"
+ *       500:
+ *         description: Server error occurred during redirection
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 app.get('/', async (req, res) => {
   try {
     res.redirect('/dashboard');
@@ -339,6 +451,47 @@ app.get('/', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: System health check endpoint
+ *     description: |
+ *       Checks if the application is properly configured and the database is reachable.
+ *       This endpoint can be used by monitoring systems to verify service health.
+ *       
+ *       The endpoint returns a 200 status code with a "healthy" status if everything is 
+ *       working correctly, or a 503 status code with error details if there are issues.
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: System is healthy and operational
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: "healthy"
+ *                   description: Health status indication
+ *       503:
+ *         description: System is not fully configured or database is unreachable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: [not_configured, error]
+ *                   example: "not_configured"
+ *                   description: Error status type
+ *                 message:
+ *                   type: string
+ *                   example: "Application setup not completed"
+ *                   description: Detailed error message
+ */
 app.get('/health', async (req, res) => {
   try {
     const isConfigured = await setupService.isConfigured();
@@ -441,6 +594,7 @@ async function startServer() {
   const port = process.env.PAPERLESS_AI_PORT || 3000;
   try {
     await initializeDataDirectory();
+    await saveOpenApiSpec(); // Save OpenAPI specification on startup
     app.listen(port, () => {
       console.log(`Server running on port ${port}`);
       startScanning();
