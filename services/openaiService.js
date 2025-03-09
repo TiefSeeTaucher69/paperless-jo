@@ -183,7 +183,7 @@ class OpenAIService {
             content: truncatedContent
           }
         ],
-        temperature: 0.3,
+        ...(model !== 'o3-mini' && { temperature: 0.3 }),
       });
       
       if (!response?.choices?.[0]?.message?.content) {
