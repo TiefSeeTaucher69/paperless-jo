@@ -288,10 +288,10 @@ class OpenAIService {
       
       // Truncate content if necessary
       const truncatedContent = await this.truncateToTokenLimit(content, availableTokens);
-      
+      const model = process.env.OPENAI_MODEL;
       // Make API request
       const response = await this.client.chat.completions.create({
-        model: process.env.OPENAI_MODEL,
+        model: model,
         messages: [
           {
             role: "system",

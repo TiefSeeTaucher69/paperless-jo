@@ -72,11 +72,11 @@ class ManualService {
         const existingTagsList = existingTags
             .map(tag => tag.name)
             .join(', ');
-    
+        const model = process.env.OPENAI_MODEL;
         const systemPrompt = process.env.SYSTEM_PROMPT;
         await this.writePromptToFile(systemPrompt, content);
         const response = await this.openai.chat.completions.create({
-            model: process.env.OPENAI_MODEL,
+            model: model,
             messages: [
             {
                 role: "system",
@@ -170,9 +170,9 @@ class ManualService {
                 .join(', ');
         
             const systemPrompt = process.env.SYSTEM_PROMPT;
-        
+            const model = config.custom.model;
             const response = await this.openai.chat.completions.create({
-                model: config.custom.model,
+                model: model,
                 messages: [
                 {
                     role: "system",
