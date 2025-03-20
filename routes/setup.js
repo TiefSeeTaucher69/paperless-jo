@@ -11,6 +11,7 @@ const debugService = require('../services/debugService.js');
 const configFile = require('../config/config.js');
 const ChatService = require('../services/chatService.js');
 const documentsService = require('../services/documentsService.js');
+const RAGService = require('../services/ragService.js');
 const fs = require('fs').promises;
 const path = require('path');
 const jwt = require('jsonwebtoken');
@@ -4225,5 +4226,19 @@ router.get('/api/processing-status', async (req, res) => {
       res.status(500).json({ error: 'Failed to fetch processing status' });
   }
 });
+
+router.get('/api/rag-test', async (req, res) => {
+  RAGService.initialize();
+  try { 
+    if(await RAGService.sendDocumentsToRAGService()){
+      res.status(200).json({ success: true });
+    }else{
+      res.status(500).json({ success: false });
+    }    
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch processing status' });
+  }
+}
+);
 
 module.exports = router;

@@ -87,7 +87,7 @@ class ManualService {
                 content: content
             }
             ],
-            temperature: 0.3,
+            ...(model !== 'o3-mini' && { temperature: 0.3 }),
         });
     
         let jsonContent = response.choices[0].message.content;
@@ -183,7 +183,7 @@ class ManualService {
                     content: content
                 }
                 ],
-                temperature: 0.3,
+                ...(model !== 'o3-mini' && { temperature: 0.3 }),
             });
         
             let jsonContent = response.choices[0].message.content;
