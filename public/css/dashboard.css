@@ -841,3 +841,74 @@ body {
     background: var(--accent-secondary);
     border-radius: 4px;
 }
+
+/* GitHub Star Button */
+.github-button {
+    display: inline-flex;
+    align-items: center;
+    font-weight: 500;
+    font-size: 14px;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  }
+  
+  .github-button:hover {
+    text-decoration: none;
+  }
+  
+  .star-button {
+    display: flex;
+    align-items: center;
+    padding: 5px 12px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-right: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+    transition: background-color 0.2s;
+  }
+  
+  .star-count {
+    position: relative;
+    padding: 5px 12px;
+    font-weight: 600;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    transition: background-color 0.2s;
+  }
+  
+  .star-count::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+    width: 8px;
+    height: 8px;
+    background-color: var(--bg-primary);
+    border-left: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .github-button:hover .star-button {
+    background-color: var(--hover-bg);
+  }
+  
+  .star-icon {
+    fill: var(--accent-primary);
+    margin-right: 4px;
+    transition: transform 0.3s ease;
+  }
+  
+  .github-button:hover .star-icon {
+    transform: rotate(-15deg) scale(1.2);
+  }
