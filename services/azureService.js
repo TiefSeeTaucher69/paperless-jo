@@ -172,8 +172,8 @@ class AzureOpenAIService {
         process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : []
       );
       
-      const maxTokens = 128000;
-      const reservedTokens = totalPromptTokens + 1000;
+      const maxTokens = Number(config.tokenLimit);
+      const reservedTokens = totalPromptTokens + Number(config.responseTokens);
       const availableTokens = maxTokens - reservedTokens;
       
       const truncatedContent = await this.truncateToTokenLimit(content, availableTokens);
@@ -211,6 +211,8 @@ class AzureOpenAIService {
 
       let jsonContent = response.choices[0].message.content;
       jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+      // console.log(`[DEBUG] [${timestamp}] Response: ${jsonContent}`);
 
       let parsedResponse;
       try {
@@ -291,8 +293,8 @@ class AzureOpenAIService {
       );
       
       // Calculate available tokens
-      const maxTokens = 128000;
-      const reservedTokens = totalPromptTokens + 1000; // Reserve for response
+      const maxTokens = Number(config.tokenLimit);
+      const reservedTokens = totalPromptTokens + Number(config.responseTokens); 
       const availableTokens = maxTokens - reservedTokens;
       
       // Truncate content if necessary

@@ -1844,6 +1844,8 @@ router.get('/setup', async (req, res) => {
       SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
       SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
       PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
+      TOKEN_LIMIT: process.env.TOKEN_LIMIT || 128000,
+      RESPONSE_TOKENS: process.env.RESPONSE_TOKENS || 1000,
       TAGS: normalizeArray(process.env.TAGS),
       ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
       AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
@@ -2636,6 +2638,9 @@ router.get('/settings', async (req, res) => {
     SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
     SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
     PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
+    
+    TOKEN_LIMIT: process.env.TOKEN_LIMIT || 128000,
+    RESPONSE_TOKENS: process.env.RESPONSE_TOKENS || 1000,
     TAGS: normalizeArray(process.env.TAGS),
     ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
     AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
@@ -3527,6 +3532,8 @@ router.post('/setup', express.json(), async (req, res) => {
       scanInterval,
       systemPrompt,
       showTags,
+      tokenLimit,
+      responseTokens,
       tags,
       aiProcessedTag,
       aiTagName,
@@ -3644,6 +3651,8 @@ router.post('/setup', express.json(), async (req, res) => {
       SCAN_INTERVAL: scanInterval || '*/30 * * * *',
       SYSTEM_PROMPT: processedPrompt,
       PROCESS_PREDEFINED_DOCUMENTS: showTags || 'no',
+      TOKEN_LIMIT: tokenLimit || 128000,
+      RESPONSE_TOKENS: responseTokens || 1000,
       TAGS: normalizeArray(tags),
       ADD_AI_PROCESSED_TAG: aiProcessedTag || 'no',
       AI_PROCESSED_TAG_NAME: aiTagName || 'ai-processed',
@@ -3814,6 +3823,14 @@ router.post('/setup', express.json(), async (req, res) => {
  *                 type: boolean
  *                 description: Whether to show tags in the UI
  *                 example: true
+ *               tokenLimit:
+ *                 type: integer
+ *                 description: The maximum number of tokens th AI can handle
+ *                 example: 128000
+ *               responseTokens:
+ *                 type: integer
+ *                 description: The approx. amount of tokens required for the response
+ *                 example: 1000
  *               tags:
  *                 type: string
  *                 description: Comma-separated list of tags to use for filtering
@@ -3923,6 +3940,8 @@ router.post('/settings', express.json(), async (req, res) => {
       scanInterval,
       systemPrompt,
       showTags,
+      tokenLimit,
+      responseTokens,
       tags,
       aiProcessedTag,
       aiTagName,
@@ -3964,6 +3983,8 @@ router.post('/settings', express.json(), async (req, res) => {
       SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
       SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
       PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
+      TOKEN_LIMIT: process.env.TOKEN_LIMIT || 128000,
+      RESPONSE_TOKENS: process.env.RESPONSE_TOKENS || 1000,
       TAGS: process.env.TAGS || '',
       ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
       AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
@@ -4081,6 +4102,8 @@ router.post('/settings', express.json(), async (req, res) => {
     if (scanInterval) updatedConfig.SCAN_INTERVAL = scanInterval;
     if (systemPrompt) updatedConfig.SYSTEM_PROMPT = processedPrompt.replace(/\r\n/g, '\n').replace(/\n/g, '\\n');
     if (showTags) updatedConfig.PROCESS_PREDEFINED_DOCUMENTS = showTags;
+    if (tokenLimit) updatedConfig.TOKEN_LIMIT = tokenLimit;
+    if (responseTokens) updatedConfig.RESPONSE_TOKENS = responseTokens;
     if (tags !== undefined) updatedConfig.TAGS = normalizeArray(tags);
     if (aiProcessedTag) updatedConfig.ADD_AI_PROCESSED_TAG = aiProcessedTag;
     if (aiTagName) updatedConfig.AI_PROCESSED_TAG_NAME = aiTagName;

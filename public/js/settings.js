@@ -32,6 +32,8 @@ class FormManager {
     constructor() {
         this.form = document.getElementById('setupForm');
         this.aiProvider = document.getElementById('aiProvider');
+        this.tokenLimit = document.getElementById('tokenLimit'); 
+        this.responseTokens = document.getElementById('responseTokens'); 
         this.showTags = document.getElementById('showTags');
         this.aiProcessedTag = document.getElementById('aiProcessedTag');
         this.usePromptTags = document.getElementById('usePromptTags');
@@ -47,6 +49,8 @@ class FormManager {
         this.handleDisableAutomaticProcessing();
         
         this.aiProvider.addEventListener('change', () => this.toggleProviderSettings());
+        this.tokenLimit.addEventListener('input', () => this.validateTokenLimit()); 
+        this.responseTokens.addEventListener('input', () => this.validateResponseTokens()); 
         this.showTags.addEventListener('change', () => this.toggleTagsInput());
         this.aiProcessedTag.addEventListener('change', () => this.toggleAiTagInput());
         this.usePromptTags.addEventListener('change', () => this.togglePromptTagsInput());
@@ -60,6 +64,24 @@ class FormManager {
         
         this.toggleAiTagInput();
         this.togglePromptTagsInput();
+    }
+
+    validateTokenLimit() {
+        const value = parseInt(this.tokenLimit.value, 10);
+        if (isNaN(value) || value < 1) {
+            this.tokenLimit.setCustomValidity('Token Limit must be a positive integer.');
+        } else {
+            this.tokenLimit.setCustomValidity('');
+        }
+    }
+
+    validateResponseTokens() {
+        const value = parseInt(this.responseTokens.value, 10);
+        if (isNaN(value) || value < 0) {
+            this.responseTokens.setCustomValidity('Response tokens must be a non-negative integer.');
+        } else {
+            this.responseTokens.setCustomValidity('');
+        }
     }
 
     handleDisableAutomaticProcessing() {
@@ -95,6 +117,7 @@ class FormManager {
         const azureEndpoint = document.getElementById('azureEndpoint');
         const azureDeploymentName = document.getElementById('azureDeploymentName');
         const azureApiVersion = document.getElementById('azureApiVersion');
+        
         
         // Hide all settings sections first
         openaiSettings.classList.add('hidden');

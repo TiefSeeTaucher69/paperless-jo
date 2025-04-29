@@ -163,8 +163,8 @@ class OpenAIService {
         process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : []
       );
       
-      const maxTokens = 128000;
-      const reservedTokens = totalPromptTokens + 1000;
+      const maxTokens = Number(config.tokenLimit);
+      const reservedTokens = totalPromptTokens + Number(config.responseTokens);
       const availableTokens = maxTokens - reservedTokens;
       
       const truncatedContent = await this.truncateToTokenLimit(content, availableTokens);
@@ -282,8 +282,8 @@ class OpenAIService {
       );
       
       // Calculate available tokens
-      const maxTokens = 128000;
-      const reservedTokens = totalPromptTokens + 1000; // Reserve for response
+      const maxTokens = Number(config.tokenLimit);
+      const reservedTokens = totalPromptTokens + Number(config.responseTokens); // Reserve for response
       const availableTokens = maxTokens - reservedTokens;
       
       // Truncate content if necessary
