@@ -30,6 +30,8 @@ module.exports = {
   CONFIGURED: false,
   disableAutomaticProcessing: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
+  tokenLimit: process.env.TOKEN_LIMIT || 128000,
+  responseTokens: process.env.RESPONSE_TOKENS || 1000,
   addAIProcessedTag: process.env.ADD_AI_PROCESSED_TAG || 'no',
   addAIProcessedTags: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
   paperless: {

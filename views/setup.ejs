@@ -346,6 +346,26 @@
                                                    placeholder="Enter API version">
                                         </div>
                                     </div>
+
+                                    <div class="form-group">
+                                        <label for="tokenLimit">Token Limit</label>
+                                        <input type="number" 
+                                               id="tokenLimit" 
+                                               name="tokenLimit"
+                                               value="<%= config.TOKEN_LIMIT %>"
+                                               class="modern-input"
+                                               placeholder="Enter token limit of model">
+                                    </div>
+                        
+                                    <div class="form-group">
+                                        <label for="responseTokens">Response Tokens</label>
+                                        <input type="number" 
+                                               id="responseTokens" 
+                                               name="responseTokens"
+                                               value="<%= config.RESPONSE_TOKENS %>"
+                                               class="modern-input"
+                                               placeholder="Enter approximate token amount for the response">
+                                    </div>
                                 </div>
                             </section>
                         </div>

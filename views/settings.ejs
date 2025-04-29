@@ -404,6 +404,28 @@
                                                placeholder="Enter API version">
                                     </div>
                                 </div>
+
+                                <!-- Token Limit Field -->
+                                <div class="space-y-2">
+                                    <label for="tokenLimit">Token Limit</label>
+                                    <input type="number" 
+                                        id="tokenLimit" 
+                                        name="tokenLimit"
+                                        value="<%= config.TOKEN_LIMIT %>"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        placeholder="Enter token limit of model">
+                                </div>
+
+                                <!--  Response Tokens Field -->
+                                <div class="space-y-2">
+                                    <label for="responseTokens">Response Tokens</label>
+                                    <input type="number" 
+                                        id="responseTokens" 
+                                        name="responseTokens"
+                                        value="<%= config.RESPONSE_TOKENS %>"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        placeholder="Enter approximate token amount for response">
+                                </div>
                             </div>
                         </section>
         

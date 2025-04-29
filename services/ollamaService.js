@@ -347,7 +347,7 @@ class OllamaService {
      */
     _calculateNumCtx(promptTokenCount, expectedResponseTokens) {
         const totalTokenUsage = promptTokenCount + expectedResponseTokens;
-        const maxCtxLimit = 128000;
+        const maxCtxLimit = Number(config.tokenLimit);
         
         const numCtx = Math.min(totalTokenUsage, maxCtxLimit);
         

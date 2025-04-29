@@ -122,8 +122,8 @@ class CustomOpenAIService {
       );
         
         // Calculate available tokens
-        const maxTokens = 128000; // Model's maximum context length
-        const reservedTokens = totalPromptTokens + 1000; // Reserve for response
+        const maxTokens = Number(config.tokenLimit); // Model's maximum context length
+        const reservedTokens = totalPromptTokens +  Number(config.responseTokens); 
         const availableTokens = maxTokens - reservedTokens;
         
         // Truncate content if necessary
@@ -240,8 +240,8 @@ class CustomOpenAIService {
       );
       
       // Calculate available tokens
-      const maxTokens = 128000;
-      const reservedTokens = totalPromptTokens + 1000; // Reserve for response
+      const maxTokens = Number(config.tokenLimit);
+      const reservedTokens = totalPromptTokens + Number(config.responseTokens); 
       const availableTokens = maxTokens - reservedTokens;
       
       // Truncate content if necessary
