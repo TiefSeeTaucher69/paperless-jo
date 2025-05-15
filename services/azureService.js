@@ -147,7 +147,7 @@ class AzureOpenAIService {
         throw new Error('Invalid API response structure');
       }
       
-      console.log(`[DEBUG] [${timestamp}] Azure request sent`);
+      console.log(`[DEBUG] [${timestamp}] AzureOpenAI request sent`);
       console.log(`[DEBUG] [${timestamp}] Total tokens: ${response.usage.total_tokens}`);
       
       const usage = response.usage;
@@ -210,7 +210,7 @@ class AzureOpenAIService {
       const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
       
       if (!this.client) {
-        throw new Error('OpenAI client not initialized - missing API key');
+        throw new Error('AzureOpenAI client not initialized - missing API key');
       }
       
       // Calculate total prompt tokens including musthavePrompt
@@ -228,7 +228,7 @@ class AzureOpenAIService {
       
       // Make API request
       const response = await this.client.chat.completions.create({
-        model: process.env.OPENAI_MODEL,
+        model: process.env.AZURE_DEPLOYMENT_NAME,
         messages: [
           {
             role: "system",
@@ -248,7 +248,7 @@ class AzureOpenAIService {
       }
       
       // Log token usage
-      console.log(`[DEBUG] [${timestamp}] OpenAI request sent`);
+      console.log(`[DEBUG] [${timestamp}] AzureOpenAI request sent`);
       console.log(`[DEBUG] [${timestamp}] Total tokens: ${response.usage.total_tokens}`);
       
       const usage = response.usage;
