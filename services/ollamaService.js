@@ -541,7 +541,7 @@ class OllamaService {
             + '\n\n' 
             + '================================================================================\n\n';
             
-        await this._writePromptToFile(content);
+        await writePromptToFile(content);
     }
 }
 

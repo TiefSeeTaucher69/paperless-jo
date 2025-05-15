@@ -59,7 +59,7 @@ class ManualService {
             .join(', ');
         const model = process.env.OPENAI_MODEL;
         const systemPrompt = process.env.SYSTEM_PROMPT;
-        await this.writePromptToFile(systemPrompt, content);
+        await writePromptToFile(systemPrompt, content);
         const response = await this.openai.chat.completions.create({
             model: model,
             messages: [
@@ -107,7 +107,7 @@ class ManualService {
             .join(', ');
     
         const systemPrompt = process.env.SYSTEM_PROMPT;
-        await this.writePromptToFile(systemPrompt, content);
+        await writePromptToFile(systemPrompt, content);
         const response = await this.openai.chat.completions.create({
             model: process.env.AZURE_DEPLOYMENT_NAME,
             messages: [
