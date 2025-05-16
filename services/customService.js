@@ -82,7 +82,7 @@ class CustomOpenAIService {
       }
 
       // Calculate total prompt tokens including all components
-      const totalPromptTokens = await this.calculateTotalPromptTokens(
+      const totalPromptTokens = await calculateTotalPromptTokens(
         systemPrompt,
         process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : []
       );
@@ -93,7 +93,7 @@ class CustomOpenAIService {
         const availableTokens = maxTokens - reservedTokens;
         
         // Truncate content if necessary
-        const truncatedContent = await this.truncateToTokenLimit(content, availableTokens);
+        const truncatedContent = await truncateToTokenLimit(content, availableTokens);
       
       // Make API request
       const response = await this.client.chat.completions.create({
@@ -180,7 +180,7 @@ class CustomOpenAIService {
       }
       
       // Calculate total prompt tokens including musthavePrompt
-      const totalPromptTokens = await this.calculateTotalPromptTokens(
+      const totalPromptTokens = await calculateTotalPromptTokens(
         prompt + musthavePrompt // Combined system prompt
       );
       
@@ -190,7 +190,7 @@ class CustomOpenAIService {
       const availableTokens = maxTokens - reservedTokens;
       
       // Truncate content if necessary
-      const truncatedContent = await this.truncateToTokenLimit(content, availableTokens);
+      const truncatedContent = await truncateToTokenLimit(content, availableTokens);
       
       // Make API request
       const response = await this.client.chat.completions.create({
