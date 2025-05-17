@@ -129,11 +129,6 @@ async function sendQuestion(question) {
                         if (parsed.content) {
                             markdown += parsed.content;
                             
-                            // Add citations if not present
-                            if (parsed.sources && !sources.length) {
-                                sources = parsed.sources;
-                            }
-                            
                             // Update message with current markdown content
                             const contentDiv = messageDiv.querySelector('.message-content');
                             contentDiv.innerHTML = marked.parse(markdown);
@@ -147,6 +142,12 @@ async function sendQuestion(question) {
                             addCitations(contentDiv);
                             
                             scrollToBottom();
+                        }
+                        
+                        // Store sources when they're received
+                        if (parsed.sources && Array.isArray(parsed.sources) && parsed.sources.length > 0) {
+                            console.log('Sources received:', parsed.sources);
+                            sources = parsed.sources;
                         }
                     } catch (e) {
                         console.error('Error parsing SSE data:', e);
@@ -190,7 +191,8 @@ async function sendQuestion(question) {
                 item.addEventListener('click', () => {
                     const docId = item.getAttribute('data-doc-id');
                     if (docId) {
-                        window.open(`/dashboard?doc=${docId}`, '_blank');
+                        // Use the dashboard link that will handle redirecting to the correct Paperless instance
+                        window.open(`/dashboard/doc/${docId}`, '_blank');
                     }
                 });
             });
