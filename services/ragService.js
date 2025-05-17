@@ -2,11 +2,15 @@
 const axios = require('axios');
 const config = require('../config/config');
 const AIServiceFactory = require('./aiServiceFactory');
+const paperlessService = require('./paperlessService');
 
 class RAGService {
   constructor() {
     this.searchApiUrl = "http://localhost:8000/search";
     this.aiService = AIServiceFactory.getService();
+    
+    // Make sure paperlessService is initialized
+    paperlessService.initialize();
   }
 
   /**
@@ -53,11 +57,50 @@ class RAGService {
         };
       }
 
-      // Prepare context from documents
-      const context = documents.map((doc, index) => {
+      // Debug: Log documents used for context
+      console.log("\n[DEBUG] RAG SERVICE - DOCUMENT CONTEXT");
+      console.log("========================================");
+      console.log(`Question: "${question}"`);
+      console.log(`Number of documents: ${documents.length}`);
+      
+      // Prepare context from documents with full content
+      const context = await Promise.all(documents.map(async (doc, index) => {
+        // Debug: Log each document's details
+        console.log(`\n[Document ${index + 1}] ID: ${doc.doc_id}`);
+        console.log(`Title: "${doc.title}"`);
+        console.log(`Correspondent: ${doc.correspondent}`);
+        console.log(`Date: ${doc.date}`);
+        console.log(`Relevance Score: ${doc.score.toFixed(2)}`);
+        console.log(`Cross Score: ${doc.cross_score.toFixed(2)}`);
+        console.log(`Snippet: "${doc.snippet.substring(0, 500)}${doc.snippet.length > 500 ? '...' : ''}"`);
+        
+        // Fetch full document content if available
+        let fullContent = "";
+        try {
+          console.log(`[DEBUG] Fetching full content for document ID: ${doc.doc_id}`);
+          fullContent = await paperlessService.getDocumentContent(doc.doc_id);
+          
+          if (fullContent) {
+            // Truncate for debug log only
+            const contentPreview = fullContent.substring(0, 300);
+            console.log(`[DEBUG] Full content retrieved (${fullContent.length} chars). Preview: "${contentPreview}..."`);
+          } else {
+            console.log(`[DEBUG] No full content found, using snippet only`);
+          }
+        } catch (error) {
+          console.error(`[ERROR] Failed to get full content for document ${doc.doc_id}: ${error.message}`);
+          console.log('[DEBUG] Will proceed with snippet only');
+        }
+        
+        // Use full content if available, otherwise fall back to snippet
+        const contentToUse = fullContent || doc.snippet;
+        
         return `Document ${index + 1}: "${doc.title}" (${doc.correspondent}, ${doc.date})
-Snippet: ${doc.snippet}`;
-      }).join("\n\n");
+Content: ${contentToUse}`;
+      }));
+      
+      // Join all document contexts with double line breaks
+      const fullContext = context.join("\n\n");
 
       // Get the language to use for the response (defaults to matching the question language)
       const language = options.language || 'en';
@@ -84,10 +127,20 @@ Snippet: ${doc.snippet}`;
 Question: ${question}
 
 Context Documents:
-${context}
+${fullContext}
 
 ${languageInstruction}
 Please provide a comprehensive answer citing the specific documents used. If the information to answer the question is not contained in the documents, state that clearly.`;
+
+      // Debug log the full prompt
+      console.log("\n[DEBUG] RAG SERVICE - PROMPT INFORMATION");
+      console.log("=========================================");
+      console.log(`Full prompt length: ${prompt.length} characters`);
+      if (prompt.length > 1000) {
+        console.log(`Prompt (trimmed): ${prompt.substring(0, 500)}...${prompt.substring(prompt.length - 500)}`);
+      } else {
+        console.log(`Full prompt: ${prompt}`);
+      }
 
       // Create a custom system prompt specifically for RAG
       const ragSystemPrompt = `You are a document-based question answering assistant.
@@ -121,7 +174,7 @@ This overrides any previous instructions about JSON formatting. DO NOT return JS
         },
         {
           role: "user",
-          content: question + "\n\n" + context
+          content: question + "\n\n" + fullContext
         }
       ];
       
@@ -132,11 +185,38 @@ This overrides any previous instructions about JSON formatting. DO NOT return JS
         temperature: 0.3,
       });
       
+      // Debug log the AI response
+      console.log("\n[DEBUG] RAG SERVICE - AI RESPONSE");
+      console.log("=================================");
+      console.log(`Model used: ${response.model || 'Unknown'}`);
+      if (response.usage) {
+        console.log(`Tokens used: ${response.usage.total_tokens} (Prompt: ${response.usage.prompt_tokens}, Completion: ${response.usage.completion_tokens})`);
+      }
+      
       // Extract the answer from the result
       let answer = "Unable to generate an answer from the documents.";
       
       if (response?.choices?.[0]?.message?.content) {
         answer = response.choices[0].message.content.trim();
+        
+        // Log a preview of the response content
+        console.log(`\nResponse content (first 500 chars):\n${answer.substring(0, 500)}${answer.length > 500 ? '...' : ''}`);
+        
+        // Log if the response contains specific phrases indicating "no information"
+        const noInfoPhrases = [
+          "cannot answer", "cannot provide", "don't have enough information",
+          "keine Informationen", "cannot find", "not contained", "not mentioned",
+          "not specified", "not provided", "not included", "not found", "no specific"
+        ];
+        
+        const containsNoInfoPhrase = noInfoPhrases.some(phrase => 
+          answer.toLowerCase().includes(phrase.toLowerCase())
+        );
+        
+        if (containsNoInfoPhrase) {
+          console.log("\n[WARNING] Response indicates no information found, but documents might contain relevant info.");
+          console.log("Consider reviewing the full document content beyond the snippets.");
+        }
       }
       
       return {
@@ -160,6 +240,10 @@ This overrides any previous instructions about JSON formatting. DO NOT return JS
       // Search for relevant documents
       const documents = await this.searchDocuments(question, options);
       
+      // Log the total number of matching documents before filtering
+      console.log(`\n[DEBUG] RAG SERVICE - SEARCH RESULTS`);
+      console.log(`Total matching documents: ${documents.length}`);
+      
       // Get top 3 documents based on score
       const topDocuments = documents
         .sort((a, b) => (b.score + b.cross_score) - (a.score + a.cross_score))
@@ -167,6 +251,26 @@ This overrides any previous instructions about JSON formatting. DO NOT return JS
       
       // Generate answer from documents, passing the options including language
       const result = await this.generateAnswerFromDocuments(question, topDocuments, options);
+      
+      // If the response indicates no information was found but we have more documents
+      if (
+        result.answer.toLowerCase().includes("keine information") || 
+        result.answer.toLowerCase().includes("not contained") ||
+        result.answer.toLowerCase().includes("not mentioned") ||
+        result.answer.toLowerCase().includes("not enough information") ||
+        result.answer.toLowerCase().includes("nicht genügend")
+      ) {
+        console.log("\n[DEBUG] RAG SERVICE - POSSIBLE INFORMATION GAP");
+        console.log("AI indicates no information found, but there may be more relevant documents available.");
+        console.log(`Total available documents: ${documents.length}, Used: ${topDocuments.length}`);
+        
+        if (documents.length > topDocuments.length) {
+          console.log("Consider retrieving more content from the original documents or increasing snippet size.");
+          console.log("Document IDs to check: " + documents.slice(0, Math.min(5, documents.length))
+            .map(doc => `${doc.doc_id} (${doc.title.substring(0, 30)}...)`)
+            .join(", "));
+        }
+      }
       
       return result;
     } catch (error) {
