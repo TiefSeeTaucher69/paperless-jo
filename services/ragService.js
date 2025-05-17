@@ -7,10 +7,26 @@ const paperlessService = require('./paperlessService');
 class RAGService {
   constructor() {
     this.searchApiUrl = "http://localhost:8000/search";
-    this.aiService = AIServiceFactory.getService();
+    this.aiService = null;
     
     // Make sure paperlessService is initialized
     paperlessService.initialize();
+  }
+
+  /**
+   * Initialize or get the AI service
+   * @returns {Object} The initialized AI service
+   */
+  initialize() {
+    if (!this.aiService) {
+      this.aiService = AIServiceFactory.getService();
+      
+      // If the service has an initialize method, call it
+      if (typeof this.aiService.initialize === 'function') {
+        this.aiService.initialize();
+      }
+    }
+    return this.aiService;
   }
 
   /**
@@ -159,31 +175,64 @@ Just write a clear, direct answer in plain text.
 
 This overrides any previous instructions about JSON formatting. DO NOT return JSON - only return the text of your answer.`;
 
-      // Use direct OpenAI call instead of analyzeDocument which handles thumbnails
-      this.aiService.initialize();
+      // Initialize the AI service
+      const aiService = this.initialize();
       
-      if (!this.aiService.client) {
-        throw new Error('AI client not initialized');
-      }
+      // Different handling based on AI provider type
+      let response;
+      const aiProvider = config.aiProvider;
       
-      // Create messages for AI completion
-      const messages = [
-        {
-          role: "system",
-          content: ragSystemPrompt
-        },
-        {
-          role: "user",
-          content: question + "\n\n" + fullContext
+      if (aiProvider === 'openai' || aiProvider === 'azure' || aiProvider === 'custom') {
+        // These providers use the OpenAI client format
+        if (!aiService.client) {
+          throw new Error('AI client not initialized');
         }
-      ];
-      
-      // Call AI service directly
-      const response = await this.aiService.client.chat.completions.create({
-        model: process.env.OPENAI_MODEL || config.ollama.model,
-        messages: messages,
-        temperature: 0.3,
-      });
+        
+        // Create messages for AI completion
+        const messages = [
+          {
+            role: "system",
+            content: ragSystemPrompt
+          },
+          {
+            role: "user",
+            content: question + "\n\n" + fullContext
+          }
+        ];
+        
+        // Call AI service directly with OpenAI client
+        response = await aiService.client.chat.completions.create({
+          model: process.env.OPENAI_MODEL || config.ollama.model,
+          messages: messages,
+          temperature: 0.3,
+        });
+      } else if (aiProvider === 'ollama') {
+        // Ollama uses a different API format
+        response = await aiService.client.post(`${config.ollama.apiUrl}/api/generate`, {
+          model: config.ollama.model,
+          prompt: question + "\n\n" + fullContext,
+          system: ragSystemPrompt,
+          stream: false,
+          options: {
+            temperature: 0.3,
+            num_predict: 1024
+          }
+        });
+        
+        // Transform Ollama response to match OpenAI format
+        if (response.data) {
+          response = {
+            model: config.ollama.model,
+            choices: [{
+              message: {
+                content: response.data.response
+              }
+            }]
+          };
+        }
+      } else {
+        throw new Error(`Unsupported AI provider: ${aiProvider}`);
+      }
       
       // Debug log the AI response
       console.log("\n[DEBUG] RAG SERVICE - AI RESPONSE");
