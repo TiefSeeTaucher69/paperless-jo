@@ -62,13 +62,29 @@ async function sendQuestion(question) {
         // Show user message immediately
         addMessage(question, true);
         
-        // Create loading message
+        // Create loading message with enhanced animation
         const containerDiv = document.createElement('div');
         containerDiv.className = 'message-container assistant';
         
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message assistant';
-        messageDiv.innerHTML = '<p class="loading-dots">Searching documents and generating answer</p>';
+        
+        // Create content and timestamp for loading message
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.innerHTML = '<p class="loading-dots">Searching documents and generating answer</p>';
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'message-time';
+        
+        // Format current time
+        const now = new Date();
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        timeSpan.textContent = `${hours}:${minutes}`;
+        
+        messageDiv.appendChild(contentDiv);
+        messageDiv.appendChild(timeSpan);
         containerDiv.appendChild(messageDiv);
         
         document.getElementById('chatHistory').appendChild(containerDiv);
@@ -119,12 +135,16 @@ async function sendQuestion(question) {
                             }
                             
                             // Update message with current markdown content
-                            messageDiv.innerHTML = marked.parse(markdown);
+                            const contentDiv = messageDiv.querySelector('.message-content');
+                            contentDiv.innerHTML = marked.parse(markdown);
                             
                             // Apply syntax highlighting to any code blocks
-                            messageDiv.querySelectorAll('pre code').forEach((block) => {
+                            contentDiv.querySelectorAll('pre code').forEach((block) => {
                                 hljs.highlightBlock(block);
                             });
+                            
+                            // Add citation links
+                            addCitations(contentDiv);
                             
                             scrollToBottom();
                         }
@@ -201,19 +221,95 @@ function addMessage(message, isUser = true) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
     
+    // Create content and timestamp
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'message-time';
+    
+    // Format current time
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    timeSpan.textContent = `${hours}:${minutes}`;
+    
+    // Add content based on message type
     if (isUser) {
-        messageDiv.innerHTML = `<p>${escapeHtml(message)}</p>`;
+        contentDiv.innerHTML = `<p>${escapeHtml(message)}</p>`;
     } else {
-        messageDiv.innerHTML = marked.parse(message);
-        messageDiv.querySelectorAll('pre code').forEach((block) => {
+        contentDiv.innerHTML = marked.parse(message);
+        contentDiv.querySelectorAll('pre code').forEach((block) => {
             hljs.highlightBlock(block);
         });
+        
+        // Add citation links
+        addCitations(contentDiv);
     }
     
+    messageDiv.appendChild(contentDiv);
+    messageDiv.appendChild(timeSpan);
     containerDiv.appendChild(messageDiv);
+    
+    // Add with animation
+    containerDiv.style.opacity = '0';
+    containerDiv.style.transform = 'translateY(20px)';
+    
     const chatHistory = document.getElementById('chatHistory');
     chatHistory.appendChild(containerDiv);
-    scrollToBottom();
+    
+    // Trigger animation
+    setTimeout(() => {
+        containerDiv.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        containerDiv.style.opacity = '1';
+        containerDiv.style.transform = 'translateY(0)';
+        scrollToBottom();
+    }, 10);
+}
+
+// Add citation references to document mentions in text
+function addCitations(contentElement) {
+    const text = contentElement.innerHTML;
+    
+    // Replace "Document X" with citation links
+    const citedText = text.replace(
+        /Document (\d+)/g, 
+        '<span class="citation" data-doc-id="$1">$1</span>'
+    );
+    
+    contentElement.innerHTML = citedText;
+    
+    // Add click handlers to citations
+    contentElement.querySelectorAll('.citation').forEach(citation => {
+        citation.addEventListener('click', () => {
+            const docId = citation.getAttribute('data-doc-id');
+            // Highlight corresponding source document
+            highlightSourceDocument(docId);
+        });
+    });
+}
+
+// Highlight a source document when its citation is clicked
+function highlightSourceDocument(docIndex) {
+    const sourceItems = document.querySelectorAll('.source-item');
+    
+    // Remove any existing highlights
+    sourceItems.forEach(item => {
+        item.classList.remove('highlighted');
+        item.style.transform = '';
+        item.style.boxShadow = '';
+    });
+    
+    // Add highlight to the clicked item
+    if (sourceItems[docIndex - 1]) {
+        const item = sourceItems[docIndex - 1];
+        item.classList.add('highlighted');
+        item.style.transform = 'translateY(-4px)';
+        item.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.15)';
+        
+        // Scroll the source into view
+        item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 }
 
 function showError(message) {
