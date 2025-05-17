@@ -1,0 +1,286 @@
+/* RAG-specific styles to extend the chat.css base styling */
+
+/* Feature list styling in initial state */
+.features-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.feature-item i {
+    font-size: 1.25rem;
+    color: var(--accent-primary);
+}
+
+/* Filter options styling */
+.filter-options {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.toggle-filters-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.toggle-filters-btn:hover {
+    background-color: var(--bg-secondary);
+}
+
+.filter-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.filter-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.filter-item label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.filter-input {
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    min-width: 200px;
+}
+
+.clear-filters-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-left: auto;
+    align-self: flex-end;
+}
+
+.clear-filters-btn:hover {
+    background-color: var(--bg-primary);
+}
+
+/* Enhanced Chat Styling */
+.message-container {
+    display: flex;
+    margin-bottom: 1rem;
+}
+
+.message-container.user {
+    justify-content: flex-end;
+}
+
+.message-container.assistant {
+    justify-content: flex-start;
+}
+
+.message {
+    max-width: 80%;
+    padding: 1rem;
+    border-radius: 1rem;
+    position: relative;
+}
+
+.message.user {
+    background-color: var(--user-message-bg);
+    color: var(--text-primary);
+    border-top-right-radius: 0.25rem;
+}
+
+.message.assistant {
+    background-color: var(--message-bg);
+    color: var(--text-primary);
+    border-top-left-radius: 0.25rem;
+}
+
+/* Source document styling - Integrated version */
+.source-documents {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+}
+
+.source-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.source-title i {
+    color: var(--accent-primary);
+}
+
+.source-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.source-item {
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    font-size: 0.875rem;
+}
+
+.source-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.source-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.source-meta {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+.source-snippet {
+    color: var(--text-secondary);
+    line-height: 1.4;
+    padding: 0.5rem;
+    background-color: var(--bg-primary);
+    border-radius: 0.25rem;
+    border-left: 3px solid var(--accent-primary);
+}
+
+.source-score {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* Citation reference styling */
+.citation {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    background-color: var(--accent-primary);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 0 0.25rem;
+    cursor: pointer;
+    vertical-align: text-top;
+}
+
+/* Adjustments for mobile view */
+@media (max-width: 768px) {
+    .filter-panel {
+        flex-direction: column;
+    }
+    
+    .filter-input {
+        min-width: unset;
+        width: 100%;
+    }
+}
+
+/* Animation for loading state */
+.loading-dots:after {
+    content: '.';
+    animation: dots 1.5s steps(5, end) infinite;
+}
+
+@keyframes dots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60% { content: '...'; }
+    80%, 100% { content: ''; }
+}
+
+/* Custom scrollbar for the chat history */
+.chat-history::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-history::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+.chat-history::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 4px;
+}
+
+.chat-history::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text-secondary);
+}
+
+/* Initial state styling */
+.initial-state {
+    text-align: center;
+    padding: 2rem;
+}
+
+.initial-state h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.initial-state p {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Dark mode specific adjustments */
+:root[data-theme="dark"] .source-snippet {
+    border-left-color: var(--accent-primary);
+}
