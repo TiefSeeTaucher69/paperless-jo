@@ -456,6 +456,22 @@
             border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
+        .back-button {
+            margin-right: 1rem;
+        }
+
+        .back-button a {
+            color: var(--primary-color);
+            font-size: 1.25rem;
+            transition: color 0.2s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .back-button a:hover {
+            color: var(--primary-hover);
+        }
+
         .action-buttons {
             display: flex;
             gap: 0.5rem;
@@ -601,10 +617,15 @@
     </style>
 </head>
 <body>
-    <header>
+<header>
+        <div class="back-button">
+            <a href="/dashboard" title="Back to Dashboard">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+        </div>
         <div class="logo">
             <i class="fas fa-search"></i>
-            Paperless-AI RAG
+            Paperless-AI RAG Chat
         </div>
         <div class="header-controls">
             <div class="ai-model-badge" id="ai-model-badge">
@@ -673,7 +694,7 @@
 
         <div class="chat-container" id="chat-container">
             <div class="system-message">
-                Welcome to RAGZ! Ask a question about your documents.
+                Welcome to Paperless-AI RAG Chat! Ask a question about your documents.
             </div>
         </div>
 
