@@ -213,10 +213,12 @@ async function startIndexing() {
         const statusText = document.getElementById('indexingStatusText');
         const progressBar = document.getElementById('indexingProgress').querySelector('.progress-fill');
         const startButton = document.getElementById('startIndexingButton');
+        const forceReindexButton = document.getElementById('forceReindexButton');
         
         // Update UI
         statusIndicator.style.display = 'flex';
         startButton.style.display = 'none';
+        if (forceReindexButton) forceReindexButton.style.display = 'none';
         statusText.textContent = 'Python-Dienst wird gestartet...';
         progressBar.style.width = '5%';
         
@@ -230,7 +232,36 @@ async function startIndexing() {
             throw new Error(errorData.error || 'Failed to start indexing');
         }
         
-        // Start polling for status updates
+        // Check if indexing is already running in another process or already complete
+        const data = await response.json().catch(() => null);
+        if (data) {
+            if (data.alreadyRunning) {
+                console.log('Indexing already running in another process');
+                statusText.textContent = 'Indexierung läuft bereits in einem anderen Prozess';
+                progressBar.style.width = '20%';
+                
+                // Show the initial state and start polling for updates
+                startStatusPolling();
+                return;
+            } else if (data.alreadyComplete) {
+                console.log('Indexing already complete');
+                statusText.textContent = 'Indexierung bereits abgeschlossen';
+                progressBar.style.width = '100%';
+                
+                // Show completion state
+                setTimeout(() => {
+                    document.getElementById('ragSetupSection').style.display = 'none';
+                    document.getElementById('initialState').style.display = 'block';
+                    if (startButton) startButton.style.display = 'flex';
+                    if (forceReindexButton) forceReindexButton.style.display = 'flex';
+                    statusIndicator.style.display = 'none';
+                }, 2000);
+                
+                return;
+            }
+        }
+        
+        // If no special condition detected, start polling for status updates
         startStatusPolling();
         
         // Set up SSE for progress updates

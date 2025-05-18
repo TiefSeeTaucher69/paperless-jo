@@ -88,7 +88,27 @@
                             </div>
                         </div>
 
-                        <!-- RAG Setup Section moved out of chat interface -->
+                        <!-- RAG Setup Section -->
+                        <div id="ragSetupSection" class="rag-setup-section">
+                            <h3>Indexing Setup</h3>
+                            <p>Der RAG-Service muss initialisiert werden, um Ihre Dokumente zu indizieren.</p>
+                            
+                            <div class="setup-buttons">
+                                <button id="startIndexingButton" class="btn btn-primary">
+                                    <i class="fas fa-sync"></i> Indexierung starten
+                                </button>
+                                <button id="forceReindexButton" class="btn btn-secondary">
+                                    <i class="fas fa-redo"></i> Neuindexierung erzwingen
+                                </button>
+                            </div>
+                            
+                            <div id="indexingStatus" class="indexing-status" style="display: none;">
+                                <div id="indexingStatusText" class="indexing-status-text">Indexierung läuft...</div>
+                                <div id="indexingProgress" class="progress-bar">
+                                    <div class="progress-fill"></div>
+                                </div>
+                            </div>
+                        </div>
 
                         <!-- Chat History -->
                         <div id="chatHistory" class="chat-history">

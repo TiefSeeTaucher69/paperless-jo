@@ -21,8 +21,59 @@ class RAGService extends EventEmitter {
       lastMessage: ''
     };
     
+    // Path to lock file to prevent multiple indexing processes
+    this.lockFilePath = path.join(process.cwd(), 'rag_indexing.lock');
+    
+    // Path to flag file indicating successful indexing completion
+    this.completionFlagPath = path.join(process.cwd(), 'indexing_complete.flag');
+    
+    // Path to documents file and chromadb directory
+    this.documentsPath = path.join(process.cwd(), 'documents.json');
+    this.chromadbPath = path.join(process.cwd(), 'chromadb');
+    
     // Make sure paperlessService is initialized
     paperlessService.initialize();
+    
+    // Check if indexing was previously completed
+    this._checkPreviousIndexingState();
+  }
+  
+  /**
+   * Check if indexing was previously completed by examining index files
+   * @private
+   */
+  _checkPreviousIndexingState() {
+    try {
+      // Check if the completion flag exists
+      const flagExists = fs.existsSync(this.completionFlagPath);
+      
+      // Check if documents.json and chromadb directory exist
+      const docsExist = fs.existsSync(this.documentsPath);
+      const chromadbExists = fs.existsSync(this.chromadbPath);
+      
+      // If both the flag and the actual index files exist, consider indexing complete
+      if (flagExists && docsExist && chromadbExists) {
+        console.log('Found existing valid index files - marking indexing as previously completed');
+        this.indexingStatus.complete = true;
+      } else if (docsExist && chromadbExists) {
+        // If index files exist but no flag, create the flag
+        console.log('Found index files but no completion flag - creating flag file');
+        fs.writeFileSync(this.completionFlagPath, new Date().toISOString(), 'utf8');
+        this.indexingStatus.complete = true;
+      } else {
+        console.log('No valid index files found - indexing will be required');
+        this.indexingStatus.complete = false;
+        
+        // Clean up flag file if it exists but indexes don't
+        if (flagExists) {
+          console.log('Removing stale completion flag file');
+          fs.unlinkSync(this.completionFlagPath);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking previous indexing state:', error);
+      this.indexingStatus.complete = false;
+    }
   }
 
   /**
@@ -145,10 +196,114 @@ class RAGService extends EventEmitter {
   }
   
   /**
+   * Check if another indexing process is currently running
+   * @returns {boolean} True if locked, false if not
+   * @private 
+   */
+  _isIndexingLocked() {
+    try {
+      // Check if lock file exists
+      if (fs.existsSync(this.lockFilePath)) {
+        // Read the lock file to get the timestamp
+        const lockData = fs.readFileSync(this.lockFilePath, 'utf8');
+        const lockTime = new Date(lockData);
+        const currentTime = new Date();
+        
+        // If lock is older than 10 minutes, consider it stale and remove it
+        if (currentTime - lockTime > 10 * 60 * 1000) {
+          console.log('Found stale lock file, removing it');
+          fs.unlinkSync(this.lockFilePath);
+          return false;
+        }
+        
+        // Lock file is recent, indexing is in progress
+        return true;
+      }
+      
+      // No lock file found
+      return false;
+    } catch (error) {
+      console.error('Error checking indexing lock:', error);
+      return false; // Assume unlocked in case of error
+    }
+  }
+  
+  /**
+   * Create a lock file to prevent multiple indexing processes
+   * @returns {boolean} True if lock was successfully created, false if already locked
+   * @private
+   */
+  _createIndexingLock() {
+    try {
+      // Check if already locked
+      if (this._isIndexingLocked()) {
+        console.log('Cannot create lock: indexing is already in progress');
+        return false;
+      }
+      
+      // Create lock file with current timestamp
+      fs.writeFileSync(this.lockFilePath, new Date().toISOString(), 'utf8');
+      console.log('Created indexing lock file');
+      return true;
+    } catch (error) {
+      console.error('Error creating indexing lock:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Remove the indexing lock file
+   * @private
+   */
+  _releaseIndexingLock() {
+    try {
+      if (fs.existsSync(this.lockFilePath)) {
+        fs.unlinkSync(this.lockFilePath);
+        console.log('Released indexing lock');
+      }
+    } catch (error) {
+      console.error('Error releasing indexing lock:', error);
+    }
+  }
+  
+  /**
+   * Create a flag file to indicate indexing was successfully completed
+   * @private
+   */
+  _createCompletionFlag() {
+    try {
+      fs.writeFileSync(this.completionFlagPath, new Date().toISOString(), 'utf8');
+      console.log('Created indexing completion flag file');
+    } catch (error) {
+      console.error('Error creating completion flag:', error);
+    }
+  }
+
+  /**
    * Start the indexing process (assumes the server is already running)
    * @returns {Promise<Object>} Result of operation 
    */
   async startIndexing() {
+    // Check if indexing is already in progress
+    if (this._isIndexingLocked()) {
+      console.log('Another indexing process is already running');
+      return { 
+        success: false, 
+        message: 'Another indexing process is already running', 
+        alreadyRunning: true 
+      };
+    }
+    
+    // Create lock to prevent multiple processes
+    if (!this._createIndexingLock()) {
+      return { 
+        success: false, 
+        message: 'Failed to acquire indexing lock', 
+        alreadyRunning: true 
+      };
+    }
+    
+    // Update indexing status
     this.indexingStatus = {
       running: true,
       complete: false,
@@ -235,6 +390,12 @@ class RAGService extends EventEmitter {
           if (status.documents_count) {
             message += `: ${status.documents_count} Dokumente indiziert`;
           }
+          
+          // Create completion flag file when indexing is complete
+          this._createCompletionFlag();
+          
+          // Release the lock file
+          this._releaseIndexingLock();
         }
         
         // Emit progress event
@@ -308,14 +469,72 @@ class RAGService extends EventEmitter {
   }
   
   /**
+   * Count the number of documents in the documents.json file
+   * @returns {number} Number of documents or 0 if file doesn't exist
+   * @private
+   */
+  _countDocumentsInFile() {
+    try {
+      if (fs.existsSync(this.documentsPath)) {
+        const content = fs.readFileSync(this.documentsPath, 'utf8');
+        const documents = JSON.parse(content);
+        return Array.isArray(documents) ? documents.length : 0;
+      }
+      return 0;
+    } catch (error) {
+      console.error('Error counting documents in file:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Check the current status of RAG indexing
    * @returns {Promise<Object>} Current status information
    */
   async checkRagStatus() {
     try {
+      // First check if we have valid index files, regardless of server status
+      const docsExist = fs.existsSync(this.documentsPath);
+      const chromadbExists = fs.existsSync(this.chromadbPath);
+      const flagExists = fs.existsSync(this.completionFlagPath);
+      
+      // Check if indexing is currently locked by another process
+      const isLocked = this._isIndexingLocked();
+      
       // First do a basic connection check
       const serverStatus = await this.checkServerStatus();
       if (!serverStatus.server_running) {
+        // Even if server isn't running, if we have valid index files, report them
+        if (docsExist && chromadbExists && flagExists) {
+          return {
+            running: false,
+            complete: true,
+            progress: 100,
+            message: 'Indexierung bereits abgeschlossen. Server nicht gestartet.',
+            server_running: false,
+            indexing_in_progress: false,
+            indexing_complete: true,
+            idle: true,
+            documents_loaded: true,
+            documents_count: this._countDocumentsInFile()
+          };
+        }
+        
+        // If indexing is locked by another process
+        if (isLocked) {
+          return {
+            running: true,
+            complete: false,
+            progress: 20,
+            message: 'Indexierung läuft in einem anderen Prozess',
+            server_running: false,
+            indexing_in_progress: true,
+            indexing_complete: false,
+            idle: false,
+            locked_by_another_process: true
+          };
+        }
+        
         return {
           running: false,
           complete: false,

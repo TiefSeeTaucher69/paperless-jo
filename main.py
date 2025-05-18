@@ -529,31 +529,50 @@ class DataManager:
     async def index_documents_background(self):
         """Background task to index documents"""
         try:
+            # Always mark indexing as in progress at start
+            status_manager.indexing_in_progress = True
+            
+            # Load the set of already indexed documents first
+            indexed_doc_ids = self.index_manager.load_indexed_documents()
+            logger.info(f"Loaded {len(indexed_doc_ids)} already indexed document IDs")
+            
             # Load documents if not already loaded
             if not self.documents:
                 self.documents = await self.load_documents()
             
-            # Load the set of already indexed documents
-            self.index_manager.load_indexed_documents()
-            
-            # Get documents that need indexing
+            # Get only documents that need indexing (not in indexed.conf)
             unindexed_docs = self.index_manager.get_unindexed_documents(self.documents)
             
             if not unindexed_docs:
-                logger.info("No new documents to index")
+                logger.info("No new documents to index - all documents already in indexed.conf")
+                
+                # Set to complete but DON'T overwrite existing chromadb
+                logger.info("Marking indexing as complete without re-indexing all documents")
                 status_manager.indexing_complete = True
+                
+                # Create flag file if it doesn't exist
+                if not os.path.exists("indexing_complete.flag"):
+                    logger.info("Creating indexing_complete.flag")
+                    with open("indexing_complete.flag", "w") as f:
+                        f.write(datetime.now().isoformat())
+                
                 return
             
-            logger.info(f"Found {len(unindexed_docs)} documents to index")
+            logger.info(f"Found {len(unindexed_docs)} new documents that need indexing (not in indexed.conf)")
             
-            # Get or create the collection
+            # Get or create the collection - but don't overwrite existing data
             collection = await self.setup_chroma_collection()
             
             # Only index documents that haven't been indexed yet
-            if unindexed_docs:
-                await self._add_documents_to_chroma(collection, unindexed_docs)
-                # Save the updated indexed document IDs
-                self.index_manager.save_indexed_documents()
+            logger.info(f"Adding only {len(unindexed_docs)} new documents to ChromaDB")
+            await self._add_documents_to_chroma(collection, unindexed_docs)
+            
+            # Save the updated indexed document IDs
+            self.index_manager.save_indexed_documents()
+            
+            # Make sure to create the completion flag
+            with open("indexing_complete.flag", "w") as f:
+                f.write(datetime.now().isoformat())
             
         except Exception as e:
             logger.error(f"Error in background indexing task: {str(e)}")
@@ -860,33 +879,73 @@ async def startup_event():
     # Initialize data manager
     data_manager = DataManager()
     
-    # Initialize search engine
+    # 1. Check for all necessary files first
+    chromadb_exists = os.path.exists(CHROMADB_DIR) and os.path.isdir(CHROMADB_DIR)
+    documents_exists = os.path.exists(DOCUMENTS_FILE)
+    flag_exists = os.path.exists('indexing_complete.flag')
+    indexed_conf_exists = os.path.exists(INDEXED_CONF)
+    
+    logger.info(f"Startup check - ChromaDB: {chromadb_exists}, Documents: {documents_exists}, " +
+                f"Flag: {flag_exists}, indexed.conf: {indexed_conf_exists}")
+    
+    # 2. If we have valid index files and a completion flag, mark indexing as complete
+    if chromadb_exists and documents_exists and flag_exists:
+        logger.info("Found valid index files and completion flag. Marking indexing as complete.")
+        status_manager.indexing_complete = True
+    
+    # 3. Initialize search engine - this loads documents
     search_engine = SearchEngine(data_manager)
     await search_engine.initialize()
     
-    # If indexed.conf doesn't exist, create it and start indexing all documents
-    if not os.path.exists(INDEXED_CONF):
-        logger.info("No indexed.conf found, will create it after indexing all documents")
-        # Documents should be loaded as part of search_engine.initialize()
-        # Start background indexing task
-        background_tasks = BackgroundTasks()
-        background_tasks.add_task(data_manager.index_documents_background)
-        # This will be executed in the background
-        asyncio.create_task(data_manager.index_documents_background())
-    else:
+    # 4. Check indexing status based on what files we have:
+    
+    # Case 1: If indexed.conf exists - check for new documents that need indexing
+    if indexed_conf_exists:
+        logger.info("indexed.conf exists - checking for new documents only")
+        
         # Load indexed document IDs
         data_manager.index_manager.load_indexed_documents()
+        indexed_count = len(data_manager.index_manager.indexed_doc_ids)
         
-        # Check for new documents that aren't in indexed.conf yet
+        # Only start indexing for new unindexed documents
         unindexed_docs = data_manager.index_manager.get_unindexed_documents(data_manager.documents)
         
         if unindexed_docs:
-            logger.info(f"Found {len(unindexed_docs)} new documents to index")
+            logger.info(f"Found {len(unindexed_docs)} new documents to index (out of {len(data_manager.documents)} total)")
             # Start background indexing task for new documents only
             asyncio.create_task(data_manager.index_documents_background())
         else:
-            logger.info("No new documents to index, API is ready for search")
+            logger.info(f"All {indexed_count} documents are already indexed. No re-indexing needed.")
+            # Create flag file if not exists
+            if not flag_exists:
+                with open("indexing_complete.flag", "w") as f:
+                    f.write(datetime.now().isoformat())
             status_manager.indexing_complete = True
+    
+    # Case 2: If we have index files (chromadb/documents.json) but no indexed.conf
+    # Create indexed.conf from existing documents to avoid re-indexing
+    elif chromadb_exists and documents_exists:
+        logger.info("Index files exist but no indexed.conf - creating from existing data")
+        
+        # Add all document IDs to indexed.conf
+        for doc in data_manager.documents:
+            data_manager.index_manager.add_indexed_document(doc["id"])
+        
+        # Save the indexed document IDs
+        data_manager.index_manager.save_indexed_documents()
+        
+        # Create completion flag
+        if not flag_exists:
+            with open("indexing_complete.flag", "w") as f:
+                f.write(datetime.now().isoformat())
+        
+        status_manager.indexing_complete = True
+    
+    # Case 3: No valid index files at all - need to start from scratch
+    else:
+        logger.info("No valid index files found, will create them for new documents only")
+        # This will execute only for documents not in indexed.conf (which is empty)
+        asyncio.create_task(data_manager.index_documents_background())
     
     logger.info("RAGZ Document Search API ready")
 
@@ -921,8 +980,42 @@ async def get_status():
 @app.post("/start-indexing")
 async def start_indexing(background_tasks: BackgroundTasks):
     """Start the indexing process in the background"""
+    # Check if there's a lock file preventing concurrent indexing
+    lock_file_path = 'rag_indexing.lock'
+    
+    if os.path.exists(lock_file_path):
+        # Read the lock file to check if it's stale
+        try:
+            with open(lock_file_path, 'r') as f:
+                lock_time_str = f.read().strip()
+                lock_time = datetime.fromisoformat(lock_time_str)
+                current_time = datetime.now()
+                
+                # If lock is older than 10 minutes, consider it stale
+                if (current_time - lock_time).total_seconds() > 600:
+                    logger.info("Found stale lock file, removing it")
+                    os.remove(lock_file_path)
+                else:
+                    # Lock is recent, indexing is likely in progress
+                    return {"status": "already_running", "message": "Indexing is already in progress"}
+        except Exception as e:
+            logger.error(f"Error reading lock file: {str(e)}")
+            # If we can't parse the lock file, assume it's corrupted and remove it
+            try:
+                os.remove(lock_file_path)
+            except:
+                pass
+    
+    # Check if indexing is already running
     if status_manager.indexing_in_progress:
         return {"status": "already_running", "message": "Indexing is already in progress"}
+    
+    # Create a lock file to prevent concurrent indexing
+    try:
+        with open(lock_file_path, 'w') as f:
+            f.write(datetime.now().isoformat())
+    except Exception as e:
+        logger.error(f"Error creating lock file: {str(e)}")
     
     # Start background indexing task
     background_tasks.add_task(data_manager.index_documents_background)
@@ -933,8 +1026,28 @@ async def start_indexing(background_tasks: BackgroundTasks):
 async def search_documents(request: SearchRequest):
     """Search documents with the given query and filters"""
     try:
+        # Check if we have valid indexes
+        chromadb_exists = os.path.exists(CHROMADB_DIR) and os.path.isdir(CHROMADB_DIR)
+        documents_exists = os.path.exists(DOCUMENTS_FILE)
+        flag_exists = os.path.exists('indexing_complete.flag')
+        
+        # If we have all necessary files, consider indexing complete regardless of status_manager
+        if chromadb_exists and documents_exists and flag_exists:
+            # Force status_manager to show indexing as complete to allow searching
+            if not status_manager.indexing_complete:
+                logger.info("Found valid index files but status_manager doesn't show complete. Fixing this.")
+                status_manager.indexing_complete = True
+        elif not status_manager.indexing_complete:
+            # No valid index files and status_manager says not complete
+            raise HTTPException(
+                status_code=400, 
+                detail="Indexing is not complete. Please wait until indexing finishes before searching."
+            )
+            
         logger.info(f"Search request: {request}")
         return await search_engine.search(request)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Search error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

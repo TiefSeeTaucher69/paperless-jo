@@ -1,5 +1,88 @@
 /* RAG-specific styles */
 
+/* RAG Setup Section */
+.rag-setup-section {
+    background-color: var(--card-background);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rag-setup-section h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-color);
+}
+
+.rag-setup-section p {
+    font-size: 0.95rem;
+    margin-bottom: 16px;
+    color: var(--text-secondary);
+}
+
+.setup-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    border: none;
+    color: white;
+}
+
+.btn i {
+    margin-right: 8px;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+}
+
+.btn-primary {
+    background-color: var(--primary-color, #007bff);
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color, #6c757d);
+}
+
+.indexing-status {
+    margin-top: 16px;
+}
+
+.indexing-status-text {
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    color: var(--text-color);
+}
+
+.progress-bar {
+    height: 8px;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: var(--primary-color, #007bff);
+    width: 0%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
 .setup-section {
   background-color: #f8f9fa;
   border-radius: 8px;
