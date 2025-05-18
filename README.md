@@ -18,6 +18,27 @@ It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query 
 - Gemini (Google)
 - ... and there are possibly many more
 
+> 🚀 **New Feature Announcement**  
+> **Paperless-AI now includes a powerful, integrated RAG-powered Chat interface!**  
+> Introducing a whole new way to interact with your Paperless-NGX archive: instead of browsing, filtering, or guessing which tags to search for — just ask.  
+> Thanks to Retrieval-Augmented Generation (RAG), you can now search semantically across the full content of your documents and get human-like answers instantly.
+
+> 🔍 **No more guessing. Just ask.**  
+> Want to know _“When did I receive my electricity contract?”_, _“How much did I pay for the last car repair?”_ or _“Which documents mention my health insurance?”_ — Paperless-AI will find it for you, even if you don’t remember the exact title, sender, or date.
+
+> 💡 **What does RAG bring to Paperless-NGX?**  
+> - True full-text understanding of your documents  
+> - Context-aware responses — beyond keyword search  
+> - Useful when dealing with large or chaotic document archives  
+> - Saves time, avoids frustration, and unlocks insights you may have forgotten you had stored  
+> - Blazingly fast answers backed by your own trusted data
+
+![RAG_CHAT_DEMO](https://dummyimage.com/1200x600/cccccc/000000&text=RAG+Chat+Demo+Screenshot+Placeholder)
+
+> ⚠️ **Important Note**: If you're installing Paperless-AI for the **first time**, please **restart the container after completing the setup routine** (where you enter your API keys and preferences). This ensures that all services initialize correctly and your RAG index is built properly.  
+> ➕ This step is **not required when updating** an existing installation.
+
+
 ![PPAI_SHOWCASE3](https://github.com/user-attachments/assets/1fc9f470-6e45-43e0-a212-b8fa6225e8dd)
 
 
