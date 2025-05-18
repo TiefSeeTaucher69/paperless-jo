@@ -1,8 +1,8 @@
 #!/bin/bash
 # start-services.sh - Script to start both Node.js and Python services
 
-# Make script executable
-chmod +x start-services.sh
+# Activate virtual environment for Python
+source /app/venv/bin/activate
 
 # Start the Python RAG service in the background
 echo "Starting Python RAG service..."
@@ -19,7 +19,7 @@ export RAG_SERVICE_ENABLED="true"
 
 # Start the Node.js application
 echo "Starting Node.js Paperless-AI service..."
-node server.js
+npm run test
 
 # If Node.js exits, kill the Python service
 kill $PYTHON_PID

@@ -9,6 +9,7 @@ RUN apt-get update && \
     python3 \
     python3-pip \
     python3-dev \
+    python3-venv \
     make \
     g++ \
     curl \
@@ -16,13 +17,14 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install PM2 process manager globally and make startup script executable
+# Install PM2 process manager globally
 RUN npm install pm2 -g
-RUN chmod +x start-services.sh
 
-# Install Python dependencies for RAG service
+# Install Python dependencies for RAG service in a virtual environment
 COPY requirements.txt /app/
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN python3 -m venv /app/venv
+ENV PATH="/app/venv/bin:$PATH"
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 # Copy package files for dependency installation
 COPY package*.json ./
@@ -32,6 +34,9 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Copy application source code
 COPY . .
+
+# Make startup script executable
+RUN chmod +x start-services.sh
 
 # Configure persistent data volume
 VOLUME ["/app/data"]
