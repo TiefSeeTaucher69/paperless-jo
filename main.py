@@ -4,15 +4,16 @@ import logging
 import hashlib
 import numpy as np
 from datetime import datetime
-from typing import List, Dict, Optional, Any, Union
 import time
+import asyncio
+from typing import List, Dict, Optional, Any, Union, Set
+import configparser
 
 import requests
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 from tqdm import tqdm
 import torch
 from sentence_transformers import SentenceTransformer, CrossEncoder
@@ -31,18 +32,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger("RAGZ")
 
-# Load environment variables
-load_dotenv()
+# Load configuration from file
+config = configparser.ConfigParser()
+config.read('rag_config.conf')
 
 # Constants
-DOCUMENTS_FILE = "./documents.json"
-CHROMADB_DIR = "./chromadb"
-EMBEDDING_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+DOCUMENTS_FILE = config['DEFAULT'].get('DOCUMENTS_FILE', './documents.json')
+CHROMADB_DIR = config['DEFAULT'].get('CHROMADB_DIR', './chromadb')
+INDEXED_CONF = "./indexed.conf"
+EMBEDDING_MODEL_NAME = config['DEFAULT'].get('EMBEDDING_MODEL_NAME', 'paraphrase-multilingual-MiniLM-L12-v2')
 CROSS_ENCODER_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 COLLECTION_NAME = "documents"
-BM25_WEIGHT = 0.3
-SEMANTIC_WEIGHT = 0.7
-MAX_RESULTS = 20
+BM25_WEIGHT = float(config['DEFAULT'].get('BM25_WEIGHT', '0.3'))
+SEMANTIC_WEIGHT = float(config['DEFAULT'].get('SEMANTIC_WEIGHT', '0.7'))
+MAX_RESULTS = int(config['DEFAULT'].get('MAX_RESULTS', '20'))
 
 # Download NLTK resources if not present
 nltk.download('punkt', quiet=True)
@@ -65,15 +68,138 @@ class SearchResult(BaseModel):
     snippet: str
     doc_id: Optional[int] = None
 
+# Status manager for tracking indexing progress
+class StatusManager:
+    def __init__(self):
+        self.indexing_in_progress = False
+        self.indexing_complete = False
+        self.total_documents = 0
+        self.indexed_documents = 0
+        self.start_time = None
+        self.estimated_completion_time = None
+    
+    def start_indexing(self, total_docs: int):
+        """Start tracking indexing progress"""
+        self.indexing_in_progress = True
+        self.indexing_complete = False
+        self.total_documents = total_docs
+        self.indexed_documents = 0
+        self.start_time = time.time()
+        self.estimated_completion_time = None
+        logger.info(f"Starting indexing of {total_docs} documents")
+    
+    def update_progress(self, indexed_count: int):
+        """Update progress with the number of documents indexed so far"""
+        self.indexed_documents = indexed_count
+        
+        # Calculate ETA
+        if self.start_time and self.indexed_documents > 0 and self.total_documents > 0:
+            elapsed_time = time.time() - self.start_time
+            docs_per_second = self.indexed_documents / elapsed_time if elapsed_time > 0 else 0
+            remaining_docs = self.total_documents - self.indexed_documents
+            
+            if docs_per_second > 0:
+                remaining_time = remaining_docs / docs_per_second
+                self.estimated_completion_time = time.time() + remaining_time
+        
+        # Log progress
+        if self.total_documents > 0:
+            progress_pct = (self.indexed_documents / self.total_documents) * 100
+            logger.info(f"Indexing progress: {self.indexed_documents}/{self.total_documents} ({progress_pct:.2f}%)")
+    
+    def complete_indexing(self):
+        """Mark indexing as complete"""
+        self.indexing_in_progress = False
+        self.indexing_complete = True
+        self.indexed_documents = self.total_documents
+        logger.info("Indexing complete")
+    
+    def get_progress_percentage(self) -> float:
+        """Get progress as a percentage"""
+        if self.total_documents == 0:
+            return 0.0
+        return (self.indexed_documents / self.total_documents) * 100
+    
+    def get_eta_seconds(self) -> Optional[float]:
+        """Get estimated seconds until completion"""
+        if self.estimated_completion_time is None:
+            return None
+        return max(0, self.estimated_completion_time - time.time())
+    
+    def get_status(self) -> Dict[str, Any]:
+        """Get complete status information"""
+        eta_seconds = self.get_eta_seconds()
+        eta_formatted = None
+        
+        if eta_seconds is not None:
+            minutes, seconds = divmod(int(eta_seconds), 60)
+            hours, minutes = divmod(minutes, 60)
+            eta_formatted = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        
+        return {
+            "indexing_in_progress": self.indexing_in_progress,
+            "indexing_complete": self.indexing_complete,
+            "idle": not self.indexing_in_progress,
+            "total_documents": self.total_documents,
+            "indexed_documents": self.indexed_documents,
+            "progress": self.get_progress_percentage(),
+            "eta_seconds": eta_seconds,
+            "eta_formatted": eta_formatted
+        }
+
+# Indexed Document Manager
+class IndexManager:
+    def __init__(self):
+        self.indexed_doc_ids = set()
+        self.conf_path = INDEXED_CONF
+    
+    def load_indexed_documents(self) -> Set[int]:
+        """Load the set of indexed document IDs from the config file"""
+        if not os.path.exists(self.conf_path):
+            logger.info(f"No indexed.conf file found at {self.conf_path}")
+            return set()
+        
+        try:
+            with open(self.conf_path, 'r', encoding='utf-8') as f:
+                indexed_ids = json.load(f)
+                # Convert all IDs to integers for consistency
+                self.indexed_doc_ids = {int(doc_id) for doc_id in indexed_ids}
+                logger.info(f"Loaded {len(self.indexed_doc_ids)} indexed document IDs from {self.conf_path}")
+                return self.indexed_doc_ids
+        except Exception as e:
+            logger.error(f"Error loading indexed document IDs: {str(e)}")
+            return set()
+    
+    def save_indexed_documents(self):
+        """Save the current set of indexed document IDs to the config file"""
+        try:
+            with open(self.conf_path, 'w', encoding='utf-8') as f:
+                json.dump(list(self.indexed_doc_ids), f)
+            logger.info(f"Saved {len(self.indexed_doc_ids)} indexed document IDs to {self.conf_path}")
+        except Exception as e:
+            logger.error(f"Error saving indexed document IDs: {str(e)}")
+    
+    def add_indexed_document(self, doc_id: int):
+        """Mark a document as indexed"""
+        self.indexed_doc_ids.add(int(doc_id))
+    
+    def is_document_indexed(self, doc_id: int) -> bool:
+        """Check if a document has already been indexed"""
+        return int(doc_id) in self.indexed_doc_ids
+    
+    def get_unindexed_documents(self, documents: List[Dict]) -> List[Dict]:
+        """Filter a list of documents to only those that haven't been indexed yet"""
+        return [doc for doc in documents if not self.is_document_indexed(doc["id"])]
+
 # Data Manager
 class DataManager:
     def __init__(self):
-        self.paperless_url = os.getenv("PAPERLESS_URL")
-        self.paperless_token = os.getenv("PAPERLESS_TOKEN")
+        self.paperless_url = config['DEFAULT'].get('PAPERLESS_URL')
+        self.paperless_token = config['DEFAULT'].get('PAPERLESS_TOKEN')
         
         if not self.paperless_url or not self.paperless_token:
-            logger.error("Missing PAPERLESS_URL or PAPERLESS_TOKEN in .env file")
-            raise ValueError("Missing PAPERLESS_URL or PAPERLESS_TOKEN in .env file")
+            logger.error("Missing PAPERLESS_URL or PAPERLESS_TOKEN in rag_config.conf file")
+            raise ValueError("Missing PAPERLESS_URL or PAPERLESS_TOKEN in rag_config.conf file")
         
         self.documents = []
         self.document_hashes = {}
@@ -88,6 +214,9 @@ class DataManager:
         
         # Initialize Cross-Encoder
         self.cross_encoder = CrossEncoder(CROSS_ENCODER_MODEL_NAME)
+        
+        # Initialize index manager
+        self.index_manager = IndexManager()
     
     def _get_headers(self):
         return {"Authorization": f"Token {self.paperless_token}"}
@@ -97,7 +226,7 @@ class DataManager:
         content = f"{doc['title']}{doc['content']}{doc['correspondent']}"
         return hashlib.sha256(content.encode()).hexdigest()
     
-    def fetch_documents_from_api(self):
+    async def fetch_documents_from_api(self):
         """Fetch all documents from Paperless-NGX API with pagination"""
         logger.info(f"Fetching documents from Paperless-NGX API: {self.paperless_url}")
         
@@ -216,7 +345,7 @@ class DataManager:
         
         return processed_docs
     
-    def load_documents(self):
+    async def load_documents(self):
         """Load documents from file or API"""
         if os.path.exists(DOCUMENTS_FILE):
             logger.info(f"Loading documents from {DOCUMENTS_FILE}")
@@ -229,7 +358,7 @@ class DataManager:
             
             # Check for updates if we have internet connection
             try:
-                new_documents = self.fetch_documents_from_api()
+                new_documents = await self.fetch_documents_from_api()
                 
                 # Check for changes
                 changes = False
@@ -246,7 +375,7 @@ class DataManager:
                 if changes:
                     logger.info("Saving updated documents")
                     self.documents = list(documents_dict.values())
-                    self.save_documents()
+                    await self.save_documents()
                     return self.documents
                 else:
                     logger.info("No document changes detected")
@@ -257,17 +386,17 @@ class DataManager:
                 return local_documents
         else:
             logger.info("No local documents found, fetching from API")
-            self.documents = self.fetch_documents_from_api()
-            self.save_documents()
+            self.documents = await self.fetch_documents_from_api()
+            await self.save_documents()
             return self.documents
     
-    def save_documents(self):
+    async def save_documents(self):
         """Save documents to file"""
         with open(DOCUMENTS_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.documents, f, ensure_ascii=False, indent=2)
         logger.info(f"Saved {len(self.documents)} documents to {DOCUMENTS_FILE}")
     
-    def setup_chroma_collection(self):
+    async def setup_chroma_collection(self):
         """Set up ChromaDB collection"""
         # Check if collection exists
         try:
@@ -283,24 +412,39 @@ class DataManager:
                 
                 # Check if we need to update the collection
                 if not self.documents:
-                    self.load_documents()
+                    self.documents = await self.load_documents()
                 
+                # Load indexed document IDs
+                indexed_doc_ids = self.index_manager.load_indexed_documents()
+                
+                # Get existing IDs in ChromaDB
                 existing_ids = collection.get()["ids"]
                 existing_ids_set = set(existing_ids)
+                
+                # Update our index manager with existing IDs
+                for doc_id in existing_ids:
+                    try:
+                        self.index_manager.add_indexed_document(int(doc_id))
+                    except ValueError:
+                        # Skip if not a valid integer
+                        continue
                 
                 # Find documents to add or update
                 docs_to_update = []
                 for doc in self.documents:
                     doc_id = str(doc["id"])
                     
-                    # If document is new or hash has changed
-                    if doc_id not in existing_ids_set or self.document_hashes.get(doc["id"]) != doc.get("hash"):
+                    # If document is not in our indexed set or the hash has changed
+                    if not self.index_manager.is_document_indexed(doc["id"]) or \
+                       (doc_id in existing_ids_set and self.document_hashes.get(doc["id"]) != doc.get("hash")):
                         docs_to_update.append(doc)
                 
                 # Update documents if needed
                 if docs_to_update:
                     logger.info(f"Updating {len(docs_to_update)} documents in ChromaDB")
-                    self._add_documents_to_chroma(collection, docs_to_update)
+                    await self._add_documents_to_chroma(collection, docs_to_update)
+                    # Save updated indexed document IDs
+                    self.index_manager.save_indexed_documents()
                 else:
                     logger.info("No updates needed for ChromaDB collection")
                 
@@ -314,25 +458,32 @@ class DataManager:
                 
                 # Load documents if not already loaded
                 if not self.documents:
-                    self.load_documents()
+                    self.documents = await self.load_documents()
                 
-                # Add all documents to collection
-                self._add_documents_to_chroma(collection, self.documents)
+                # Add all documents to collection with status tracking
+                await self._add_documents_to_chroma(collection, self.documents)
+                # Save all document IDs as indexed
+                self.index_manager.save_indexed_documents()
                 return collection
                 
         except Exception as e:
             logger.error(f"Error setting up ChromaDB collection: {str(e)}")
             raise
     
-    def _add_documents_to_chroma(self, collection, documents):
-        """Add documents to ChromaDB collection"""
+    async def _add_documents_to_chroma(self, collection, documents):
+        """Add documents to ChromaDB collection with status tracking"""
+        # Update status
+        status_manager.start_indexing(len(documents))
+        
         # We process in batches to avoid memory issues
         batch_size = 100
         total_docs = len(documents)
+        processed_docs = 0
         
         for i in range(0, total_docs, batch_size):
             batch = documents[i:i+batch_size]
-            logger.info(f"Processing batch {i//batch_size + 1}/{(total_docs-1)//batch_size + 1} ({len(batch)} documents)")
+            batch_size_actual = len(batch)
+            logger.info(f"Processing batch {i//batch_size + 1}/{(total_docs-1)//batch_size + 1} ({batch_size_actual} documents)")
             
             ids = [str(doc["id"]) for doc in batch]
             
@@ -360,8 +511,54 @@ class DataManager:
                 documents=texts,
                 metadatas=metadatas
             )
+            
+            # Mark documents as indexed and update status
+            for doc in batch:
+                self.index_manager.add_indexed_document(doc["id"])
+            
+            processed_docs += batch_size_actual
+            status_manager.update_progress(processed_docs)
+            
+            # Small delay to prevent overloading the system
+            await asyncio.sleep(0.1)
         
+        # Mark indexing as complete
+        status_manager.complete_indexing()
         logger.info(f"Added/updated {total_docs} documents to ChromaDB collection")
+        
+    async def index_documents_background(self):
+        """Background task to index documents"""
+        try:
+            # Load documents if not already loaded
+            if not self.documents:
+                self.documents = await self.load_documents()
+            
+            # Load the set of already indexed documents
+            self.index_manager.load_indexed_documents()
+            
+            # Get documents that need indexing
+            unindexed_docs = self.index_manager.get_unindexed_documents(self.documents)
+            
+            if not unindexed_docs:
+                logger.info("No new documents to index")
+                status_manager.indexing_complete = True
+                return
+            
+            logger.info(f"Found {len(unindexed_docs)} documents to index")
+            
+            # Get or create the collection
+            collection = await self.setup_chroma_collection()
+            
+            # Only index documents that haven't been indexed yet
+            if unindexed_docs:
+                await self._add_documents_to_chroma(collection, unindexed_docs)
+                # Save the updated indexed document IDs
+                self.index_manager.save_indexed_documents()
+            
+        except Exception as e:
+            logger.error(f"Error in background indexing task: {str(e)}")
+            status_manager.indexing_in_progress = False
+            raise
 
 
 # Search Engine
@@ -373,24 +570,24 @@ class SearchEngine:
         self.bm25 = None
         self.tokenized_corpus = None
     
-    def initialize(self):
+    async def initialize(self):
         """Initialize search engine"""
         # Load documents if not already loaded
         if not self.data_manager.documents:
-            self.documents = self.data_manager.load_documents()
+            self.documents = await self.data_manager.load_documents()
         else:
             self.documents = self.data_manager.documents
         
         # Set up ChromaDB collection
-        self.collection = self.data_manager.setup_chroma_collection()
+        self.collection = await self.data_manager.setup_chroma_collection()
         
         # Set up BM25
         logger.info("Initializing BM25 index")
-        self._setup_bm25()
+        await self._setup_bm25()
         
         logger.info("Search engine initialized")
     
-    def _setup_bm25(self):
+    async def _setup_bm25(self):
         """Set up BM25 index"""
         # Prepare corpus for BM25
         self.tokenized_corpus = []
@@ -574,7 +771,7 @@ class SearchEngine:
         
         return snippet.strip()
     
-    def search(self, request: SearchRequest):
+    async def search(self, request: SearchRequest):
         """Perform full search with filters and reranking"""
         query = request.query
         
@@ -637,6 +834,9 @@ class SearchEngine:
 # FastAPI Application
 app = FastAPI(title="RAGZ Document Search API")
 
+# Initialize global status manager
+status_manager = StatusManager()
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -662,16 +862,79 @@ async def startup_event():
     
     # Initialize search engine
     search_engine = SearchEngine(data_manager)
-    search_engine.initialize()
+    await search_engine.initialize()
+    
+    # If indexed.conf doesn't exist, create it and start indexing all documents
+    if not os.path.exists(INDEXED_CONF):
+        logger.info("No indexed.conf found, will create it after indexing all documents")
+        # Documents should be loaded as part of search_engine.initialize()
+        # Start background indexing task
+        background_tasks = BackgroundTasks()
+        background_tasks.add_task(data_manager.index_documents_background)
+        # This will be executed in the background
+        asyncio.create_task(data_manager.index_documents_background())
+    else:
+        # Load indexed document IDs
+        data_manager.index_manager.load_indexed_documents()
+        
+        # Check for new documents that aren't in indexed.conf yet
+        unindexed_docs = data_manager.index_manager.get_unindexed_documents(data_manager.documents)
+        
+        if unindexed_docs:
+            logger.info(f"Found {len(unindexed_docs)} new documents to index")
+            # Start background indexing task for new documents only
+            asyncio.create_task(data_manager.index_documents_background())
+        else:
+            logger.info("No new documents to index, API is ready for search")
+            status_manager.indexing_complete = True
     
     logger.info("RAGZ Document Search API ready")
+
+@app.get("/status")
+async def get_status():
+    """Get current indexing status"""
+    if not data_manager or not data_manager.documents:
+        return {
+            "indexing_in_progress": status_manager.indexing_in_progress,
+            "indexing_complete": status_manager.indexing_complete,
+            "idle": not status_manager.indexing_in_progress,
+            "total_documents": 0,
+            "indexed_documents": 0,
+            "progress": 0,
+            "documents_loaded": False,
+            "documents_count": 0,
+            "eta_seconds": None,
+            "eta_formatted": None,
+            "server_running": True
+        }
+    
+    # Get status info
+    status_info = status_manager.get_status()
+    
+    # Add additional information
+    status_info["documents_loaded"] = len(data_manager.documents) > 0
+    status_info["documents_count"] = len(data_manager.documents)
+    status_info["server_running"] = True
+    
+    return status_info
+
+@app.post("/start-indexing")
+async def start_indexing(background_tasks: BackgroundTasks):
+    """Start the indexing process in the background"""
+    if status_manager.indexing_in_progress:
+        return {"status": "already_running", "message": "Indexing is already in progress"}
+    
+    # Start background indexing task
+    background_tasks.add_task(data_manager.index_documents_background)
+    
+    return {"status": "started", "message": "Indexing started in the background"}
 
 @app.post("/search", response_model=List[SearchResult])
 async def search_documents(request: SearchRequest):
     """Search documents with the given query and filters"""
     try:
         logger.info(f"Search request: {request}")
-        return search_engine.search(request)
+        return await search_engine.search(request)
     except Exception as e:
         logger.error(f"Search error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

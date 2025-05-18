@@ -23,3 +23,6 @@ openrouter.js
 RAGZ_README.md
 /chromadb
 /chromadb/*
+rag_config.conf
+indexed.conf
+main.py.bak

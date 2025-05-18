@@ -15,49 +15,302 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedTheme = localStorage.getItem('theme') || 'light';
     setTheme(savedTheme);
     setupTextareaAutoResize();
-    setupFilterToggle();
     
     // Clear initial state if there's chat history
     if (document.getElementById('chatHistory').children.length > 0) {
         document.getElementById('initialState').classList.add('hidden');
     }
+    
+    // Check RAG service status
+    checkRagStatus();
+    
+    // Setup indexing buttons
+    const startIndexingButton = document.getElementById('startIndexingButton');
+    if (startIndexingButton) {
+        startIndexingButton.addEventListener('click', startIndexing);
+    }
+    
+    // Setup force reindex button
+    const forceReindexButton = document.getElementById('forceReindexButton');
+    if (forceReindexButton) {
+        forceReindexButton.addEventListener('click', async () => {
+            try {
+                // Confirm with user
+                if (!confirm('Sind Sie sicher, dass Sie eine Neuindexierung erzwingen möchten? Dies löscht alle vorhandenen Indizes.')) {
+                    return;
+                }
+                
+                // First try to delete existing index files via a special endpoint
+                await fetch('/rag/start-indexing?force=true', {
+                    method: 'POST'
+                });
+                
+                // Then start normal indexing
+                startIndexing();
+            } catch (error) {
+                console.error('Error forcing reindex:', error);
+                alert('Fehler beim Erzwingen der Neuindexierung: ' + error.message);
+            }
+        });
+    }
 });
 
-// Setup filter panel toggle
-function setupFilterToggle() {
-    const toggleBtn = document.getElementById('toggleFilters');
-    const filterPanel = document.getElementById('filterPanel');
-    const clearBtn = document.getElementById('clearFilters');
-    
-    toggleBtn.addEventListener('click', () => {
-        filterPanel.classList.toggle('hidden');
-    });
-    
-    clearBtn.addEventListener('click', () => {
-        document.getElementById('fromDate').value = '';
-        document.getElementById('toDate').value = '';
-        document.getElementById('correspondent').value = '';
-    });
+// Check RAG service status
+async function checkRagStatus() {
+    try {
+        const response = await fetch('/rag/status');
+        if (!response.ok) {
+            throw new Error('Could not check RAG status');
+        }
+        
+        const status = await response.json();
+        updateIndexingUI(status);
+        
+        // Start polling if indexing is in progress
+        if (status.running && !window.statusCheckInterval) {
+            startStatusPolling();
+        }
+    } catch (error) {
+        console.error('Error checking RAG status:', error);
+        // Show setup section if we couldn't check status (service might not be running)
+        document.getElementById('ragSetupSection').style.display = 'block';
+        document.getElementById('initialState').style.display = 'none';
+    }
 }
+
+// Start polling for status updates
+function startStatusPolling() {
+    if (window.statusCheckInterval) {
+        clearInterval(window.statusCheckInterval);
+    }
+    
+    window.statusCheckInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/rag/status');
+            if (!response.ok) {
+                throw new Error('Could not check RAG status');
+            }
+            
+            const status = await response.json();
+            updateIndexingUI(status);
+            
+            // Stop polling when indexing is complete
+            if (status.complete) {
+                clearInterval(window.statusCheckInterval);
+                window.statusCheckInterval = null;
+            }
+        } catch (error) {
+            console.error('Error polling RAG status:', error);
+            clearInterval(window.statusCheckInterval);
+            window.statusCheckInterval = null;
+        }
+    }, 2000); // Check every 2 seconds
+}
+
+// Update UI based on indexing status
+function updateIndexingUI(status) {
+    const setupSection = document.getElementById('ragSetupSection');
+    const statusIndicator = document.getElementById('indexingStatus');
+    const statusText = document.getElementById('indexingStatusText');
+    const progressBar = document.getElementById('indexingProgress').querySelector('.progress-fill');
+    const startButton = document.getElementById('startIndexingButton');
+    const initialState = document.getElementById('initialState');
+    
+    // Debug information
+    console.log('RAG Status:', status);
+    
+    // Always ensure button exists and is correctly styled
+    if (startButton) {
+        startButton.innerHTML = '<i class="fas fa-sync"></i> ' + (status.server_running === false ? 'Python-Server starten' : 'Indexierung starten');
+        startButton.style.display = 'flex'; // Ensure button is visible by default
+    } else {
+        console.error('Start button not found in DOM');
+    }
+    
+    // Get reference to forceReindexButton (it's now in the HTML)
+    const forceReindexButton = document.getElementById('forceReindexButton');
+    
+    // Always ensure setup section is visible first
+    setupSection.style.display = 'block';
+    initialState.style.display = 'none';
+    
+    // Process status
+    if (status.indexing_in_progress) {
+        // Show progress for running indexing
+        statusIndicator.style.display = 'flex';
+        
+        // Hide buttons during indexing
+        if (startButton) startButton.style.display = 'none';
+        if (forceReindexButton) forceReindexButton.style.display = 'none';
+        
+        // Create a detailed status message
+        let message = 'Indexierung läuft...';
+        
+        // If we have document counts, show them
+        if (status.indexed_documents !== undefined && status.total_documents) {
+            message = `Indexierung läuft: ${status.indexed_documents}/${status.total_documents} Dokumente`;
+            
+            // Add ETA if available
+            if (status.eta_formatted) {
+                message += ` (ETA: ${status.eta_formatted})`;
+            }
+        }
+        
+        statusText.textContent = message;
+        
+        // Set progress percentage
+        const progressPercent = typeof status.progress === 'number' ? status.progress : 50;
+        progressBar.style.width = `${progressPercent}%`;
+    } else if (status.indexing_complete) {
+        // For complete status, show chat interface but keep reindex button
+        initialState.style.display = 'block';
+        
+        // Keep setup section visible, but with a different message
+        const sectionText = setupSection.querySelector('p');
+        if (sectionText) {
+            let message = 'Indexierung abgeschlossen.';
+            if (status.documents_count) {
+                message += ` ${status.documents_count} Dokumente sind indexiert.`;
+            }
+            message += ' Sie können den RAG-Chat nutzen oder bei Bedarf eine Neuindexierung starten.';
+            sectionText.textContent = message;
+        }
+        
+        // Show the button for reindexing, hide progress
+        statusIndicator.style.display = 'none';
+        if (startButton) startButton.style.display = 'flex';
+        if (forceReindexButton) forceReindexButton.style.display = 'flex';
+        
+        // Stop any active polling
+        if (window.statusCheckInterval) {
+            clearInterval(window.statusCheckInterval);
+            window.statusCheckInterval = null;
+        }
+    } else {
+        // Show setup UI for server not running or indexing needed
+        initialState.style.display = 'none';
+        statusIndicator.style.display = 'none';
+        
+        if (startButton) startButton.style.display = 'flex';
+        if (forceReindexButton) forceReindexButton.style.display = 'flex';
+        
+        // Update text based on server status
+        const sectionText = setupSection.querySelector('p');
+        if (sectionText) {
+            if (status.server_running === false) {
+                sectionText.textContent = 'Der Python-Server muss gestartet werden, bevor Dokumente indiziert werden können.';
+            } else {
+                sectionText.textContent = 'Der RAG-Service muss initialisiert werden, um Ihre Dokumente zu indizieren.';
+            }
+        }
+    }
+}
+
+// Start indexing process
+async function startIndexing() {
+    try {
+        const statusIndicator = document.getElementById('indexingStatus');
+        const statusText = document.getElementById('indexingStatusText');
+        const progressBar = document.getElementById('indexingProgress').querySelector('.progress-fill');
+        const startButton = document.getElementById('startIndexingButton');
+        
+        // Update UI
+        statusIndicator.style.display = 'flex';
+        startButton.style.display = 'none';
+        statusText.textContent = 'Python-Dienst wird gestartet...';
+        progressBar.style.width = '5%';
+        
+        // Send request to start indexing
+        const response = await fetch('/rag/start-indexing', {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to start indexing');
+        }
+        
+        // Start polling for status updates
+        startStatusPolling();
+        
+        // Set up SSE for progress updates
+        const sseResponse = await fetch('/rag/start-indexing', {
+            method: 'POST',
+            headers: {
+                'Accept': 'text/event-stream'
+            }
+        });
+        
+        if (!sseResponse.ok) return; // Already started, just use polling
+        
+        const reader = sseResponse.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = line.slice(6);
+                    if (data === '[DONE]') continue;
+                    
+                    try {
+                        const parsed = JSON.parse(data);
+                        
+                        // Update UI
+                        statusText.textContent = parsed.message || 'Indexierung läuft...';
+                        if (parsed.progress) {
+                            progressBar.style.width = `${parsed.progress}%`;
+                        }
+                        
+                        // On completion
+                        if (parsed.status === 'complete') {
+                            setTimeout(() => {
+                                document.getElementById('ragSetupSection').style.display = 'none';
+                                document.getElementById('initialState').style.display = 'block';
+                            }, 2000);
+                            
+                            // Stop polling
+                            if (window.statusCheckInterval) {
+                                clearInterval(window.statusCheckInterval);
+                                window.statusCheckInterval = null;
+                            }
+                        } else if (parsed.status === 'error') {
+                            statusIndicator.classList.add('error');
+                            startButton.style.display = 'flex';
+                            
+                            // Stop polling
+                            if (window.statusCheckInterval) {
+                                clearInterval(window.statusCheckInterval);
+                                window.statusCheckInterval = null;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error parsing SSE data:', e);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error starting indexing:', error);
+        alert('Fehler beim Starten der Indexierung: ' + error.message);
+        
+        // Reset UI
+        document.getElementById('indexingStatus').style.display = 'none';
+        document.getElementById('startIndexingButton').style.display = 'flex';
+    }
+}
+
 
 async function sendQuestion(question) {
     try {
-        // Get filter values
-        const fromDate = document.getElementById('fromDate').value;
-        const toDate = document.getElementById('toDate').value;
-        const correspondent = document.getElementById('correspondent').value.trim();
-        
-        // Build filter object
-        const filters = {};
-        if (fromDate) filters.from_date = fromDate;
-        if (toDate) filters.to_date = toDate;
-        if (correspondent) filters.correspondent = correspondent;
-        
+                
         // Detect question language to ensure response is in the same language
         const questionLanguage = detectLanguage(question);
-        if (questionLanguage) {
-            filters.language = questionLanguage;
-        }
         
         // Show user message immediately
         addMessage(question, true);
@@ -90,14 +343,34 @@ async function sendQuestion(question) {
         document.getElementById('chatHistory').appendChild(containerDiv);
         scrollToBottom();
         
+        // Check if we need to start the Python server first
+        try {
+            const statusResponse = await fetch('/rag/status');
+            
+            if (!statusResponse.ok) {
+                // Try to start just the server
+                await fetch('/rag/start-indexing?serverOnly=true', { method: 'POST' });
+                console.log('Started Python server for chat');
+            } else {
+                // Check if the indexing is complete
+                const statusData = await statusResponse.json();
+                if (!statusData.indexing_complete) {
+                    // Show a more informative message
+                    contentDiv.innerHTML = '<p>Indexing is still in progress. Please wait until document indexing is complete before asking questions.</p>';
+                    return;
+                }
+            }
+        } catch (error) {
+            console.warn('Could not check server status:', error);
+        }
+        
         const response = await fetch('/rag/ask', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                question: question,
-                filters: filters
+                question: question
             })
         });
         
@@ -158,44 +431,56 @@ async function sendQuestion(question) {
         
         // After streaming complete, add source documents if available
         if (sources && sources.length > 0) {
-            const sourceDocsDiv = document.createElement('div');
-            sourceDocsDiv.className = 'source-documents';
-            
-            sourceDocsDiv.innerHTML = `
-                <div class="source-title">
-                    <i class="fas fa-file-alt"></i>
-                    <span>Source Documents (${sources.length})</span>
-                </div>
-                <div class="source-list">
-                    ${sources.map((doc, index) => `
-                        <div class="source-item" data-doc-id="${doc.doc_id}">
-                            <div class="source-header">
-                                <div class="source-name">${escapeHtml(doc.title)}</div>
-                                <div class="source-meta">${escapeHtml(doc.correspondent)} | ${doc.date}</div>
-                            </div>
-                            <div class="source-snippet">${escapeHtml(doc.snippet)}</div>
-                            <div class="source-score">
-                                <span>Relevance: ${Math.round(doc.score * 100)}%</span>
-                                <span>Cross-Score: ${Math.round(doc.cross_score * 100)}%</span>
-                            </div>
+            try {
+                // Ensure sources have the correct structure
+                const validSources = sources.filter(doc => 
+                    doc && typeof doc === 'object' && doc.title && doc.snippet && doc.doc_id);
+                
+                if (validSources.length > 0) {
+                    const sourceDocsDiv = document.createElement('div');
+                    sourceDocsDiv.className = 'source-documents';
+                    
+                    sourceDocsDiv.innerHTML = `
+                        <div class="source-title">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Source Documents (${validSources.length})</span>
                         </div>
-                    `).join('')}
-                </div>
-            `;
-            
-            containerDiv.appendChild(sourceDocsDiv);
-            scrollToBottom();
-            
-            // Add click events for source items
-            containerDiv.querySelectorAll('.source-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const docId = item.getAttribute('data-doc-id');
-                    if (docId) {
-                        // Use the dashboard link that will handle redirecting to the correct Paperless instance
-                        window.open(`/dashboard/doc/${docId}`, '_blank');
-                    }
-                });
-            });
+                        <div class="source-list">
+                            ${validSources.map((doc, index) => `
+                                <div class="source-item" data-doc-id="${doc.doc_id}">
+                                    <div class="source-header">
+                                        <div class="source-name">${escapeHtml(doc.title || 'Untitled Document')}</div>
+                                        <div class="source-meta">${escapeHtml(doc.correspondent || 'Unknown')} | ${doc.date || 'No date'}</div>
+                                    </div>
+                                    <div class="source-snippet">${escapeHtml(doc.snippet || 'No content available')}</div>
+                                    <div class="source-score">
+                                        <span>Relevance: ${Math.round((doc.score || 0) * 100)}%</span>
+                                        <span>Cross-Score: ${Math.round((doc.cross_score || 0) * 100)}%</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    
+                    containerDiv.appendChild(sourceDocsDiv);
+                    scrollToBottom();
+                    
+                    // Add click events for source items
+                    containerDiv.querySelectorAll('.source-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            const docId = item.getAttribute('data-doc-id');
+                            if (docId) {
+                                // Use the dashboard link that will handle redirecting to the correct Paperless instance
+                                window.open(`/dashboard/doc/${docId}`, '_blank');
+                            }
+                        });
+                    });
+                } else {
+                    console.warn('Received invalid source documents format', sources);
+                }
+            } catch (error) {
+                console.error('Error displaying source documents:', error);
+            }
         }
         
         // Remove loading dots
