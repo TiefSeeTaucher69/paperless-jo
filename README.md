@@ -33,7 +33,7 @@ It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query 
 > - Saves time, avoids frustration, and unlocks insights you may have forgotten you had stored  
 > - Blazingly fast answers backed by your own trusted data
 
-![RAG_CHAT_DEMO](https://dummyimage.com/1200x600/cccccc/000000&text=RAG+Chat+Demo+Screenshot+Placeholder)
+![RAG_CHAT_DEMO]([https://dummyimage.com/1200x600/cccccc/000000&text=RAG+Chat+Demo+Screenshot+Placeholder](https://raw.githubusercontent.com/clusterzx/paperless-ai/refs/heads/main/ppairag.png))
 
 > ⚠️ **Important Note**: If you're installing Paperless-AI for the **first time**, please **restart the container after completing the setup routine** (where you enter your API keys and preferences). This ensures that all services initialize correctly and your RAG index is built properly.  
 > ➕ This step is **not required when updating** an existing installation.
