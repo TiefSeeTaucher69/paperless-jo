@@ -2,6 +2,7 @@
 const axios = require('axios');
 const config = require('../config/config');
 const AIServiceFactory = require('./aiServiceFactory');
+const paperlessService = require('./paperlessService');
 
 class RagService {
   constructor() {
@@ -62,7 +63,31 @@ async askQuestion(question) {
     
     const { context, sources } = response.data;
     
-    // 2. Use AI service to generate an answer based on the context
+    // 2. Fetch full content for each source document using doc_id
+    let enhancedContext = context;
+    
+    if (sources && sources.length > 0) {
+      // Fetch full document content for each source
+      const fullDocContents = await Promise.all(
+        sources.map(async (source) => {
+          if (source.doc_id) {
+            try {
+              const fullContent = await paperlessService.getDocumentContent(source.doc_id);
+              return `Full document content for ${source.title || 'Document ' + source.doc_id}:\n${fullContent}`;
+            } catch (error) {
+              console.error(`Error fetching content for document ${source.doc_id}:`, error.message);
+              return '';
+            }
+          }
+          return '';
+        })
+      );
+      
+      // Combine original context with full document contents
+      enhancedContext = context + '\n\n' + fullDocContents.filter(content => content).join('\n\n');
+    }
+    
+    // 3. Use AI service to generate an answer based on the enhanced context
     const aiService = AIServiceFactory.getService();
     
     // Create a language-agnostic prompt that works in any language
@@ -74,7 +99,7 @@ Answer the following question precisely, based on the provided documents:
 Question: ${question}
 
 Context from relevant documents:
-${context}
+${enhancedContext}
 
 Important instructions:
 - Use ONLY information from the provided documents
