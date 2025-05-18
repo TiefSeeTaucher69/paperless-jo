@@ -15,6 +15,7 @@ class RagService {
   async checkStatus() {
     try {
       const response = await axios.get(`${this.baseUrl}/status`);
+      //make test call to the LLM service to check if it is available
       return response.data;
     } catch (error) {
       console.error('Error checking RAG service status:', error.message);
@@ -46,59 +47,60 @@ class RagService {
     }
   }
 
-  /**
-   * Ask a question about documents and get an AI-generated answer
-   * @param {string} question - The question to ask
-   * @returns {Promise<{answer: string, sources: Array}>} - AI response and source documents
-   */
-  async askQuestion(question) {
-    try {
-      // 1. Get context from the RAG service
-      const response = await axios.post(`${this.baseUrl}/context`, { 
-        question,
-        max_sources: 5
-      });
-      
-      const { context, sources } = response.data;
-      
-      // 2. Use AI service to generate an answer based on the context
-      const aiService = AIServiceFactory.getService();
-      
-      const prompt = `
-Du bist ein hilfreicher Assistent, der Fragen zu Dokumenten beantwortet.
+/**
+ * Ask a question about documents and get an AI-generated answer in the same language as the question
+ * @param {string} question - The question to ask
+ * @returns {Promise<{answer: string, sources: Array}>} - AI response and source documents
+ */
+async askQuestion(question) {
+  try {
+    // 1. Get context from the RAG service
+    const response = await axios.post(`${this.baseUrl}/context`, { 
+      question,
+      max_sources: 5
+    });
+    
+    const { context, sources } = response.data;
+    
+    // 2. Use AI service to generate an answer based on the context
+    const aiService = AIServiceFactory.getService();
+    
+    // Create a language-agnostic prompt that works in any language
+    const prompt = `
+You are a helpful assistant that answers questions about documents.
 
-Beantworte folgende Frage präzise, basierend auf den bereitgestellten Dokumenten:
+Answer the following question precisely, based on the provided documents:
 
-Frage: ${question}
+Question: ${question}
 
-Kontext aus relevanten Dokumenten:
+Context from relevant documents:
 ${context}
 
-Wichtige Anweisungen:
-- Nutze NUR Informationen aus den bereitgestellten Dokumenten
-- Wenn die Antwort nicht in den Dokumenten enthalten ist, antworte: "Diese Information ist nicht in den Dokumenten enthalten."
-- Vermeide Annahmen oder Spekulation außerhalb des gegebenen Kontexts
-- Antworte auf Deutsch, außer wenn die Frage auf Englisch gestellt wurde
-- Nenne keine Dokumentennummern oder Quellverweise, antworte als wäre es eine natürliche Konversation
+Important instructions:
+- Use ONLY information from the provided documents
+- If the answer is not contained in the documents, respond: "This information is not contained in the documents." (in the same language as the question)
+- Avoid assumptions or speculation beyond the given context
+- Answer in the same language as the question was asked
+- Do not mention document numbers or source references, answer as if it were a natural conversation
 `;
 
-      let answer;
-      try {
-        answer = await aiService.generateText(prompt);
-      } catch (error) {
-        console.error('Error generating answer with AI service:', error);
-        answer = "Es gab ein Problem bei der Generierung einer Antwort. Bitte versuche es später erneut.";
-      }
-      
-      return {
-        answer,
-        sources
-      };
+    let answer;
+    try {
+      answer = await aiService.generateText(prompt);
     } catch (error) {
-      console.error('Error in askQuestion:', error);
-      throw error;
+      console.error('Error generating answer with AI service:', error);
+      answer = "An error occurred while generating an answer. Please try again later.";
     }
+    
+    return {
+      answer,
+      sources
+    };
+  } catch (error) {
+    console.error('Error in askQuestion:', error);
+    throw new Error("An error occurred while processing your question. Please try again later.");
   }
+}
 
   /**
    * Start indexing documents in the RAG service

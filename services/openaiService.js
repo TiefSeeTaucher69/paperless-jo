@@ -318,8 +318,7 @@ class OpenAIService {
             content: prompt
           }
         ],
-        temperature: 0.7,
-        max_tokens: 1000
+        temperature: 0.7
       });
       
       if (!response?.choices?.[0]?.message?.content) {

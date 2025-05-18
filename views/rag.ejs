@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -609,7 +609,7 @@
         <div class="header-controls">
             <div class="ai-model-badge" id="ai-model-badge">
                 <i class="fas fa-robot"></i>
-                <span id="ai-model-name">KI: Wird geladen...</span>
+                <span id="ai-model-name">AI: Loading...</span>
             </div>
             <div class="status-indicator">
                 <div class="status-dot online" id="status-indicator"></div>
@@ -624,22 +624,22 @@
     <main>
         <div class="filters">
             <div class="filters-title" id="filters-toggle">
-                <span>Suchfilter & API-Status</span>
+                <span>Search Filters & API Status</span>
                 <i class="fas fa-chevron-down"></i>
             </div>
             <div class="filters-content" id="filters-content">
                 <div class="filter-row">
                     <div class="filter-group">
-                        <label class="filter-label" for="date-from">Von Datum</label>
+                        <label class="filter-label" for="date-from">From Date</label>
                         <input type="date" id="date-from" class="filter-input">
                     </div>
                     <div class="filter-group">
-                        <label class="filter-label" for="date-to">Bis Datum</label>
+                        <label class="filter-label" for="date-to">To Date</label>
                         <input type="date" id="date-to" class="filter-input">
                     </div>
                     <div class="filter-group">
-                        <label class="filter-label" for="correspondent">Absender/Empfänger</label>
-                        <input type="text" id="correspondent" class="filter-input" placeholder="Name des Absenders/Empfängers">
+                        <label class="filter-label" for="correspondent">Sender/Recipient</label>
+                        <input type="text" id="correspondent" class="filter-input" placeholder="Name of sender/recipient">
                     </div>
                 </div>
 
@@ -650,22 +650,22 @@
                     </div>
                     <div class="status-badge success">
                         <i class="fas fa-check-circle"></i>
-                        <span>Daten: Geladen</span>
+                        <span>Data: Loaded</span>
                     </div>
                     <div class="status-badge success">
                         <i class="fas fa-check-circle"></i>
-                        <span>Index: Bereit</span>
+                        <span>Index: Ready</span>
                     </div>
                 </div>
 
                 <div class="action-buttons">
                     <button class="btn btn-outline" id="check-updates-btn">
                         <i class="fas fa-sync-alt"></i>
-                        Auf Updates prüfen
+                        Check for Updates
                     </button>
                     <button class="btn btn-primary" id="start-indexing-btn">
                         <i class="fas fa-database"></i>
-                        Indexierung starten
+                        Start Indexing
                     </button>
                 </div>
             </div>
@@ -673,14 +673,14 @@
 
         <div class="chat-container" id="chat-container">
             <div class="system-message">
-                Willkommen bei RAGZ! Stelle eine Frage zu deinen Dokumenten.
+                Welcome to RAGZ! Ask a question about your documents.
             </div>
         </div>
 
         <div id="error-message" class="hidden"></div>
 
         <div class="typing-indicator hidden" id="typing-indicator">
-            <span>Suche läuft</span>
+            <span>Search in progress</span>
             <div class="dot"></div>
             <div class="dot"></div>
             <div class="dot"></div>
@@ -690,14 +690,14 @@
             <textarea 
                 class="message-input" 
                 id="message-input" 
-                placeholder="Stelle eine Frage zu deinen Dokumenten..." 
+                placeholder="Ask a question about your documents..." 
                 rows="1"
-                aria-label="Nachricht eingeben"></textarea>
+                aria-label="Enter message"></textarea>
             <div class="input-controls">
-                <button class="ai-toggle active" id="ai-toggle" aria-label="KI ein-/ausschalten" title="KI-Antwort aktivieren/deaktivieren">
+                <button class="ai-toggle active" style="visibility: hidden;" id="ai-toggle" aria-label="Toggle AI" title="Enable/disable AI response">
                     <i class="fas fa-robot"></i>
                 </button>
-                <button class="send-button" id="send-button" aria-label="Nachricht senden">
+                <button class="send-button" id="send-button" aria-label="Send message">
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </div>
@@ -705,7 +705,7 @@
     </main>
 
     <footer>
-        &copy; 2025 Paperless-AI - RAG | Dokumentensuche mit KI
+        &copy; 2025 Paperless-AI - RAG | Document search with AI
     </footer>
 
     <script>
@@ -775,7 +775,7 @@
             
             checkUpdatesBtn.addEventListener('click', async () => {
                 checkUpdatesBtn.disabled = true;
-                checkUpdatesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Prüfe...';
+                checkUpdatesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
                 
                 try {
                     const response = await fetch('/api/rag/index/check');
@@ -784,19 +784,19 @@
                         const data = await response.json();
                         showSystemMessage(`Status: ${data.message}`);
                     } else {
-                        showError('Fehler beim Prüfen des Status');
+                        showError('Error checking status');
                     }
                 } catch (error) {
-                    showError(`Verbindungsfehler: ${error.message}`);
+                    showError(`Connection error: ${error.message}`);
                 } finally {
                     checkUpdatesBtn.disabled = false;
-                    checkUpdatesBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Auf Updates prüfen';
+                    checkUpdatesBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Check for Updates';
                 }
             });
             
             startIndexingBtn.addEventListener('click', async () => {
                 startIndexingBtn.disabled = true;
-                startIndexingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starte...';
+                startIndexingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
                 
                 try {
                     const response = await fetch('/api/rag/index', {
@@ -812,16 +812,16 @@
                     
                     if (response.ok) {
                         const data = await response.json();
-                        showSystemMessage(`Indexierung gestartet: ${data.status}`);
-                        updateStatusIndicator('indexing', 'Indexierung läuft');
+                        showSystemMessage(`Indexing started: ${data.status}`);
+                        updateStatusIndicator('indexing', 'Indexing in progress');
                     } else {
-                        showError('Fehler beim Starten der Indexierung');
+                        showError('Error starting indexing');
                     }
                 } catch (error) {
-                    showError(`Verbindungsfehler: ${error.message}`);
+                    showError(`Connection error: ${error.message}`);
                 } finally {
                     startIndexingBtn.disabled = false;
-                    startIndexingBtn.innerHTML = '<i class="fas fa-database"></i> Indexierung starten';
+                    startIndexingBtn.innerHTML = '<i class="fas fa-database"></i> Start Indexing';
                 }
             });
 
@@ -842,10 +842,10 @@
         function updateAIToggle() {
             if (useAI) {
                 aiToggle.classList.add('active');
-                aiToggle.title = 'KI-Antwort deaktivieren';
+                aiToggle.title = 'Disable AI response';
             } else {
                 aiToggle.classList.remove('active');
-                aiToggle.title = 'KI-Antwort aktivieren';
+                aiToggle.title = 'Enable AI response';
             }
         }
 
@@ -875,9 +875,9 @@
             if (statusData.llm_status && statusData.llm_status.is_available) {
                 const providerName = statusData.llm_status.provider.toUpperCase();
                 const modelName = statusData.llm_status.model;
-                aiModelName.textContent = `KI: ${providerName} - ${modelName}`;
+                aiModelName.textContent = `AI: ${providerName} - ${modelName}`;
             } else {
-                aiModelName.textContent = 'KI: Nicht verfügbar';
+                aiModelName.textContent = 'AI: Not available';
             }
             
             // Update status indicator
@@ -887,16 +887,16 @@
             }
             
             if (statusData.indexing_status && statusData.indexing_status.running) {
-                updateStatusIndicator('indexing', 'Indexierung läuft');
+                updateStatusIndicator('indexing', 'Indexing in progress');
                 return;
             }
             
             if (statusData.index_ready) {
-                updateStatusIndicator('online', 'Bereit');
+                updateStatusIndicator('online', 'Ready');
             } else if (statusData.data_loaded) {
-                updateStatusIndicator('indexing', 'Index wird erstellt');
+                updateStatusIndicator('indexing', 'Creating index');
             } else {
-                updateStatusIndicator('indexing', 'Daten werden geladen');
+                updateStatusIndicator('indexing', 'Loading data');
             }
             
             // Update API status badges
@@ -922,8 +922,8 @@
             if (statusData.data_loaded !== undefined) {
                 addStatusBadge(
                     statusData.data_loaded,
-                    'Daten',
-                    statusData.data_loaded ? 'Geladen' : 'Nicht geladen'
+                    'Data',
+                    statusData.data_loaded ? 'Loaded' : 'Not loaded'
                 );
             }
             
@@ -932,7 +932,7 @@
                 addStatusBadge(
                     statusData.index_ready,
                     'Index',
-                    statusData.index_ready ? 'Bereit' : 'Nicht bereit'
+                    statusData.index_ready ? 'Ready' : 'Not ready'
                 );
             }
             
@@ -940,8 +940,8 @@
             if (statusData.indexing_status && statusData.indexing_status.running) {
                 addStatusBadge(
                     false,
-                    'Indexierung',
-                    'In Bearbeitung',
+                    'Indexing',
+                    'In Progress',
                     'warning'
                 );
             }
@@ -950,7 +950,7 @@
             if (statusData.indexing_status && statusData.indexing_status.documents_count) {
                 addStatusBadge(
                     true,
-                    'Dokumente',
+                    'Documents',
                     statusData.indexing_status.documents_count.toString(),
                     'success'
                 );
@@ -1027,7 +1027,7 @@
                 typingIndicator.classList.add('hidden');
                 
                 // Show error message
-                showError(`Fehler: ${error.message}`);
+                showError(`Error: ${error.message}`);
             });
         }
 
@@ -1053,7 +1053,7 @@
             // Add model info if available
             if (modelUsed) {
                 html += `<div style="font-size: 0.75rem; margin-top: 0.5rem; color: var(--text-tertiary);">
-                            <i class="fas fa-robot"></i> Beantwortet mit ${modelUsed}
+                            <i class="fas fa-robot"></i> Answered with ${modelUsed}
                         </div>`;
             }
             
@@ -1061,23 +1061,23 @@
             if (sources && sources.length > 0) {
                 html += `<div class="sources-container">
                             <div class="sources-title">
-                                <span>Quellen (${sources.length})</span>
+                                <span>Sources (${sources.length})</span>
                                 <button class="sources-toggle" data-expanded="false">
-                                    Alle anzeigen <i class="fas fa-chevron-down"></i>
+                                    Show all <i class="fas fa-chevron-down"></i>
                                 </button>
                             </div>
                             <div class="sources-list">`;
                 
                 sources.forEach((source, index) => {
-                    const date = source.date ? new Date(source.date).toLocaleDateString('de-DE') : 'Unbekannt';
+                    const date = source.date ? new Date(source.date).toLocaleDateString('en-US') : 'Unknown';
                     const hidden = index > 0 ? ' hidden' : '';
                     
                     html += `
                         <div class="source${hidden}" data-index="${index}">
-                            <div class="source-title">${source.title || 'Unbekannter Titel'}</div>
-                            <p>${source.snippet || 'Kein Auszug verfügbar'}</p>
+                            <div class="source-title">${source.title || 'Unknown Title'}</div>
+                            <p>${source.snippet || 'No excerpt available'}</p>
                             <div class="source-meta">
-                                <span>${source.correspondent || 'Unbekannter Absender'}</span>
+                                <span>${source.correspondent || 'Unknown Sender'}</span>
                                 <span>${date}</span>
                             </div>
                         </div>
@@ -1103,12 +1103,12 @@
                         sources.forEach((source, index) => {
                             if (index > 0) source.classList.add('hidden');
                         });
-                        toggleBtn.innerHTML = 'Alle anzeigen <i class="fas fa-chevron-down"></i>';
+                        toggleBtn.innerHTML = 'Show all <i class="fas fa-chevron-down"></i>';
                         toggleBtn.setAttribute('data-expanded', 'false');
                     } else {
                         // Expand
                         sources.forEach(source => source.classList.remove('hidden'));
-                        toggleBtn.innerHTML = 'Ausblenden <i class="fas fa-chevron-up"></i>';
+                        toggleBtn.innerHTML = 'Hide <i class="fas fa-chevron-up"></i>';
                         toggleBtn.setAttribute('data-expanded', 'true');
                     }
                 });
