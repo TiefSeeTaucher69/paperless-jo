@@ -63,6 +63,7 @@ MAX_RESULTS = 20
 
 # Download NLTK resources if not present
 nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
 nltk.download('stopwords', quiet=True)
 
 # Status und Konfiguration

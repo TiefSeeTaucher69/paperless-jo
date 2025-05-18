@@ -19,7 +19,7 @@ export RAG_SERVICE_ENABLED="true"
 
 # Start the Node.js application
 echo "Starting Node.js Paperless-AI service..."
-npm run test
+pm2-runtime ecosystem.config.js
 
 # If Node.js exits, kill the Python service
 kill $PYTHON_PID
