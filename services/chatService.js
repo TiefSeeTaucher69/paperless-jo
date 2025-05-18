@@ -120,10 +120,16 @@ class ChatService {
       const aiProvider = process.env.AI_PROVIDER;
 
       if (aiProvider === 'openai') {
-        // Use OpenAI SDK for OpenAI provider
-        const openai = OpenAIService.client;
+        // Make sure OpenAIService is initialized
+        OpenAIService.initialize();
+        
+        // Always create a new client instance for this request to ensure it works
+        const openai = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY
+        });
+        
         const stream = await openai.chat.completions.create({
-          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          model: process.env.OPENAI_MODEL || 'gpt-4',
           messages: chatData.messages,
           stream: true,
         });
