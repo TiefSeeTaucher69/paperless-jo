@@ -8,6 +8,7 @@ const os = require('os');
 const stream = require('stream');
 const { promisify } = require('util');
 const pipeline = promisify(stream.pipeline);
+const { OpenAI } = require('openai');
 
 class ChatService {
   constructor() {
@@ -115,110 +116,88 @@ class ChatService {
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
-      let apiUrl;
-      let requestBody;
-      let headers = {
-        'Content-Type': 'application/json'
-      };
-
-      if (process.env.AI_PROVIDER === 'openai') {
-        apiUrl = 'https://api.openai.com/v1/chat/completions';
-        headers['Authorization'] = `Bearer ${process.env.OPENAI_API_KEY}`;
-        requestBody = {
-          model: process.env.OPENAI_MODEL || 'gpt-4',
-          messages: chatData.messages,
-          stream: true
-        };
-      } else if (process.env.AI_PROVIDER === 'ollama') {
-        apiUrl = `${process.env.OLLAMA_API_URL}/api/chat`;
-        requestBody = {
-          model: process.env.OLLAMA_MODEL,
-          messages: chatData.messages,
-          stream: true
-        };
-      } else if (process.env.AI_PROVIDER === 'custom') {
-        apiUrl = process.env.CUSTOM_BASE_URL;
-        headers['Authorization'] = `Bearer ${process.env.CUSTOM_API_KEY}`;
-        requestBody = {
-          model: process.env.CUSTOM_MODEL,
-          messages: chatData.messages,
-          stream: true
-        };
-      } else if (process.env.AI_PROVIDER === 'azure') {
-        apiUrl = `${process.env.AZURE_ENDPOINT}/openai/deployments/${process.env.AZURE_DEPLOYMENT_NAME}/chat/completions?api-version=${process.env.AZURE_API_VERSION}`;
-        headers['api-key'] = process.env.AZURE_API_KEY;
-        requestBody = {
-          model: process.env.AZURE_DEPLOYMENT_NAME,
-          messages: chatData.messages,
-          stream: true
-        };
-      }else {
-        throw new Error('AI Provider not configured');
-      }
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
-      }
-
       let fullResponse = '';
-      const reader = response.body.getReader();
+      const aiProvider = process.env.AI_PROVIDER;
 
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = new TextDecoder().decode(value);
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-
-            if (process.env.AI_PROVIDER === 'ollama') {
-              try {
-                // Remove any BOM or unexpected characters at the start
-                const cleanLine = line.replace(/^\uFEFF/, '').trim();
-                if (!cleanLine) continue;
-
-                const data = JSON.parse(cleanLine);
-                if (data.message?.content) {
-                  fullResponse += data.message.content;
-                  res.write(`data: ${JSON.stringify({ content: data.message.content })}\n\n`);
-                }
-              } catch (e) {
-                console.log('Invalid JSON chunk:', line);
-                continue;
-              }
-            } else {
-              // OpenAI and Custom format
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') continue;
-
-                try {
-                  const parsed = JSON.parse(data);
-                  const content = parsed.choices?.[0]?.delta?.content;
-                  if (content) {
-                    fullResponse += content;
-                    res.write(`data: ${JSON.stringify({ content })}\n\n`);
-                  }
-                } catch (e) {
-                  console.log('Invalid JSON in OpenAI response:', data);
-                  continue;
-                }
-              }
-            }
+      if (aiProvider === 'openai') {
+        // Use OpenAI SDK for OpenAI provider
+        const openai = OpenAIService.client;
+        const stream = await openai.chat.completions.create({
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          messages: chatData.messages,
+          stream: true,
+        });
+        
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
           }
         }
-      } catch (error) {
-        console.error('Error processing stream:', error);
-        res.write(`data: ${JSON.stringify({ error: 'Error processing response' })}\n\n`);
+      } else if (aiProvider === 'custom') {
+        // Use OpenAI SDK with custom base URL
+        const customOpenAI = new OpenAI({
+          baseURL: process.env.CUSTOM_BASE_URL,
+          apiKey: process.env.CUSTOM_API_KEY,
+        });
+
+        const stream = await customOpenAI.chat.completions.create({
+          model: process.env.CUSTOM_MODEL,
+          messages: chatData.messages,
+          stream: true,
+        });
+        
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+        }
+      } else if (aiProvider === 'azure') {
+        // Use OpenAI SDK with Azure configuration
+        const azureOpenAI = new OpenAI({
+          apiKey: process.env.AZURE_API_KEY,
+          baseURL: `${process.env.AZURE_ENDPOINT}/openai/deployments/${process.env.AZURE_DEPLOYMENT_NAME}`,
+          defaultQuery: { 'api-version': process.env.AZURE_API_VERSION },
+        });
+
+        const stream = await azureOpenAI.chat.completions.create({
+          model: process.env.AZURE_DEPLOYMENT_NAME,
+          messages: chatData.messages,
+          stream: true,
+        });
+        
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+        }
+      } else if (aiProvider === 'ollama') {
+        // Use OpenAI SDK for Ollama with OpenAI API compatibility
+        const ollamaOpenAI = new OpenAI({
+          baseURL: `${process.env.OLLAMA_API_URL}/v1`,
+          apiKey: 'ollama', // Ollama doesn't require a real API key but the SDK requires some value
+        });
+
+        const stream = await ollamaOpenAI.chat.completions.create({
+          model: process.env.OLLAMA_MODEL,
+          messages: chatData.messages,
+          stream: true,
+        });
+        
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+        }
+      } else {
+        throw new Error('AI Provider not configured');
       }
 
       // Add the complete response to chat history
