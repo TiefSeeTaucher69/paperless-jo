@@ -7,14 +7,22 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     python3 \
+    python3-pip \
+    python3-dev \
     make \
     g++ \
-    curl && \
+    curl \
+    wget && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install PM2 process manager globally
+# Install PM2 process manager globally and make startup script executable
 RUN npm install pm2 -g
+RUN chmod +x start-services.sh
+
+# Install Python dependencies for RAG service
+COPY requirements.txt /app/
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copy package files for dependency installation
 COPY package*.json ./
@@ -38,5 +46,5 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 # Set production environment
 ENV NODE_ENV=production
 
-# Start application with PM2 with user node
-CMD ["pm2-runtime", "ecosystem.config.js"]
+# Start both Node.js and Python services using our script
+CMD ["./start-services.sh"]

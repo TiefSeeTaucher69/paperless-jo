@@ -294,6 +294,44 @@ class OpenAIService {
       };
     }
   }
+
+  /**
+   * Generate text based on a prompt
+   * @param {string} prompt - The prompt to generate text from
+   * @returns {Promise<string>} - The generated text
+   */
+  async generateText(prompt) {
+    try {
+      this.initialize();
+      
+      if (!this.client) {
+        throw new Error('OpenAI client not initialized - missing API key');
+      }
+      
+      const model = process.env.OPENAI_MODEL || config.openai.model;
+      
+      const response = await this.client.chat.completions.create({
+        model: model,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+      
+      if (!response?.choices?.[0]?.message?.content) {
+        throw new Error('Invalid API response structure');
+      }
+      
+      return response.choices[0].message.content;
+    } catch (error) {
+      console.error('Error generating text with OpenAI:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new OpenAIService();

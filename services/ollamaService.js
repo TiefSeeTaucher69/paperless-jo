@@ -543,6 +543,45 @@ class OllamaService {
             
         await writePromptToFile(content);
     }
+
+    /**
+     * Generate text based on a prompt
+     * @param {string} prompt - The prompt to generate text from
+     * @returns {Promise<string>} - The generated text
+     */
+    async generateText(prompt) {
+        try {
+            // Calculate context window size based on prompt length
+            const promptTokenCount = this._calculatePromptTokenCount(prompt);
+            const numCtx = this._calculateNumCtx(promptTokenCount, 512);
+            
+            // Simple system prompt for text generation
+            const systemPrompt = `You are a helpful assistant. Generate a clear, concise, and informative response to the user's question or request.`;
+            
+            // Call Ollama API without enforcing a specific response format
+            const response = await this.client.post(`${this.apiUrl}/api/generate`, {
+                model: this.model,
+                prompt: prompt,
+                system: systemPrompt,
+                stream: false,
+                options: {
+                    temperature: 0.7, 
+                    top_p: 0.9,
+                    num_predict: 1024,
+                    num_ctx: numCtx 
+                }
+            });
+            
+            if (!response.data || !response.data.response) {
+                throw new Error('Invalid response from Ollama API');
+            }
+            
+            return response.data.response;
+        } catch (error) {
+            console.error('Error generating text with Ollama:', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = new OllamaService();

@@ -256,6 +256,44 @@ class CustomOpenAIService {
       };
     }
   }
+
+  /**
+   * Generate text based on a prompt
+   * @param {string} prompt - The prompt to generate text from
+   * @returns {Promise<string>} - The generated text
+   */
+  async generateText(prompt) {
+    try {
+      this.initialize();
+      
+      if (!this.client) {
+        throw new Error('Custom OpenAI client not initialized - missing API key');
+      }
+      
+      const model = config.custom.model;
+      
+      const response = await this.client.chat.completions.create({
+        model: model,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+      
+      if (!response?.choices?.[0]?.message?.content) {
+        throw new Error('Invalid API response structure');
+      }
+      
+      return response.choices[0].message.content;
+    } catch (error) {
+      console.error('Error generating text with Custom OpenAI:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new CustomOpenAIService();

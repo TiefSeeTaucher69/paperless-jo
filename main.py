@@ -31,12 +31,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger("RAGZ")
 
-# Load environment variables
-load_dotenv(verbose=True)  # Verbose-Ausgabe hinzufügen, um Probleme mit der .env-Datei zu erkennen
+# Load environment variables from data directory
+data_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', '.env')
+if os.path.exists(data_env_path):
+    load_dotenv(dotenv_path=data_env_path, verbose=True)
+    logger.info(f"Loaded environment variables from {data_env_path}")
+else:
+    # Fallback to local .env file if none exists in data folder
+    local_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if os.path.exists(local_env_path):
+        load_dotenv(dotenv_path=local_env_path, verbose=True)
+        logger.info(f"Loaded environment variables from {local_env_path}")
+    else:
+        logger.warning("No .env file found in data directory or locally")
+
+# Debug: Print loaded environment variables for troubleshooting
+logger.info(f"Loaded PAPERLESS_URL: {os.getenv('PAPERLESS_URL')}")
+logger.info(f"Loaded PAPERLESS_NGX_URL: {os.getenv('PAPERLESS_NGX_URL')}")
+logger.info(f"Loaded PAPERLESS_HOST: {os.getenv('PAPERLESS_HOST')}")
+logger.info(f"Loaded PAPERLESS_API_TOKEN: {'[SET]' if os.getenv('PAPERLESS_API_TOKEN') else '[NOT SET]'}")
 
 # Constants
-DOCUMENTS_FILE = "./documents.json"
-CHROMADB_DIR = "./chromadb"
+DOCUMENTS_FILE = "./data/documents.json"
+CHROMADB_DIR = "./data/chromadb"
 EMBEDDING_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 CROSS_ENCODER_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 COLLECTION_NAME = "documents"
@@ -75,6 +92,10 @@ class IndexingRequest(BaseModel):
     force: bool = False
     background: bool = True
 
+class AskQuestionRequest(BaseModel):
+    question: str
+    max_sources: int = 5
+
 # Response models
 class SearchResult(BaseModel):
     title: str
@@ -98,16 +119,23 @@ global_state = GlobalState()
 # Data Manager
 class DataManager:
     def __init__(self, initialize_on_start=False):
-        # Flexible Variablennamen für die API-Einstellungen
-        self.paperless_url = os.getenv("PAPERLESS_URL") or os.getenv("PAPERLESS_NGX_URL")
-        self.paperless_token = os.getenv("PAPERLESS_TOKEN") or os.getenv("PAPERLESS_API_TOKEN")
+        # Flexible Variablennamen für die API-Einstellungen - erweitert um PAPERLESS_API_URL
+        paperless_api_url = os.getenv("PAPERLESS_API_URL") or os.getenv("PAPERLESS_URL") or os.getenv("PAPERLESS_NGX_URL") or os.getenv("PAPERLESS_HOST")
+        
+        # Entfernen des /api Suffix falls vorhanden
+        if paperless_api_url and paperless_api_url.endswith('/api'):
+            paperless_api_url = paperless_api_url[:-4]  # Entfernen der letzten 4 Zeichen (/api)
+            logger.info(f"Removed '/api' suffix from URL: {paperless_api_url}")
+        
+        self.paperless_url = paperless_api_url
+        self.paperless_token = os.getenv("PAPERLESS_TOKEN") or os.getenv("PAPERLESS_API_TOKEN") or os.getenv("PAPERLESS_APIKEY")
         
         # Debug-Informationen ausgeben
-        logger.info(f"Environment variables: PAPERLESS_URL={os.getenv('PAPERLESS_URL')}, PAPERLESS_NGX_URL={os.getenv('PAPERLESS_NGX_URL')}")
-        logger.info(f"Environment variables: PAPERLESS_TOKEN={'[SET]' if os.getenv('PAPERLESS_TOKEN') else '[NOT SET]'}, PAPERLESS_API_TOKEN={'[SET]' if os.getenv('PAPERLESS_API_TOKEN') else '[NOT SET]'}")
+        logger.info(f"Environment variables: PAPERLESS_API_URL={os.getenv('PAPERLESS_API_URL')}, PAPERLESS_URL={os.getenv('PAPERLESS_URL')}, PAPERLESS_NGX_URL={os.getenv('PAPERLESS_NGX_URL')}, PAPERLESS_HOST={os.getenv('PAPERLESS_HOST')}")
+        logger.info(f"Environment variables: PAPERLESS_TOKEN={'[SET]' if os.getenv('PAPERLESS_TOKEN') else '[NOT SET]'}, PAPERLESS_API_TOKEN={'[SET]' if os.getenv('PAPERLESS_API_TOKEN') else '[NOT SET]'}, PAPERLESS_APIKEY={'[SET]' if os.getenv('PAPERLESS_APIKEY') else '[NOT SET]'}")
         
         if not self.paperless_url or not self.paperless_token:
-            logger.error("Missing PAPERLESS_URL/PAPERLESS_NGX_URL or PAPERLESS_TOKEN/PAPERLESS_API_TOKEN in .env file")
+            logger.error("Missing PAPERLESS_API_URL/PAPERLESS_URL or PAPERLESS_API_TOKEN in .env file")
             raise ValueError("Missing Paperless API configuration in .env file")
         
         self.documents = []
@@ -362,6 +390,9 @@ class DataManager:
     
     def save_documents(self):
         """Save documents to file"""
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(DOCUMENTS_FILE), exist_ok=True)
+        
         with open(DOCUMENTS_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.documents, f, ensure_ascii=False, indent=2)
         logger.info(f"Saved {len(self.documents)} documents to {DOCUMENTS_FILE}")
@@ -370,6 +401,9 @@ class DataManager:
         """Set up ChromaDB collection with option to force update"""
         if not self.is_initialized:
             self.initialize_models()
+        
+        # Ensure ChromaDB directory exists
+        os.makedirs(CHROMADB_DIR, exist_ok=True)
             
         # Check if collection exists
         try:
@@ -788,7 +822,7 @@ app = FastAPI(title="RAGZ Document Search API")
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # In production, restrict to your Node.js server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -812,10 +846,14 @@ async def startup_event():
     
     try:
         # Überprüfen, ob .env-Datei existiert
-        env_file_path = ".env"
+        env_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', '.env')
         if not os.path.exists(env_file_path):
             logger.warning(f".env file not found at {os.path.abspath(env_file_path)}")
             logger.info("Creating example .env file")
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(env_file_path), exist_ok=True)
+            
             with open(env_file_path, "w") as f:
                 f.write("# Paperless-NGX API configuration\n")
                 f.write("PAPERLESS_URL=https://your-paperless-instance\n")
@@ -859,6 +897,38 @@ async def search_documents(request: SearchRequest, search_engine: SearchEngine =
         logger.error(f"Search error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/context", response_model=dict)
+async def get_context(request: AskQuestionRequest, search_engine: SearchEngine = Depends(get_search_engine)):
+    """Get context for a question without answering it"""
+    try:
+        logger.info(f"Context request: {request.question}")
+        
+        # Search for relevant documents
+        search_results = search_engine.search(SearchRequest(query=request.question))
+        
+        # Prepare sources
+        sources = []
+        context = ""
+        
+        for i, result in enumerate(search_results[:request.max_sources]):
+            context += f"Document {i+1}: {result.title}\n{result.snippet}\n\n"
+            sources.append({
+                "title": result.title,
+                "correspondent": result.correspondent,
+                "date": result.date,
+                "snippet": result.snippet,
+                "doc_id": result.doc_id
+            })
+        
+        return {
+            "context": context,
+            "sources": sources,
+            "query": request.question
+        }
+    except Exception as e:
+        logger.error(f"Context error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/status", response_model=SystemStatus)
 async def get_status():
     """Get system status"""
@@ -899,26 +969,30 @@ async def start_indexing(request: IndexingRequest, background_tasks: BackgroundT
 
 @app.post("/initialize")
 async def initialize_system(force: bool = False, background: bool = True, background_tasks: BackgroundTasks = None):
-    """Überprüfe die Umgebungsvariablen"""
+    """Initialize the system and check environment variables"""
     env_vars = {
         "PAPERLESS_URL": os.getenv("PAPERLESS_URL"),
         "PAPERLESS_NGX_URL": os.getenv("PAPERLESS_NGX_URL"),
+        "PAPERLESS_HOST": os.getenv("PAPERLESS_HOST"),
         "PAPERLESS_TOKEN": "[HIDDEN]" if os.getenv("PAPERLESS_TOKEN") else None,
-        "PAPERLESS_API_TOKEN": "[HIDDEN]" if os.getenv("PAPERLESS_API_TOKEN") else None
+        "PAPERLESS_API_TOKEN": "[HIDDEN]" if os.getenv("PAPERLESS_API_TOKEN") else None,
+        "PAPERLESS_APIKEY": "[HIDDEN]" if os.getenv("PAPERLESS_APIKEY") else None
     }
     
-    env_file_exists = os.path.exists(".env")
-    env_file_path = os.path.abspath(".env") if env_file_exists else None
+    env_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', '.env')
+    env_file_exists = os.path.exists(env_file_path)
     
-    return {
-        "env_file_exists": env_file_exists,
-        "env_file_path": env_file_path,
-        "environment_variables": env_vars,
-        "working_directory": os.getcwd(),
-        "config_valid": bool(global_state.data_manager and global_state.data_manager.paperless_url and global_state.data_manager.paperless_token)
-    }
+    # Check if indexing is already running
     if global_state.indexing_status.running:
-        return {"status": "running", "message": "Indexing already in progress"}
+        return {
+            "status": "running", 
+            "message": "Indexing already in progress",
+            "env_file_exists": env_file_exists,
+            "env_file_path": env_file_path if env_file_exists else None,
+            "environment_variables": env_vars,
+            "working_directory": os.getcwd(),
+            "config_valid": bool(global_state.data_manager and global_state.data_manager.paperless_url and global_state.data_manager.paperless_token)
+        }
     
     # Initialize data manager if needed
     if not global_state.data_manager.is_initialized:
@@ -929,17 +1003,26 @@ async def initialize_system(force: bool = False, background: bool = True, backgr
         global_state.data_manager.load_documents(force_refresh=force)
     
     # Initialize search engine
-    if background:
+    if background and background_tasks:
         background_tasks.add_task(run_indexing, force)
-        return {"status": "initializing", "message": "System initialization started in background"}
+        status = "initializing"
+        message = "System initialization started in background"
     else:
         run_indexing(force)
-        return {
-            "status": "initialized", 
-            "message": "System initialized",
-            "data_loaded": global_state.system_status.data_loaded,
-            "index_ready": global_state.system_status.index_ready
-        }
+        status = "initialized"
+        message = "System initialized"
+    
+    return {
+        "status": status, 
+        "message": message,
+        "data_loaded": global_state.system_status.data_loaded,
+        "index_ready": global_state.system_status.index_ready,
+        "env_file_exists": env_file_exists,
+        "env_file_path": env_file_path if env_file_exists else None,
+        "environment_variables": env_vars,
+        "working_directory": os.getcwd(),
+        "config_valid": bool(global_state.data_manager and global_state.data_manager.paperless_url and global_state.data_manager.paperless_token)
+    }
 
 # Main entry point with configuration options
 if __name__ == "__main__":
@@ -953,7 +1036,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # If initialized is requested from command line, set this for startup
+    # If initialization is requested from command line, set this for startup
     if args.initialize:
         logger.info("Auto-initialization requested via command line")
         
@@ -966,4 +1049,4 @@ if __name__ == "__main__":
             # Initialize in background
             run_indexing(args.force_refresh)
     
-    uvicorn.run("main2:app", host=args.host, port=args.port, reload=False)
+    uvicorn.run("main:app", host=args.host, port=args.port, reload=False)

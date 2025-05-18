@@ -8,6 +8,10 @@ const AIServiceFactory = require('./services/aiServiceFactory');
 const documentModel = require('./models/document');
 const setupService = require('./services/setupService');
 const setupRoutes = require('./routes/setup');
+
+// Add environment variables for RAG service if not already set
+process.env.RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://localhost:8000';
+process.env.RAG_SERVICE_ENABLED = process.env.RAG_SERVICE_ENABLED || 'true';
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const Logger = require('./services/loggerService');
@@ -417,6 +421,24 @@ async function scanDocuments() {
 // Routes
 app.use('/', setupRoutes);
 const authRoutes = require('./routes/auth');
+const ragRoutes = require('./routes/rag');
+
+// Mount RAG routes if enabled
+if (process.env.RAG_SERVICE_ENABLED === 'true') {
+  app.use('/api/rag', ragRoutes);
+  
+  // RAG UI route
+  app.get('/rag', async (req, res) => {
+    try {
+      res.render('rag', { 
+        title: 'Dokumenten-Fragen'
+      });
+    } catch (error) {
+      console.error('Error rendering RAG UI:', error);
+      res.status(500).send('Error loading RAG interface');
+    }
+  });
+}
 
 /**
  * @swagger
