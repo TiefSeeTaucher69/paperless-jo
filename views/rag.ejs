@@ -70,8 +70,8 @@
                     <div class="material-card chat-interface">
                         <!-- Initial State -->
                         <div class="initial-state" id="initialState">
-                            <h3>Document-Based Question Answering</h3>
-                            <p>Ask any question about your documents and I'll find relevant information to answer.</p>
+                            <h3>Paperless-AI RAG Chat - </h3><hr/>
+                            <p> Ask any question about your documents and I'll find relevant information to answer.</p>
                             <div class="features-list">
                                 <div class="feature-item">
                                     <i class="fas fa-search"></i>
@@ -88,33 +88,31 @@
                             </div>
                         </div>
 
+                        <!-- RAG Setup Section -->
+                        <div id="ragSetupSection" class="rag-setup-section">
+                            <h3>Indexing Setup</h3>
+                            <p>Der RAG-Service muss initialisiert werden, um Ihre Dokumente zu indizieren.</p>
+                            
+                            <div class="setup-buttons">
+                                <button id="startIndexingButton" class="btn btn-primary">
+                                    <i class="fas fa-sync"></i> Indexierung starten
+                                </button>
+                                <button id="forceReindexButton" class="btn btn-secondary">
+                                    <i class="fas fa-redo"></i> Neuindexierung erzwingen
+                                </button>
+                            </div>
+                            
+                            <div id="indexingStatus" class="indexing-status" style="display: none;">
+                                <div id="indexingStatusText" class="indexing-status-text">Indexierung läuft...</div>
+                                <div id="indexingProgress" class="progress-bar">
+                                    <div class="progress-fill"></div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Chat History -->
                         <div id="chatHistory" class="chat-history">
                             <!-- Messages will be added here dynamically -->
-                        </div>
-
-                        <!-- Filter Options -->
-                        <div id="filterOptions" class="filter-options">
-                            <button id="toggleFilters" class="toggle-filters-btn">
-                                <i class="fas fa-filter"></i> Filters
-                            </button>
-                            <div id="filterPanel" class="filter-panel hidden">
-                                <div class="filter-item">
-                                    <label for="fromDate">From Date:</label>
-                                    <input type="date" id="fromDate" class="filter-input">
-                                </div>
-                                <div class="filter-item">
-                                    <label for="toDate">To Date:</label>
-                                    <input type="date" id="toDate" class="filter-input">
-                                </div>
-                                <div class="filter-item">
-                                    <label for="correspondent">Correspondent:</label>
-                                    <input type="text" id="correspondent" class="filter-input" placeholder="Type correspondent name...">
-                                </div>
-                                <button id="clearFilters" class="clear-filters-btn">
-                                    <i class="fas fa-times"></i> Clear Filters
-                                </button>
-                            </div>
                         </div>
 
                         <!-- Message Input -->

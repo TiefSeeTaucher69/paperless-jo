@@ -29,3 +29,10 @@ openrouter.js
 rag_config.conf
 indexed.conf
 indexing_complete.flag
+RAGZ_README.md
+/chromadb
+/chromadb/*
+rag_config.conf
+indexed.conf
+main.py.bak
+
