@@ -645,11 +645,11 @@
     <main>
         <div class="filters">
             <div class="filters-title" id="filters-toggle">
-                <span>Search Filters & API Status</span>
+                <span>API Status</span>
                 <i class="fas fa-chevron-down"></i>
             </div>
             <div class="filters-content" id="filters-content">
-                <div class="filter-row">
+                <div class="filter-row" style="display: none;">
                     <div class="filter-group">
                         <label class="filter-label" for="date-from">From Date</label>
                         <input type="date" id="date-from" class="filter-input">
@@ -893,9 +893,9 @@
 
         function updateStatus(statusData) {
             // Update AI model info
-            if (statusData.ai_status) {
+            if (statusData.ai_status === 'ok') {
                 const modelName = statusData.ai_model.toUpperCase();;
-                aiModelName.textContent = `AI: ${modelName}`;
+                aiModelName.textContent = `AI MODEL: ${modelName}`;
             } else {
                 aiModelName.textContent = 'AI: Not available';
             }
