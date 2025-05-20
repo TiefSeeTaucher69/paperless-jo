@@ -35,5 +35,5 @@ RAGZ_README.md
 rag_config.conf
 indexed.conf
 main.py.bak
-/__pycache__
+__pycache__/
 
