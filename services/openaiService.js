@@ -9,6 +9,7 @@ const config = require('../config/config');
 const paperlessService = require('./paperlessService');
 const fs = require('fs').promises;
 const path = require('path');
+const { model } = require('./ollamaService');
 
 class OpenAIService {
   constructor() {
@@ -329,6 +330,34 @@ class OpenAIService {
     } catch (error) {
       console.error('Error generating text with OpenAI:', error);
       throw error;
+    }
+  }
+
+  async checkStatus() {
+    // send test request to OpenAI API and respond with 'ok' or 'error'
+    try {
+      this.initialize();
+      
+      if (!this.client) {
+        throw new Error('OpenAI client not initialized - missing API key');
+      }
+      const response = await this.client.chat.completions.create({
+        model: process.env.OPENAI_MODEL,
+        messages: [
+          {
+            role: "user",
+            content: "Test"
+          }
+        ],
+        temperature: 0.7
+      });
+      if (!response?.choices?.[0]?.message?.content) {
+        throw new Error('Invalid API response structure');
+      }
+      return { status: 'ok', model: process.env.OPENAI_MODEL };
+    } catch (error) {
+      console.error('Error checking OpenAI status:', error);
+      return { status: 'error', error: error.message };
     }
   }
 }

@@ -294,6 +294,39 @@ class CustomOpenAIService {
       throw error;
     }
   }
+
+  async checkStatus() {
+    try {
+      this.initialize();
+      
+      if (!this.client) {
+        throw new Error('Custom OpenAI client not initialized - missing API key');
+      }
+      
+      const model = config.custom.model;
+      
+      const response = await this.client.chat.completions.create({
+        model: model,
+        messages: [
+          {
+            role: "user",
+            content: 'Ping'
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+      
+      if (!response?.choices?.[0]?.message?.content) {
+        return { status: 'error' };
+      }
+      
+      return { status: 'ok', model: model };
+    } catch (error) {
+      console.error('Error generating text with Custom OpenAI:', error);
+      return { status: 'error' };
+    }
+  }
 }
 
 module.exports = new CustomOpenAIService();

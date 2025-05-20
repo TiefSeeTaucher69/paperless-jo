@@ -10,6 +10,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const paperlessService = require('./paperlessService');
 const os = require('os');
+const OpenAI = require('openai');
 
 /**
  * Service for document analysis using Ollama
@@ -581,6 +582,30 @@ class OllamaService {
             console.error('Error generating text with Ollama:', error);
             throw error;
         }
+    }
+
+    /**
+     * Check if the Ollama service is running
+     * @returns {Promise<boolean>} - True if the service is running, false otherwise
+     */
+    async checkStatus() {
+        // use ollama status endpoint
+        try {
+            const response = await this.client.get(`${this.apiUrl}/api/ps`);
+            if (response.status === 200) {
+                const data = response.data;
+                // Ensure data is an array and has at least one model
+                let modelName = null;
+                if (Array.isArray(data.models) && data.models.length > 0) {
+                    modelName = data.models[0].name;
+                }
+                console.log('Ollama model name:', modelName);
+                return { status: 'ok', model: modelName };
+            }
+        } catch (error) {
+            console.error('Error checking Ollama service status:', error);
+        }
+        return { status: 'error' };
     }
 }
 

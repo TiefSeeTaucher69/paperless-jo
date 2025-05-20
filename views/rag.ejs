@@ -893,10 +893,9 @@
 
         function updateStatus(statusData) {
             // Update AI model info
-            if (statusData.llm_status && statusData.llm_status.is_available) {
-                const providerName = statusData.llm_status.provider.toUpperCase();
-                const modelName = statusData.llm_status.model;
-                aiModelName.textContent = `AI: ${providerName} - ${modelName}`;
+            if (statusData.ai_status) {
+                const modelName = statusData.ai_model.toUpperCase();;
+                aiModelName.textContent = `AI: ${modelName}`;
             } else {
                 aiModelName.textContent = 'AI: Not available';
             }

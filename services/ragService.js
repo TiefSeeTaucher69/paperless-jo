@@ -48,84 +48,84 @@ class RagService {
     }
   }
 
-/**
- * Ask a question about documents and get an AI-generated answer in the same language as the question
- * @param {string} question - The question to ask
- * @returns {Promise<{answer: string, sources: Array}>} - AI response and source documents
- */
-async askQuestion(question) {
-  try {
-    // 1. Get context from the RAG service
-    const response = await axios.post(`${this.baseUrl}/context`, { 
-      question,
-      max_sources: 5
-    });
-    
-    const { context, sources } = response.data;
-    
-    // 2. Fetch full content for each source document using doc_id
-    let enhancedContext = context;
-    
-    if (sources && sources.length > 0) {
-      // Fetch full document content for each source
-      const fullDocContents = await Promise.all(
-        sources.map(async (source) => {
-          if (source.doc_id) {
-            try {
-              const fullContent = await paperlessService.getDocumentContent(source.doc_id);
-              return `Full document content for ${source.title || 'Document ' + source.doc_id}:\n${fullContent}`;
-            } catch (error) {
-              console.error(`Error fetching content for document ${source.doc_id}:`, error.message);
-              return '';
-            }
-          }
-          return '';
-        })
-      );
-      
-      // Combine original context with full document contents
-      enhancedContext = context + '\n\n' + fullDocContents.filter(content => content).join('\n\n');
-    }
-    
-    // 3. Use AI service to generate an answer based on the enhanced context
-    const aiService = AIServiceFactory.getService();
-    
-    // Create a language-agnostic prompt that works in any language
-    const prompt = `
-You are a helpful assistant that answers questions about documents.
-
-Answer the following question precisely, based on the provided documents:
-
-Question: ${question}
-
-Context from relevant documents:
-${enhancedContext}
-
-Important instructions:
-- Use ONLY information from the provided documents
-- If the answer is not contained in the documents, respond: "This information is not contained in the documents." (in the same language as the question)
-- Avoid assumptions or speculation beyond the given context
-- Answer in the same language as the question was asked
-- Do not mention document numbers or source references, answer as if it were a natural conversation
-`;
-
-    let answer;
+  /**
+   * Ask a question about documents and get an AI-generated answer in the same language as the question
+   * @param {string} question - The question to ask
+   * @returns {Promise<{answer: string, sources: Array}>} - AI response and source documents
+   */
+  async askQuestion(question) {
     try {
-      answer = await aiService.generateText(prompt);
+      // 1. Get context from the RAG service
+      const response = await axios.post(`${this.baseUrl}/context`, { 
+        question,
+        max_sources: 5
+      });
+      
+      const { context, sources } = response.data;
+      
+      // 2. Fetch full content for each source document using doc_id
+      let enhancedContext = context;
+      
+      if (sources && sources.length > 0) {
+        // Fetch full document content for each source
+        const fullDocContents = await Promise.all(
+          sources.map(async (source) => {
+            if (source.doc_id) {
+              try {
+                const fullContent = await paperlessService.getDocumentContent(source.doc_id);
+                return `Full document content for ${source.title || 'Document ' + source.doc_id}:\n${fullContent}`;
+              } catch (error) {
+                console.error(`Error fetching content for document ${source.doc_id}:`, error.message);
+                return '';
+              }
+            }
+            return '';
+          })
+        );
+        
+        // Combine original context with full document contents
+        enhancedContext = context + '\n\n' + fullDocContents.filter(content => content).join('\n\n');
+      }
+      
+      // 3. Use AI service to generate an answer based on the enhanced context
+      const aiService = AIServiceFactory.getService();
+      
+      // Create a language-agnostic prompt that works in any language
+      const prompt = `
+        You are a helpful assistant that answers questions about documents.
+
+        Answer the following question precisely, based on the provided documents:
+
+        Question: ${question}
+
+        Context from relevant documents:
+        ${enhancedContext}
+
+        Important instructions:
+        - Use ONLY information from the provided documents
+        - If the answer is not contained in the documents, respond: "This information is not contained in the documents." (in the same language as the question)
+        - Avoid assumptions or speculation beyond the given context
+        - Answer in the same language as the question was asked
+        - Do not mention document numbers or source references, answer as if it were a natural conversation
+        `;
+
+      let answer;
+      try {
+        answer = await aiService.generateText(prompt);
+      } catch (error) {
+        console.error('Error generating answer with AI service:', error);
+        answer = "An error occurred while generating an answer. Please try again later.";
+      }
+      
+      return {
+        answer,
+        sources
+      };
     } catch (error) {
-      console.error('Error generating answer with AI service:', error);
-      answer = "An error occurred while generating an answer. Please try again later.";
+      console.error('Error in askQuestion:', error);
+      throw new Error("An error occurred while processing your question. Please try again later.");
     }
-    
-    return {
-      answer,
-      sources
-    };
-  } catch (error) {
-    console.error('Error in askQuestion:', error);
-    throw new Error("An error occurred while processing your question. Please try again later.");
   }
-}
 
   /**
    * Start indexing documents in the RAG service
@@ -187,6 +187,22 @@ Important instructions:
       throw error;
     }
   }
+
+  /**
+   * Get AI status
+   * @returns {Promise<{status: string}>}
+   */
+  async getAIStatus() {
+    try {
+      const aiService = AIServiceFactory.getService();
+      const status = await aiService.checkStatus();
+      return status;
+    } catch (error) {
+      console.error('Error checking AI service status:', error);
+      throw error;
+    }
+  }
 }
+
 
 module.exports = new RagService();
