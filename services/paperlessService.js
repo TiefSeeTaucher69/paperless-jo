@@ -3,7 +3,7 @@ const axios = require('axios');
 const config = require('../config/config');
 const fs = require('fs');
 const path = require('path');
-const { parse, isValid, parseISO } = require('date-fns');
+const { parse, isValid, parseISO, format } = require('date-fns');
 
 class PaperlessService {
   constructor() {
@@ -1176,7 +1176,7 @@ async getOrCreateDocumentType(name) {
       
           updateData = {
             ...updates,
-            created: dateObject.toISOString()
+            created: format(dateObject, 'yyyy-MM-dd'),
           };
         } else {
           updateData = { ...updates };
@@ -1186,7 +1186,7 @@ async getOrCreateDocumentType(name) {
         console.warn('[DEBUG] Received Date:', updates);
         updateData = {
           ...updates,
-          created: new Date(1990, 0, 1).toISOString()
+          created: format(new Date(1990, 0, 1), 'yyyy-MM-dd'),
         };
       }
 
