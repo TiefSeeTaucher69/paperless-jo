@@ -31,4 +31,4 @@ rag_config.conf
 indexed.conf
 main.py.bak
 indexing_complete.flag
-/__pycache__
+__pycache__/
