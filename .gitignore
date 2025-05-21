@@ -32,3 +32,5 @@ indexed.conf
 main.py.bak
 indexing_complete.flag
 __pycache__/
+main.pyy*
+rag.ejs.old

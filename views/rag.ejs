@@ -633,8 +633,8 @@
                 <span id="ai-model-name">AI: Loading...</span>
             </div>
             <div class="status-indicator">
-                <div class="status-dot online" id="status-indicator"></div>
-                <span id="status-text">Online</span>
+                <div class="status-dot offline" id="status-indicator"></div>
+                <span id="status-text">Connecting...</span>
             </div>
             <button class="theme-toggle" id="theme-toggle">
                 <i class="fas fa-moon"></i>
@@ -665,18 +665,7 @@
                 </div>
 
                 <div class="api-status" id="api-status">
-                    <div class="status-badge success">
-                        <i class="fas fa-check-circle"></i>
-                        <span>Server: Online</span>
-                    </div>
-                    <div class="status-badge success">
-                        <i class="fas fa-check-circle"></i>
-                        <span>Data: Loaded</span>
-                    </div>
-                    <div class="status-badge success">
-                        <i class="fas fa-check-circle"></i>
-                        <span>Index: Ready</span>
-                    </div>
+                    <!-- Status badges will be loaded dynamically -->
                 </div>
 
                 <div class="action-buttons">
@@ -754,6 +743,7 @@
         // State
         let darkMode = localStorage.getItem('darkMode') === 'true';
         let useAI = localStorage.getItem('useAI') !== 'false'; // Default: true
+        let isConnected = false; // Track connection status
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -761,6 +751,11 @@
             updateAIToggle();
             autoResizeTextarea();
             messageInput.addEventListener('input', autoResizeTextarea);
+            
+            // Initialize status badges to "connecting" state
+            updateStatusBadgesLoading();
+            
+            // Perform initial status check
             checkStatus();
             
             // Initialize event listeners
@@ -804,11 +799,19 @@
                     if (response.ok) {
                         const data = await response.json();
                         showSystemMessage(`Status: ${data.message}`);
+                        isConnected = true;
+                        updateStatusIndicator('online', 'Online');
                     } else {
                         showError('Error checking status');
+                        isConnected = false;
+                        updateStatusIndicator('offline', 'Offline');
+                        updateStatusBadgesOffline();
                     }
                 } catch (error) {
                     showError(`Connection error: ${error.message}`);
+                    isConnected = false;
+                    updateStatusIndicator('offline', 'Offline');
+                    updateStatusBadgesOffline();
                 } finally {
                     checkUpdatesBtn.disabled = false;
                     checkUpdatesBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Check for Updates';
@@ -835,11 +838,22 @@
                         const data = await response.json();
                         showSystemMessage(`Indexing started: ${data.status}`);
                         updateStatusIndicator('indexing', 'Indexing in progress');
+                        
+                        // Update status badges to show indexing in progress
+                        addStatusBadge(false, 'Indexing', 'In Progress', 'warning');
+                        
+                        isConnected = true;
                     } else {
                         showError('Error starting indexing');
+                        isConnected = false;
+                        updateStatusIndicator('offline', 'Offline');
+                        updateStatusBadgesOffline();
                     }
                 } catch (error) {
                     showError(`Connection error: ${error.message}`);
+                    isConnected = false;
+                    updateStatusIndicator('offline', 'Offline');
+                    updateStatusBadgesOffline();
                 } finally {
                     startIndexingBtn.disabled = false;
                     startIndexingBtn.innerHTML = '<i class="fas fa-database"></i> Start Indexing';
@@ -881,20 +895,25 @@
                 const response = await fetch('/api/rag/status');
                 if (response.ok) {
                     const data = await response.json();
+                    isConnected = true;
                     updateStatus(data);
                 } else {
+                    isConnected = false;
                     updateStatusIndicator('offline', 'Offline');
+                    updateStatusBadgesOffline();
                 }
             } catch (error) {
                 console.error('Error checking status:', error);
+                isConnected = false;
                 updateStatusIndicator('offline', 'Offline');
+                updateStatusBadgesOffline();
             }
         }
 
         function updateStatus(statusData) {
             // Update AI model info
             if (statusData.ai_status === 'ok') {
-                const modelName = statusData.ai_model.toUpperCase();;
+                const modelName = statusData.ai_model.toUpperCase();
                 aiModelName.textContent = `AI MODEL: ${modelName}`;
             } else {
                 aiModelName.textContent = 'AI: Not available';
@@ -903,15 +922,13 @@
             // Update status indicator
             if (!statusData.server_up) {
                 updateStatusIndicator('offline', 'Offline');
+                updateStatusBadgesOffline();
                 return;
             }
             
             if (statusData.indexing_status && statusData.indexing_status.running) {
                 updateStatusIndicator('indexing', 'Indexing in progress');
-                return;
-            }
-            
-            if (statusData.index_ready) {
+            } else if (statusData.index_ready) {
                 updateStatusIndicator('online', 'Ready');
             } else if (statusData.data_loaded) {
                 updateStatusIndicator('indexing', 'Creating index');
@@ -926,6 +943,20 @@
         function updateStatusIndicator(status, text) {
             statusIndicator.className = `status-dot ${status}`;
             statusText.textContent = text;
+        }
+
+        function updateStatusBadgesLoading() {
+            apiStatus.innerHTML = '';
+            addStatusBadge(false, 'Server', 'Connecting...', 'warning');
+            addStatusBadge(false, 'Data', 'Pending', 'warning');
+            addStatusBadge(false, 'Index', 'Pending', 'warning');
+        }
+
+        function updateStatusBadgesOffline() {
+            apiStatus.innerHTML = '';
+            addStatusBadge(false, 'Server', 'Offline', 'error');
+            addStatusBadge(false, 'Data', 'Unknown', 'error');
+            addStatusBadge(false, 'Index', 'Unknown', 'error');
         }
 
         function updateStatusBadges(statusData) {
@@ -967,12 +998,20 @@
             }
             
             // Document Count
-            if (statusData.indexing_status && statusData.indexing_status.documents_count) {
+            if (statusData.indexing_status && statusData.indexing_status.documents_count > 0) {
                 addStatusBadge(
                     true,
                     'Documents',
                     statusData.indexing_status.documents_count.toString(),
                     'success'
+                );
+            } else if (statusData.indexing_status) {
+                // If documents_count is 0 but we're connected, show as warning
+                addStatusBadge(
+                    false,
+                    'Documents',
+                    statusData.indexing_status.documents_count.toString(),
+                    'warning'
                 );
             }
         }
@@ -994,6 +1033,12 @@
         function sendMessage() {
             const questionText = messageInput.value.trim();
             if (!questionText) return;
+            
+            // Check if we're connected before sending
+            if (!isConnected) {
+                showError("Cannot send message: Server is offline. Please check your connection.");
+                return;
+            }
             
             // Clear input and resize
             messageInput.value = '';
@@ -1041,6 +1086,10 @@
                 
                 // Display answer with sources
                 addAssistantMessage(data.answer, data.sources, data.model);
+                
+                // Update connection status
+                isConnected = true;
+                updateStatusIndicator('online', 'Online');
             })
             .catch(error => {
                 // Hide typing indicator
@@ -1048,6 +1097,14 @@
                 
                 // Show error message
                 showError(`Error: ${error.message}`);
+                
+                // Update connection status if there was an error
+                isConnected = false;
+                updateStatusIndicator('offline', 'Offline');
+                updateStatusBadgesOffline();
+                
+                // Schedule an immediate status check
+                setTimeout(checkStatus, 1000);
             });
         }
 
@@ -1154,3 +1211,5 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
     </script>
+</body>
+</html>
