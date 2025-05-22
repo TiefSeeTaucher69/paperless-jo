@@ -99,7 +99,7 @@ class OpenAIService {
         .join('\n');
 
       // Get system prompt and model
-      if(process.env.USE_EXISTING_DATA === 'yes') {
+      if(config.useExistingData === 'yes') {
         systemPrompt = `
         Prexisting tags: ${existingTagsList}\n\n
         Prexisiting correspondent: ${existingCorrespondentList}\n\n
