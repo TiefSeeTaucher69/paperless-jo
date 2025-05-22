@@ -74,7 +74,7 @@ class OllamaService {
      * @param {string} customPrompt - Custom prompt (optional)
      * @returns {Object} Analysis results
      */
-    async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id, customPrompt = null) {
+    async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id, customPrompt = null, options = {}) {
         try {
             // Truncate content if needed
             content = this._truncateContent(content);
@@ -82,7 +82,7 @@ class OllamaService {
             // Build prompt
             let prompt;
             if(!customPrompt) {
-                prompt = this._buildPrompt(content, existingTags, existingCorrespondentList);
+                prompt = this._buildPrompt(content, existingTags, existingCorrespondentList, options);
             } else {
                 prompt = customPrompt + "\n\n" + JSON.stringify(content);
                 console.log('[DEBUG] Ollama Service started with custom prompt');
@@ -210,7 +210,7 @@ class OllamaService {
      * @param {Array} existingCorrespondent - List of existing correspondents
      * @returns {string} Formatted prompt
      */
-    _buildPrompt(content, existingTags = [], existingCorrespondent = []) {
+    _buildPrompt(content, existingTags = [], existingCorrespondent = [], options = {}) {
         let systemPrompt;
         let promptTags = '';
     
@@ -244,6 +244,27 @@ class OllamaService {
             .filter(name => name.length > 0)  // Remove empty strings
             .join(', ');
     
+        // Add restrictions for tags and correspondents if enabled
+        if (config.restrictToExistingTags === 'yes' || (options.restrictToExistingTags === true)) {
+            systemPrompt += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
+        }
+        
+        if (config.restrictToExistingCorrespondents === 'yes' || (options.restrictToExistingCorrespondents === true)) {
+            systemPrompt += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${existingCorrespondentList}. Do not suggest any correspondent that is not in this list.`;
+        }
+        
+        // Include external API data if available
+        if (options.externalApiData) {
+            const externalApiData = options.externalApiData;
+            systemPrompt += `\n\nAdditional context from external API:\n${
+                typeof externalApiData === 'object' 
+                ? JSON.stringify(externalApiData, null, 2) 
+                : externalApiData
+            }`;
+            
+            console.log('[DEBUG] Including external API data in prompt');
+        }
+
         if(process.env.USE_EXISTING_DATA === 'yes') {
             return `${systemPrompt}
             Existing tags: ${existingTagsList}\n

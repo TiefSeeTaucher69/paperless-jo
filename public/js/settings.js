@@ -690,6 +690,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Custom Fields Management
 document.addEventListener('DOMContentLoaded', function() {
+    // External API settings toggle
+    const externalApiEnabled = document.getElementById('externalApiEnabled');
+    const externalApiSettings = document.getElementById('externalApiSettings');
+    
+    if (externalApiEnabled && externalApiSettings) {
+        externalApiEnabled.addEventListener('change', function() {
+            if (this.checked) {
+                externalApiSettings.classList.remove('hidden');
+            } else {
+                externalApiSettings.classList.add('hidden');
+            }
+        });
+    }
+    
     const fieldsList = document.getElementById('customFieldsList');
     if (fieldsList) {
         // Initialize Sortable

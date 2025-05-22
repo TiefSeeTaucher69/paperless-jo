@@ -1557,13 +1557,33 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
     content = content.substring(0, 50000);
   }
 
+  // Prepare options for AI service
+  const options = {
+    restrictToExistingTags: config.restrictToExistingTags === 'yes',
+    restrictToExistingCorrespondents: config.restrictToExistingCorrespondents === 'yes'
+  };
+
+  // Get external API data if enabled
+  if (config.externalApiConfig.enabled === 'yes') {
+    try {
+      const externalApiService = require('../services/externalApiService');
+      const externalData = await externalApiService.fetchData();
+      if (externalData) {
+        options.externalApiData = externalData;
+        console.log('[DEBUG] Retrieved external API data for prompt enrichment');
+      }
+    } catch (error) {
+      console.error('[ERROR] Failed to fetch external API data:', error.message);
+    }
+  }
+
   const aiService = AIServiceFactory.getService();
   let analysis;
   if(customPrompt) {
     console.log('[DEBUG] Starting document analysis with custom prompt');
-    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id, customPrompt);
+    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id, customPrompt, options);
   }else{
-    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id);
+    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id, null, options);
   }
   console.log('Repsonse from AI service:', analysis);
   if (analysis.error) {
@@ -4122,12 +4142,25 @@ router.post('/settings', express.json(), async (req, res) => {
       });
     }
 
-    // Handle limit functions
-    updatedConfig.ACTIVATE_TAGGING = activateTagging ? 'yes' : 'no';
-    updatedConfig.ACTIVATE_CORRESPONDENTS = activateCorrespondents ? 'yes' : 'no';
-    updatedConfig.ACTIVATE_DOCUMENT_TYPE = activateDocumentType ? 'yes' : 'no';
-    updatedConfig.ACTIVATE_TITLE = activateTitle ? 'yes' : 'no';
-    updatedConfig.ACTIVATE_CUSTOM_FIELDS = activateCustomFields ? 'yes' : 'no';
+      // Handle limit functions
+      updatedConfig.ACTIVATE_TAGGING = activateTagging ? 'yes' : 'no';
+      updatedConfig.ACTIVATE_CORRESPONDENTS = activateCorrespondents ? 'yes' : 'no';
+      updatedConfig.ACTIVATE_DOCUMENT_TYPE = activateDocumentType ? 'yes' : 'no';
+      updatedConfig.ACTIVATE_TITLE = activateTitle ? 'yes' : 'no';
+      updatedConfig.ACTIVATE_CUSTOM_FIELDS = activateCustomFields ? 'yes' : 'no';
+      
+      // Handle tag and correspondent restrictions
+      updatedConfig.RESTRICT_TO_EXISTING_TAGS = restrictToExistingTags ? 'yes' : 'no';
+      updatedConfig.RESTRICT_TO_EXISTING_CORRESPONDENTS = restrictToExistingCorrespondents ? 'yes' : 'no';
+      
+      // Handle external API integration
+      updatedConfig.EXTERNAL_API_ENABLED = externalApiEnabled ? 'yes' : 'no';
+      updatedConfig.EXTERNAL_API_URL = externalApiUrl || '';
+      updatedConfig.EXTERNAL_API_METHOD = externalApiMethod || 'GET';
+      updatedConfig.EXTERNAL_API_HEADERS = externalApiHeaders || '{}';
+      updatedConfig.EXTERNAL_API_BODY = externalApiBody || '{}';
+      updatedConfig.EXTERNAL_API_TIMEOUT = externalApiTimeout || '5000';
+      updatedConfig.EXTERNAL_API_TRANSFORM = externalApiTransform || '';
 
     // Handle API key
     let apiToken = process.env.API_KEY;

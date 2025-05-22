@@ -26,7 +26,7 @@ class CustomOpenAIService {
     }
   }
 
-  async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id) {
+  async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], id, customPrompt = null, options = {}) {
     const cachePath = path.join('./public/images', `${id}.png`);
     try {
       this.initialize();
@@ -58,7 +58,9 @@ class CustomOpenAIService {
       const existingTagsList = existingTags
         .map(tag => tag.name)
         .join(', ');
-
+      
+      // Get external API data if available
+      let externalApiData = options.externalApiData || null;
       
       let systemPrompt = '';
       let promptTags = '';
@@ -73,6 +75,36 @@ class CustomOpenAIService {
       } else {
         systemPrompt = process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt;
         promptTags = '';
+      }
+      
+      // Add restrictions for tags and correspondents if enabled
+      if (config.restrictToExistingTags === 'yes' || (options.restrictToExistingTags === true)) {
+        systemPrompt += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
+      }
+      
+      if (config.restrictToExistingCorrespondents === 'yes' || (options.restrictToExistingCorrespondents === true)) {
+        const correspondentListStr = Array.isArray(existingCorrespondentList) 
+          ? existingCorrespondentList.join(', ')
+          : existingCorrespondentList;
+          
+        systemPrompt += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. Do not suggest any correspondent that is not in this list.`;
+      }
+      
+      // Include external API data if available
+      if (externalApiData) {
+        systemPrompt += `\n\nAdditional context from external API:\n${
+          typeof externalApiData === 'object' 
+            ? JSON.stringify(externalApiData, null, 2) 
+            : externalApiData
+        }`;
+        
+        console.log('[DEBUG] Including external API data in prompt');
+      }
+      
+      // Custom prompt override if provided
+      if (customPrompt) {
+        console.log('[DEBUG] Replace system prompt with custom prompt');
+        systemPrompt = customPrompt + '\n\n' + config.mustHavePrompt;
       }
       if (process.env.USE_PROMPT_TAGS === 'yes') {
         promptTags = process.env.PROMPT_TAGS;
