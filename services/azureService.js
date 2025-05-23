@@ -60,8 +60,19 @@ class AzureOpenAIService {
         .map(tag => tag.name)
         .join(', ');
 
-      // Get external API data if available
+      // Get external API data if available and validate it
       let externalApiData = options.externalApiData || null;
+      let validatedExternalApiData = null;
+
+      if (externalApiData) {
+        try {
+          validatedExternalApiData = await this._validateAndTruncateExternalApiData(externalApiData);
+          console.log('[DEBUG] External API data validated and included');
+        } catch (error) {
+          console.warn('[WARNING] External API data validation failed:', error.message);
+          validatedExternalApiData = null;
+        }
+      }
 
       let systemPrompt = '';
       let promptTags = '';
@@ -93,7 +104,7 @@ class AzureOpenAIService {
         .join('\n');
 
       // Get system prompt and model
-      if(process.env.USE_EXISTING_DATA === 'yes') {
+      if(config.useExistingData === 'yes' && config.restrictToExistingTags === 'no' && config.restrictToExistingCorrespondents === 'no') {
         systemPrompt = `
         Prexisting tags: ${existingTagsList}\n\n
         Prexisiting correspondent: ${existingCorrespondentList}\n\n
@@ -105,28 +116,18 @@ class AzureOpenAIService {
         promptTags = '';
       }
       
-      // Add restrictions for tags and correspondents if enabled
-      if (config.restrictToExistingTags === 'yes' || (options.restrictToExistingTags === true)) {
-        systemPrompt += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
-      }
+      // Build restriction prompts with validation
+      const restrictionPrompts = this._buildRestrictionPrompts(
+        existingTags, 
+        existingCorrespondentList, 
+        config, 
+        options
+      );
+      systemPrompt += restrictionPrompts;
       
-      if (config.restrictToExistingCorrespondents === 'yes' || (options.restrictToExistingCorrespondents === true)) {
-        const correspondentListStr = Array.isArray(existingCorrespondentList) 
-          ? existingCorrespondentList.join(', ')
-          : existingCorrespondentList;
-          
-        systemPrompt += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. Do not suggest any correspondent that is not in this list.`;
-      }
-      
-      // Include external API data if available
-      if (externalApiData) {
-        systemPrompt += `\n\nAdditional context from external API:\n${
-          typeof externalApiData === 'object' 
-            ? JSON.stringify(externalApiData, null, 2) 
-            : externalApiData
-        }`;
-        
-        console.log('[DEBUG] Including external API data in prompt');
+      // Include validated external API data if available
+      if (validatedExternalApiData) {
+        systemPrompt += `\n\nAdditional context from external API:\n${validatedExternalApiData}`;
       }
 
       if (process.env.USE_PROMPT_TAGS === 'yes') {
@@ -141,17 +142,28 @@ class AzureOpenAIService {
         systemPrompt = customPrompt + '\n\n' + config.mustHavePrompt;
       }
       
-      // Rest of the function remains the same
+      // Calculate tokens AFTER all prompt modifications are complete
       const totalPromptTokens = await calculateTotalPromptTokens(
         systemPrompt,
-        process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : []
+        process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : [],
+        model
       );
       
       const maxTokens = Number(config.tokenLimit);
       const reservedTokens = totalPromptTokens + Number(config.responseTokens);
       const availableTokens = maxTokens - reservedTokens;
       
-      const truncatedContent = await truncateToTokenLimit(content, availableTokens);
+      // Validate that we have positive available tokens
+      if (availableTokens <= 0) {
+        console.warn(`[WARNING] No available tokens for content. Reserved: ${reservedTokens}, Max: ${maxTokens}`);
+        throw new Error('Token limit exceeded: prompt too large for available token limit');
+      }
+      
+      console.log(`[DEBUG] Token calculation - Prompt: ${totalPromptTokens}, Reserved: ${reservedTokens}, Available: ${availableTokens}`);
+      console.log(`[DEBUG] Use existing data: ${config.useExistingData}, Restrictions applied based on useExistingData setting`);
+      console.log(`[DEBUG] External API data: ${validatedExternalApiData ? 'included' : 'none'}`);
+      
+      const truncatedContent = await truncateToTokenLimit(content, availableTokens, model);
 
       await writePromptToFile(systemPrompt, truncatedContent);
 
@@ -187,8 +199,6 @@ class AzureOpenAIService {
       let jsonContent = response.choices[0].message.content;
       jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
-      // console.log(`[DEBUG] [${timestamp}] Response: ${jsonContent}`);
-
       let parsedResponse;
       try {
         parsedResponse = JSON.parse(jsonContent);
@@ -218,7 +228,79 @@ class AzureOpenAIService {
         error: error.message 
       };
     }
-}
+  }
+
+  /**
+   * Build restriction prompts with validation for tags and correspondents
+   * @param {Array} existingTags - Array of existing tags
+   * @param {Array|string} existingCorrespondentList - List of existing correspondents
+   * @param {Object} config - Configuration object
+   * @param {Object} options - Options object
+   * @returns {string} - Built restriction prompts
+   */
+  _buildRestrictionPrompts(existingTags, existingCorrespondentList, config, options) {
+    let restrictions = '';
+    
+    // Use existing data setting controls both injection and restriction behavior
+    const useExistingData = config.useExistingData === 'yes';
+    
+    // Handle tag restrictions - only apply if useExistingData is enabled
+    if (useExistingData && config.restrictToExistingTags === 'yes') {
+      const existingTagsList = existingTags
+        .map(tag => tag.name)
+        .join(', ');
+        
+      if (existingTagsList && existingTagsList.trim() !== '') {
+        restrictions += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
+      } else {
+        console.warn('[WARNING] Tag restriction enabled but no existing tags provided');
+        restrictions += `\n\nIMPORTANT: No existing tags available for restriction. Please provide minimal, relevant tags.`;
+      }
+    }
+    
+    // Handle correspondent restrictions - only apply if useExistingData is enabled
+    if (useExistingData && config.restrictToExistingCorrespondents === 'yes') {
+      const correspondentListStr = Array.isArray(existingCorrespondentList) 
+        ? existingCorrespondentList.join(', ')
+        : existingCorrespondentList;
+        
+      if (correspondentListStr && correspondentListStr.trim() !== '') {
+        restrictions += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. Do not suggest any correspondent that is not in this list.`;
+      } else {
+        console.warn('[WARNING] Correspondent restriction enabled but no existing correspondents provided');
+        restrictions += `\n\nIMPORTANT: No existing correspondents available for restriction. Leave correspondent empty or use a generic value.`;
+      }
+    }
+    
+    return restrictions;
+  }
+
+  /**
+   * Validate and truncate external API data to prevent token overflow
+   * @param {any} apiData - The external API data to validate
+   * @param {number} maxTokens - Maximum tokens allowed for external data (default: 500)
+   * @returns {string} - Validated and potentially truncated data string
+   */
+  async _validateAndTruncateExternalApiData(apiData, maxTokens = 500) {
+    if (!apiData) {
+      return null;
+    }
+
+    const dataString = typeof apiData === 'object' 
+      ? JSON.stringify(apiData, null, 2) 
+      : String(apiData);
+
+    // Calculate tokens for the data
+    const dataTokens = await calculateTokens(dataString, process.env.AZURE_DEPLOYMENT_NAME);
+    
+    if (dataTokens > maxTokens) {
+      console.warn(`[WARNING] External API data (${dataTokens} tokens) exceeds limit (${maxTokens}), truncating`);
+      return await truncateToTokenLimit(dataString, maxTokens, process.env.AZURE_DEPLOYMENT_NAME);
+    }
+    
+    console.log(`[DEBUG] External API data validated: ${dataTokens} tokens`);
+    return dataString;
+  }
 
   async analyzePlayground(content, prompt) {
     const musthavePrompt = `
@@ -351,6 +433,39 @@ class AzureOpenAIService {
     } catch (error) {
       console.error('Error generating text with AzureOpenAI:', error);
       throw error;
+    }
+  }
+
+  async checkStatus() {
+    try {
+      this.initialize();
+      
+      if (!this.client) {
+        throw new Error('AzureOpenAI client not initialized - missing API key');
+      }
+      
+      const model = process.env.AZURE_DEPLOYMENT_NAME;
+      
+      const response = await this.client.chat.completions.create({
+        model: model,
+        messages: [
+          {
+            role: "user",
+            content: "Test"
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 10
+      });
+      
+      if (!response?.choices?.[0]?.message?.content) {
+        throw new Error('Invalid API response structure');
+      }
+      
+      return { status: 'ok', model: model };
+    } catch (error) {
+      console.error('Error checking AzureOpenAI status:', error);
+      return { status: 'error', error: error.message };
     }
   }
 }

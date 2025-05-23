@@ -79,17 +79,53 @@ class OllamaService {
             // Truncate content if needed
             content = this._truncateContent(content);
             
+            // Cache thumbnail
+            await this._handleThumbnailCaching(id);
+            
+            // Get external API data if available and validate it
+            let externalApiData = options.externalApiData || null;
+            let validatedExternalApiData = null;
+
+            if (externalApiData) {
+                try {
+                    validatedExternalApiData = await this._validateAndTruncateExternalApiData(externalApiData);
+                    console.log('[DEBUG] External API data validated and included');
+                } catch (error) {
+                    console.warn('[WARNING] External API data validation failed:', error.message);
+                    validatedExternalApiData = null;
+                }
+            }
+            
             // Build prompt
             let prompt;
             if(!customPrompt) {
                 prompt = this._buildPrompt(content, existingTags, existingCorrespondentList, options);
             } else {
-                prompt = customPrompt + "\n\n" + JSON.stringify(content);
+                // Parse CUSTOM_FIELDS for custom prompt
+                let customFieldsObj;
+                try {
+                    customFieldsObj = JSON.parse(process.env.CUSTOM_FIELDS);
+                } catch (error) {
+                    console.error('Failed to parse CUSTOM_FIELDS:', error);
+                    customFieldsObj = { custom_fields: [] };
+                }
+
+                const customFieldsTemplate = {};
+                customFieldsObj.custom_fields.forEach((field, index) => {
+                    customFieldsTemplate[index] = {
+                        field_name: field.value,
+                        value: "Fill in the value based on your analysis"
+                    };
+                });
+
+                const customFieldsStr = '"custom_fields": ' + JSON.stringify(customFieldsTemplate, null, 2)
+                    .split('\n')
+                    .map(line => '    ' + line)
+                    .join('\n');
+
+                prompt = customPrompt + '\n\n' + config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr) + "\n\n" + JSON.stringify(content);
                 console.log('[DEBUG] Ollama Service started with custom prompt');
             }
-
-            // Cache thumbnail
-            await this._handleThumbnailCaching(id);
             
             // Generate custom fields for the prompt
             const customFieldsStr = this._generateCustomFieldsTemplate();
@@ -100,6 +136,9 @@ class OllamaService {
             // Calculate context window size
             const promptTokenCount = this._calculatePromptTokenCount(prompt);
             const numCtx = this._calculateNumCtx(promptTokenCount, 1024);
+            
+            console.log(`[DEBUG] Use existing data: ${config.useExistingData}, Restrictions applied based on useExistingData setting`);
+            console.log(`[DEBUG] External API data: ${validatedExternalApiData ? 'included' : 'none'}`);
             
             // Call Ollama API
             const response = await this._callOllamaAPI(prompt, systemPrompt, numCtx, this.documentAnalysisSchema);
@@ -219,64 +258,172 @@ class OllamaService {
             ? existingCorrespondent 
             : [];
     
-        if (process.env.USE_PROMPT_TAGS === 'yes') {
-            promptTags = process.env.PROMPT_TAGS;
-            systemPrompt = config.specialPromptPreDefinedTags;
-        } else {
-            systemPrompt = process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt;
-        }
-    
-        // Format existing tags
-        const existingTagsList = Array.isArray(existingTags)
-            ? existingTags
-                .filter(tag => tag && tag.name)
-                .map(tag => tag.name)
-                .join(', ')
-            : '';
-    
-        // Format existing correspondents - handle both array of objects and array of strings
-        const existingCorrespondentList = correspondentList
-            .filter(Boolean)  // Remove any null/undefined entries
-            .map(correspondent => {
-                if (typeof correspondent === 'string') return correspondent;
-                return correspondent?.name || '';
-            })
-            .filter(name => name.length > 0)  // Remove empty strings
-            .join(', ');
-    
-        // Add restrictions for tags and correspondents if enabled
-        if (config.restrictToExistingTags === 'yes' || (options.restrictToExistingTags === true)) {
-            systemPrompt += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
-        }
-        
-        if (config.restrictToExistingCorrespondents === 'yes' || (options.restrictToExistingCorrespondents === true)) {
-            systemPrompt += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${existingCorrespondentList}. Do not suggest any correspondent that is not in this list.`;
-        }
-        
-        // Include external API data if available
-        if (options.externalApiData) {
-            const externalApiData = options.externalApiData;
-            systemPrompt += `\n\nAdditional context from external API:\n${
-                typeof externalApiData === 'object' 
-                ? JSON.stringify(externalApiData, null, 2) 
-                : externalApiData
-            }`;
-            
-            console.log('[DEBUG] Including external API data in prompt');
+        // Parse CUSTOM_FIELDS from environment variable
+        let customFieldsObj;
+        try {
+            customFieldsObj = JSON.parse(process.env.CUSTOM_FIELDS);
+        } catch (error) {
+            console.error('Failed to parse CUSTOM_FIELDS:', error);
+            customFieldsObj = { custom_fields: [] };
         }
 
-        if(process.env.USE_EXISTING_DATA === 'yes') {
-            return `${systemPrompt}
-            Existing tags: ${existingTagsList}\n
-            Existing Correspondents: ${existingCorrespondentList}\n
-            ${JSON.stringify(content)}
-            
-            `;
+        // Generate custom fields template for the prompt
+        const customFieldsTemplate = {};
+
+        customFieldsObj.custom_fields.forEach((field, index) => {
+            customFieldsTemplate[index] = {
+                field_name: field.value,
+                value: "Fill in the value based on your analysis"
+            };
+        });
+
+        // Convert template to string for replacement and wrap in custom_fields
+        const customFieldsStr = '"custom_fields": ' + JSON.stringify(customFieldsTemplate, null, 2)
+            .split('\n')
+            .map(line => '    ' + line)  // Add proper indentation
+            .join('\n');
+
+        // Get system prompt based on configuration
+        if(config.useExistingData === 'yes' && config.restrictToExistingTags === 'no' && config.restrictToExistingCorrespondents === 'no') {
+            // Format existing tags
+            const existingTagsList = Array.isArray(existingTags)
+                ? existingTags
+                    .filter(tag => tag && tag.name)
+                    .map(tag => tag.name)
+                    .join(', ')
+                : '';
+
+            // Format existing correspondents - handle both array of objects and array of strings
+            const existingCorrespondentList = correspondentList
+                .filter(Boolean)  // Remove any null/undefined entries
+                .map(correspondent => {
+                    if (typeof correspondent === 'string') return correspondent;
+                    return correspondent?.name || '';
+                })
+                .filter(name => name.length > 0)  // Remove empty strings
+                .join(', ');
+
+            systemPrompt = `
+            Prexisting tags: ${existingTagsList}\n\n
+            Prexisiting correspondent: ${existingCorrespondentList}\n\n
+            ` + process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
+            promptTags = '';
         } else {
-            return `${systemPrompt}
-            ${JSON.stringify(content)}
-            `;
+            config.mustHavePrompt = config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
+            systemPrompt = process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt;
+            promptTags = '';
         }
+
+        // Get validated external API data if available
+        let validatedExternalApiData = null;
+        if (options.externalApiData) {
+            try {
+                validatedExternalApiData = this._validateAndTruncateExternalApiData(options.externalApiData);
+                console.log('[DEBUG] External API data validated and included');
+            } catch (error) {
+                console.warn('[WARNING] External API data validation failed:', error.message);
+                validatedExternalApiData = null;
+            }
+        }
+
+        // Build restriction prompts with validation
+        const restrictionPrompts = this._buildRestrictionPrompts(
+            existingTags, 
+            correspondentList, 
+            config, 
+            options
+        );
+        systemPrompt += restrictionPrompts;
+
+        // Include validated external API data if available
+        if (validatedExternalApiData) {
+            systemPrompt += `\n\nAdditional context from external API:\n${validatedExternalApiData}`;
+        }
+
+        if (process.env.USE_PROMPT_TAGS === 'yes') {
+            promptTags = process.env.PROMPT_TAGS;
+            systemPrompt = `
+            Take these tags and try to match one or more to the document content.\n\n
+            ` + config.specialPromptPreDefinedTags;
+        }
+
+        return `${systemPrompt}
+        ${JSON.stringify(content)}
+        `;
+    }
+
+    /**
+     * Build restriction prompts with validation for tags and correspondents
+     * @param {Array} existingTags - Array of existing tags
+     * @param {Array|string} existingCorrespondentList - List of existing correspondents
+     * @param {Object} config - Configuration object
+     * @param {Object} options - Options object
+     * @returns {string} - Built restriction prompts
+     */
+    _buildRestrictionPrompts(existingTags, existingCorrespondentList, config, options) {
+        let restrictions = '';
+        
+        // Use existing data setting controls both injection and restriction behavior
+        const useExistingData = config.useExistingData === 'yes';
+        
+        // Handle tag restrictions - only apply if useExistingData is enabled
+        if (useExistingData && config.restrictToExistingTags === 'yes') {
+            const existingTagsList = existingTags
+                .map(tag => tag.name)
+                .join(', ');
+                
+            if (existingTagsList && existingTagsList.trim() !== '') {
+                restrictions += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
+            } else {
+                console.warn('[WARNING] Tag restriction enabled but no existing tags provided');
+                restrictions += `\n\nIMPORTANT: No existing tags available for restriction. Please provide minimal, relevant tags.`;
+            }
+        }
+        
+        // Handle correspondent restrictions - only apply if useExistingData is enabled
+        if (useExistingData && config.restrictToExistingCorrespondents === 'yes') {
+            const correspondentListStr = Array.isArray(existingCorrespondentList) 
+                ? existingCorrespondentList.join(', ')
+                : existingCorrespondentList;
+                
+            if (correspondentListStr && correspondentListStr.trim() !== '') {
+                restrictions += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. Do not suggest any correspondent that is not in this list.`;
+            } else {
+                console.warn('[WARNING] Correspondent restriction enabled but no existing correspondents provided');
+                restrictions += `\n\nIMPORTANT: No existing correspondents available for restriction. Leave correspondent empty or use a generic value.`;
+            }
+        }
+        
+        return restrictions;
+    }
+
+    /**
+     * Validate and truncate external API data to prevent token overflow
+     * @param {any} apiData - The external API data to validate
+     * @param {number} maxTokens - Maximum tokens allowed for external data (default: 500)
+     * @returns {string} - Validated and potentially truncated data string
+     */
+    async _validateAndTruncateExternalApiData(apiData, maxTokens = 500) {
+        if (!apiData) {
+            return null;
+        }
+
+        const dataString = typeof apiData === 'object' 
+            ? JSON.stringify(apiData, null, 2) 
+            : String(apiData);
+
+        // Calculate tokens for the data (using simple estimation for Ollama)
+        const dataTokens = Math.ceil(dataString.length / 4);
+        
+        if (dataTokens > maxTokens) {
+            console.warn(`[WARNING] External API data (${dataTokens} tokens) exceeds limit (${maxTokens}), truncating`);
+            // Simple truncation based on character count
+            const maxChars = maxTokens * 4;
+            return dataString.substring(0, maxChars);
+        }
+        
+        console.log(`[DEBUG] External API data validated: ${dataTokens} tokens`);
+        return dataString;
     }
 
     /**

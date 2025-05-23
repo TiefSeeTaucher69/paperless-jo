@@ -15,6 +15,25 @@ class CustomOpenAIService {
   constructor() {
     this.client = null;
     this.tokenizer = null;
+    this.documentAnalysisSchema = {
+            type: "object",
+            properties: {
+                title: { type: "string" },
+                correspondent: { type: "string" },
+                tags: { 
+                    type: "array", 
+                    items: { type: "string" } 
+                },
+                document_type: { type: "string" },
+                document_date: { type: "string" },
+                language: { type: "string" },
+                custom_fields: {
+                    type: "object",
+                    additionalProperties: true
+                }
+            },
+            required: ["title", "correspondent", "tags", "document_type", "document_date", "language"]
+        };
   }
 
   initialize() {
@@ -59,53 +78,76 @@ class CustomOpenAIService {
         .map(tag => tag.name)
         .join(', ');
       
-      // Get external API data if available
+      // Get external API data if available and validate it
       let externalApiData = options.externalApiData || null;
+      let validatedExternalApiData = null;
+
+      if (externalApiData) {
+        try {
+          validatedExternalApiData = await this._validateAndTruncateExternalApiData(externalApiData);
+          console.log('[DEBUG] External API data validated and included');
+        } catch (error) {
+          console.warn('[WARNING] External API data validation failed:', error.message);
+          validatedExternalApiData = null;
+        }
+      }
       
       let systemPrompt = '';
       let promptTags = '';
       const model = config.custom.model;
-      // Get system prompt and model
-      if(process.env.USE_EXISTING_DATA === 'yes') {
+      
+      // Parse CUSTOM_FIELDS from environment variable
+      let customFieldsObj;
+      try {
+        customFieldsObj = JSON.parse(process.env.CUSTOM_FIELDS);
+      } catch (error) {
+        console.error('Failed to parse CUSTOM_FIELDS:', error);
+        customFieldsObj = { custom_fields: [] };
+      }
+
+      // Generate custom fields template for the prompt
+      const customFieldsTemplate = {};
+
+      customFieldsObj.custom_fields.forEach((field, index) => {
+        customFieldsTemplate[index] = {
+          field_name: field.value,
+          value: "Fill in the value based on your analysis"
+        };
+      });
+
+      // Convert template to string for replacement and wrap in custom_fields
+      const customFieldsStr = '"custom_fields": ' + JSON.stringify(customFieldsTemplate, null, 2)
+        .split('\n')
+        .map(line => '    ' + line)  // Add proper indentation
+        .join('\n');
+
+      // Get system prompt based on configuration
+      if(config.useExistingData === 'yes' && config.restrictToExistingTags === 'no' && config.restrictToExistingCorrespondents === 'no') {
         systemPrompt = `
         Prexisting tags: ${existingTagsList}\n\n
         Prexisiting correspondent: ${existingCorrespondentList}\n\n
-        ` + process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt;
+        ` + process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
         promptTags = '';
       } else {
+        config.mustHavePrompt = config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
         systemPrompt = process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt;
         promptTags = '';
       }
       
-      // Add restrictions for tags and correspondents if enabled
-      if (config.restrictToExistingTags === 'yes' || (options.restrictToExistingTags === true)) {
-        systemPrompt += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
+      // Build restriction prompts with validation
+      const restrictionPrompts = this._buildRestrictionPrompts(
+        existingTags, 
+        existingCorrespondentList, 
+        config, 
+        options
+      );
+      systemPrompt += restrictionPrompts;
+      
+      // Include validated external API data if available
+      if (validatedExternalApiData) {
+        systemPrompt += `\n\nAdditional context from external API:\n${validatedExternalApiData}`;
       }
       
-      if (config.restrictToExistingCorrespondents === 'yes' || (options.restrictToExistingCorrespondents === true)) {
-        const correspondentListStr = Array.isArray(existingCorrespondentList) 
-          ? existingCorrespondentList.join(', ')
-          : existingCorrespondentList;
-          
-        systemPrompt += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. Do not suggest any correspondent that is not in this list.`;
-      }
-      
-      // Include external API data if available
-      if (externalApiData) {
-        systemPrompt += `\n\nAdditional context from external API:\n${
-          typeof externalApiData === 'object' 
-            ? JSON.stringify(externalApiData, null, 2) 
-            : externalApiData
-        }`;
-        
-        console.log('[DEBUG] Including external API data in prompt');
-      }
-      
-      // Custom prompt override if provided
-      if (customPrompt) {
-        console.log('[DEBUG] Replace system prompt with custom prompt');
-        systemPrompt = customPrompt + '\n\n' + config.mustHavePrompt;
-      }
       if (process.env.USE_PROMPT_TAGS === 'yes') {
         promptTags = process.env.PROMPT_TAGS;
         systemPrompt = `
@@ -113,21 +155,51 @@ class CustomOpenAIService {
         ` + config.specialPromptPreDefinedTags;
       }
 
-      // Calculate total prompt tokens including all components
+      // Custom prompt override if provided
+      if (customPrompt) {
+        console.log('[DEBUG] Replace system prompt with custom prompt');
+        systemPrompt = customPrompt + '\n\n' + config.mustHavePrompt;
+      }
+
+      // Calculate tokens AFTER all prompt modifications are complete
       const totalPromptTokens = await calculateTotalPromptTokens(
         systemPrompt,
-        process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : []
+        process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : [],
+        model
       );
-        
-        // Calculate available tokens
-        const maxTokens = Number(config.tokenLimit); // Model's maximum context length
-        const reservedTokens = totalPromptTokens +  Number(config.responseTokens); 
-        const availableTokens = maxTokens - reservedTokens;
-        
-        // Truncate content if necessary
-        const truncatedContent = await truncateToTokenLimit(content, availableTokens);
       
-      // Make API request
+      const maxTokens = Number(config.tokenLimit);
+      const reservedTokens = totalPromptTokens + Number(config.responseTokens);
+      const availableTokens = maxTokens - reservedTokens;
+      
+      // Validate that we have positive available tokens
+      if (availableTokens <= 0) {
+        console.warn(`[WARNING] No available tokens for content. Reserved: ${reservedTokens}, Max: ${maxTokens}`);
+        throw new Error('Token limit exceeded: prompt too large for available token limit');
+      }
+      
+      console.log(`[DEBUG] Token calculation - Prompt: ${totalPromptTokens}, Reserved: ${reservedTokens}, Available: ${availableTokens}`);
+      console.log(`[DEBUG] Use existing data: ${config.useExistingData}, Restrictions applied based on useExistingData setting`);
+      console.log(`[DEBUG] External API data: ${validatedExternalApiData ? 'included' : 'none'}`);
+      
+      const truncatedContent = await truncateToTokenLimit(content, availableTokens, model);
+
+      // console.log('######################################################################');
+      // console.log(`[DEBUG] Content length: ${content.length}, Truncated content length: ${truncatedContent.length}`);
+      // console.log(`[DEBUG] Truncated content: ${truncatedContent}`);
+      // console.log(`[DEBUG] System prompt: ${systemPrompt}`);
+      // console.log(`[DEBUG] Prompt tags: ${promptTags}`);
+      // console.log(`[DEBUG] Model: ${model}`);
+      // console.log(`[DEBUG] Custom fields: ${customFieldsStr}`);
+      // console.log(`[DEBUG] Existing tags: ${existingTagsList}`);
+      // console.log(`[DEBUG] Existing correspondents: ${existingCorrespondentList}`);
+      // console.log(`[DEBUG] Custom prompt: ${customPrompt}`);
+      // console.log(`[DEBUG] External API data: ${validatedExternalApiData}`);
+      // console.log('######################################################################');
+
+
+
+      // Full corrected request:
       const response = await this.client.chat.completions.create({
         model: model,
         messages: [
@@ -140,7 +212,13 @@ class CustomOpenAIService {
             content: truncatedContent
           }
         ],
-        ...(model !== 'o3-mini' && { temperature: 0.3 }),
+        temperature: 0.3,
+        response_format: {
+            type: "json_schema",
+            json_schema: {
+                schema: this.documentAnalysisSchema
+            }
+        }
       });
       
       // Handle response
@@ -149,7 +227,7 @@ class CustomOpenAIService {
       }
       
       // Log token usage
-      console.log(`[DEBUG] [${timestamp}] OpenAI request sent`);
+      console.log(`[DEBUG] [${timestamp}] Custom OpenAI request sent`);
       console.log(`[DEBUG] [${timestamp}] Total tokens: ${response.usage.total_tokens}`);
       
       const usage = response.usage;
@@ -165,6 +243,10 @@ class CustomOpenAIService {
       let parsedResponse;
       try {
         parsedResponse = JSON.parse(jsonContent);
+        //write to file and append to the file (txt)
+        fs.appendFile('./logs/response.txt', jsonContent, (err) => {
+          if (err) throw err;
+        });
       } catch (error) {
         console.error('Failed to parse JSON response:', error);
         throw new Error('Invalid JSON response from API');
@@ -190,6 +272,77 @@ class CustomOpenAIService {
     }
   }
 
+  /**
+   * Build restriction prompts with validation for tags and correspondents
+   * @param {Array} existingTags - Array of existing tags
+   * @param {Array|string} existingCorrespondentList - List of existing correspondents
+   * @param {Object} config - Configuration object
+   * @param {Object} options - Options object
+   * @returns {string} - Built restriction prompts
+   */
+  _buildRestrictionPrompts(existingTags, existingCorrespondentList, config, options) {
+    let restrictions = '';
+    
+    // Use existing data setting controls both injection and restriction behavior
+    const useExistingData = config.useExistingData === 'yes';
+    
+    // Handle tag restrictions - only apply if useExistingData is enabled
+    if (useExistingData && config.restrictToExistingTags === 'yes') {
+      const existingTagsList = existingTags
+        .map(tag => tag.name)
+        .join(', ');
+        
+      if (existingTagsList && existingTagsList.trim() !== '') {
+        restrictions += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
+      } else {
+        console.warn('[WARNING] Tag restriction enabled but no existing tags provided');
+        restrictions += `\n\nIMPORTANT: No existing tags available for restriction. Please provide minimal, relevant tags.`;
+      }
+    }
+    
+    // Handle correspondent restrictions - only apply if useExistingData is enabled
+    if (useExistingData && config.restrictToExistingCorrespondents === 'yes') {
+      const correspondentListStr = Array.isArray(existingCorrespondentList) 
+        ? existingCorrespondentList.join(', ')
+        : existingCorrespondentList;
+        
+      if (correspondentListStr && correspondentListStr.trim() !== '') {
+        restrictions += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. Do not suggest any correspondent that is not in this list.`;
+      } else {
+        console.warn('[WARNING] Correspondent restriction enabled but no existing correspondents provided');
+        restrictions += `\n\nIMPORTANT: No existing correspondents available for restriction. Leave correspondent empty or use a generic value.`;
+      }
+    }
+    
+    return restrictions;
+  }
+
+  /**
+   * Validate and truncate external API data to prevent token overflow
+   * @param {any} apiData - The external API data to validate
+   * @param {number} maxTokens - Maximum tokens allowed for external data (default: 500)
+   * @returns {string} - Validated and potentially truncated data string
+   */
+  async _validateAndTruncateExternalApiData(apiData, maxTokens = 500) {
+    if (!apiData) {
+      return null;
+    }
+
+    const dataString = typeof apiData === 'object' 
+      ? JSON.stringify(apiData, null, 2) 
+      : String(apiData);
+
+    // Calculate tokens for the data
+    const dataTokens = await calculateTokens(dataString, config.custom.model);
+    
+    if (dataTokens > maxTokens) {
+      console.warn(`[WARNING] External API data (${dataTokens} tokens) exceeds limit (${maxTokens}), truncating`);
+      return await truncateToTokenLimit(dataString, maxTokens, config.custom.model);
+    }
+    
+    console.log(`[DEBUG] External API data validated: ${dataTokens} tokens`);
+    return dataString;
+  }
 
   async analyzePlayground(content, prompt) {
     const musthavePrompt = `
@@ -208,7 +361,7 @@ class CustomOpenAIService {
       const timestamp = now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
       
       if (!this.client) {
-        throw new Error('OpenAI client not initialized - missing API key');
+        throw new Error('Custom OpenAI client not initialized - missing API key');
       }
       
       // Calculate total prompt tokens including musthavePrompt
@@ -246,7 +399,7 @@ class CustomOpenAIService {
       }
       
       // Log token usage
-      console.log(`[DEBUG] [${timestamp}] OpenAI request sent`);
+      console.log(`[DEBUG] [${timestamp}] Custom OpenAI request sent`);
       console.log(`[DEBUG] [${timestamp}] Total tokens: ${response.usage.total_tokens}`);
       
       const usage = response.usage;
@@ -255,8 +408,6 @@ class CustomOpenAIService {
         completionTokens: usage.completion_tokens,
         totalTokens: usage.total_tokens
       };
-
-      console.log(mappedUsage);
 
       let jsonContent = response.choices[0].message.content;
       jsonContent = jsonContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
