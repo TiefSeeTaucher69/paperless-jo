@@ -69,8 +69,19 @@ class OpenAIService {
         .map(tag => tag.name)
         .join(', ');
 
-      // Get external API data if available
+      // Get external API data if available and validate it
       let externalApiData = options.externalApiData || null;
+      let validatedExternalApiData = null;
+
+      if (externalApiData) {
+        try {
+          validatedExternalApiData = await this._validateAndTruncateExternalApiData(externalApiData);
+          console.log('[DEBUG] External API data validated and included');
+        } catch (error) {
+          console.warn('[WARNING] External API data validation failed:', error.message);
+          validatedExternalApiData = null;
+        }
+      }
 
       let systemPrompt = '';
       let promptTags = '';
@@ -114,28 +125,18 @@ class OpenAIService {
         promptTags = '';
       }
       
-      // Add restrictions for tags and correspondents if enabled
-      if (config.restrictToExistingTags === 'yes' || (options.restrictToExistingTags === true)) {
-        systemPrompt += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
-      }
+      // Build restriction prompts with validation
+      const restrictionPrompts = this._buildRestrictionPrompts(
+        existingTags, 
+        existingCorrespondentList, 
+        config, 
+        options
+      );
+      systemPrompt += restrictionPrompts;
       
-      if (config.restrictToExistingCorrespondents === 'yes' || (options.restrictToExistingCorrespondents === true)) {
-        const correspondentListStr = Array.isArray(existingCorrespondentList) 
-          ? existingCorrespondentList.join(', ')
-          : existingCorrespondentList;
-          
-        systemPrompt += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. Do not suggest any correspondent that is not in this list.`;
-      }
-      
-      // Include external API data if available
-      if (externalApiData) {
-        systemPrompt += `\n\nAdditional context from external API:\n${
-          typeof externalApiData === 'object' 
-            ? JSON.stringify(externalApiData, null, 2) 
-            : externalApiData
-        }`;
-        
-        console.log('[DEBUG] Including external API data in prompt');
+      // Include validated external API data if available
+      if (validatedExternalApiData) {
+        systemPrompt += `\n\nAdditional context from external API:\n${validatedExternalApiData}`;
       }
 
       if (process.env.USE_PROMPT_TAGS === 'yes') {
@@ -150,17 +151,28 @@ class OpenAIService {
         systemPrompt = customPrompt + '\n\n' + config.mustHavePrompt;
       }
       
-      // Rest of the function remains the same
+      // Calculate tokens AFTER all prompt modifications are complete
       const totalPromptTokens = await calculateTotalPromptTokens(
         systemPrompt,
-        process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : []
+        process.env.USE_PROMPT_TAGS === 'yes' ? [promptTags] : [],
+        model
       );
       
       const maxTokens = Number(config.tokenLimit);
       const reservedTokens = totalPromptTokens + Number(config.responseTokens);
       const availableTokens = maxTokens - reservedTokens;
       
-      const truncatedContent = await truncateToTokenLimit(content, availableTokens);
+      // Validate that we have positive available tokens
+      if (availableTokens <= 0) {
+        console.warn(`[WARNING] No available tokens for content. Reserved: ${reservedTokens}, Max: ${maxTokens}`);
+        throw new Error('Token limit exceeded: prompt too large for available token limit');
+      }
+      
+      console.log(`[DEBUG] Token calculation - Prompt: ${totalPromptTokens}, Reserved: ${reservedTokens}, Available: ${availableTokens}`);
+      console.log(`[DEBUG] Restrictions applied: Tags=${config.restrictToExistingTags === 'yes' || options.restrictToExistingTags}, Correspondents=${config.restrictToExistingCorrespondents === 'yes' || options.restrictToExistingCorrespondents}`);
+      console.log(`[DEBUG] External API data: ${validatedExternalApiData ? 'included' : 'none'}`);
+      
+      const truncatedContent = await truncateToTokenLimit(content, availableTokens, model);
       
       await writePromptToFile(systemPrompt, truncatedContent);
 
@@ -225,6 +237,77 @@ class OpenAIService {
         error: error.message 
       };
     }
+  }
+
+  /**
+   * Build restriction prompts with validation for tags and correspondents
+   * @param {Array} existingTags - Array of existing tags
+   * @param {Array|string} existingCorrespondentList - List of existing correspondents
+   * @param {Object} config - Configuration object
+   * @param {Object} options - Options object
+   * @returns {string} - Built restriction prompts
+   */
+  _buildRestrictionPrompts(existingTags, existingCorrespondentList, config, options) {
+    let restrictions = '';
+    
+    // Handle tag restrictions
+    const restrictTags = config.restrictToExistingTags === 'yes' || options.restrictToExistingTags === true;
+    if (restrictTags) {
+      const existingTagsList = existingTags
+        .map(tag => tag.name)
+        .join(', ');
+        
+      if (existingTagsList && existingTagsList.trim() !== '') {
+        restrictions += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
+      } else {
+        console.warn('[WARNING] Tag restriction enabled but no existing tags provided');
+        restrictions += `\n\nIMPORTANT: No existing tags available for restriction. Please provide minimal, relevant tags.`;
+      }
+    }
+    
+    // Handle correspondent restrictions
+    const restrictCorrespondents = config.restrictToExistingCorrespondents === 'yes' || options.restrictToExistingCorrespondents === true;
+    if (restrictCorrespondents) {
+      const correspondentListStr = Array.isArray(existingCorrespondentList) 
+        ? existingCorrespondentList.join(', ')
+        : existingCorrespondentList;
+        
+      if (correspondentListStr && correspondentListStr.trim() !== '') {
+        restrictions += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. Do not suggest any correspondent that is not in this list.`;
+      } else {
+        console.warn('[WARNING] Correspondent restriction enabled but no existing correspondents provided');
+        restrictions += `\n\nIMPORTANT: No existing correspondents available for restriction. Leave correspondent empty or use a generic value.`;
+      }
+    }
+    
+    return restrictions;
+  }
+
+  /**
+   * Validate and truncate external API data to prevent token overflow
+   * @param {any} apiData - The external API data to validate
+   * @param {number} maxTokens - Maximum tokens allowed for external data (default: 500)
+   * @returns {string} - Validated and potentially truncated data string
+   */
+  async _validateAndTruncateExternalApiData(apiData, maxTokens = 500) {
+    if (!apiData) {
+      return null;
+    }
+
+    const dataString = typeof apiData === 'object' 
+      ? JSON.stringify(apiData, null, 2) 
+      : String(apiData);
+
+    // Calculate tokens for the data
+    const dataTokens = await calculateTokens(dataString, process.env.OPENAI_MODEL);
+    
+    if (dataTokens > maxTokens) {
+      console.warn(`[WARNING] External API data (${dataTokens} tokens) exceeds limit (${maxTokens}), truncating`);
+      return await truncateToTokenLimit(dataString, maxTokens, process.env.OPENAI_MODEL);
+    }
+    
+    console.log(`[DEBUG] External API data validated: ${dataTokens} tokens`);
+    return dataString;
   }
 
   async analyzePlayground(content, prompt) {
