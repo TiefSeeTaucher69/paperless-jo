@@ -117,6 +117,20 @@ class FormManager {
         const azureEndpoint = document.getElementById('azureEndpoint');
         const azureDeploymentName = document.getElementById('azureDeploymentName');
         const azureApiVersion = document.getElementById('azureApiVersion');
+
+        // Restriction settings
+        const restrictToExistingTags = document.getElementById('restrictToExistingTags');
+        const restrictToExistingCorrespondents = document.getElementById('restrictToExistingCorrespondents');
+
+        // External API settings
+        const externalApiEnabled = document.getElementById('externalApiEnabled');
+        const externalApiSettings = document.getElementById('externalApiSettings');
+        const externalApiUrl = document.getElementById('externalApiUrl');
+        const externalApiMethod = document.getElementById('externalApiMethod');
+        const externalApiHeaders = document.getElementById('externalApiHeaders');
+        const externalApiBody = document.getElementById('externalApiBody');
+        const externalApiTimeout = document.getElementById('externalApiTimeout');
+        const externalApiTransformationTemplate = document.getElementById('externalApiTransformationTemplate');
         
         
         // Hide all settings sections first

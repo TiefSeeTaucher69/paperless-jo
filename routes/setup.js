@@ -2675,7 +2675,16 @@ router.get('/settings', async (req, res) => {
     AZURE_ENDPOINT: process.env.AZURE_ENDPOINT|| '',
     AZURE_API_KEY: process.env.AZURE_API_KEY || '',
     AZURE_DEPLOYMENT_NAME: process.env.AZURE_DEPLOYMENT_NAME || '',
-    AZURE_API_VERSION: process.env.AZURE_API_VERSION || ''
+    AZURE_API_VERSION: process.env.AZURE_API_VERSION || '',
+    RESTRICT_TO_EXISTING_TAGS: process.env.RESTRICT_TO_EXISTING_TAGS || 'no',
+    RESTRICT_TO_EXISTING_CORRESPONDENTS: process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS || 'no',
+    EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED || 'no',
+    EXTERNAL_API_URL: process.env.EXTERNAL_API_URL || '',
+    EXTERNAL_API_METHOD: process.env.EXTERNAL_API_METHOD || 'GET',
+    EXTERNAL_API_HEADERS: process.env.EXTERNAL_API_HEADERS || '{}',
+    EXTERNAL_API_BODY: process.env.EXTERNAL_API_BODY || '{}',
+    EXTERNAL_API_TIMEOUT: process.env.EXTERNAL_API_TIMEOUT || '5000',
+    EXTERNAL_API_TRANSFORM: process.env.EXTERNAL_API_TRANSFORM || ''
   };
   
   if (isConfigured) {
@@ -4025,7 +4034,16 @@ router.post('/settings', express.json(), async (req, res) => {
       AZURE_ENDPOINT: process.env.AZURE_ENDPOINT|| '',
       AZURE_API_KEY: process.env.AZURE_API_KEY || '',
       AZURE_DEPLOYMENT_NAME: process.env.AZURE_DEPLOYMENT_NAME || '',
-      AZURE_API_VERSION: process.env.AZURE_API_VERSION || ''
+      AZURE_API_VERSION: process.env.AZURE_API_VERSION || '',
+      RESTRICT_TO_EXISTING_TAGS: process.env.RESTRICT_TO_EXISTING_TAGS || 'no',
+      RESTRICT_TO_EXISTING_CORRESPONDENTS: process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS || 'no',
+      EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED || 'no',
+      EXTERNAL_API_URL: process.env.EXTERNAL_API_URL || '',
+      EXTERNAL_API_METHOD: process.env.EXTERNAL_API_METHOD || 'GET',
+      EXTERNAL_API_HEADERS: process.env.EXTERNAL_API_HEADERS || '{}',
+      EXTERNAL_API_BODY: process.env.EXTERNAL_API_BODY || '{}',
+      EXTERNAL_API_TIMEOUT: process.env.EXTERNAL_API_TIMEOUT || '5000',
+      EXTERNAL_API_TRANSFORM: process.env.EXTERNAL_API_TRANSFORM || ''
     };
 
     // Process custom fields
@@ -4061,6 +4079,19 @@ router.post('/settings', express.json(), async (req, res) => {
       if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
       return [];
     };
+
+    // Extract tag and correspondent restriction settings with defaults
+    const restrictToExistingTags = req.body.restrictToExistingTags === 'on' || req.body.restrictToExistingTags === 'yes';
+    const restrictToExistingCorrespondents = req.body.restrictToExistingCorrespondents === 'on' || req.body.restrictToExistingCorrespondents === 'yes';
+    
+    // Extract external API settings with defaults
+    const externalApiEnabled = req.body.externalApiEnabled === 'on' || req.body.externalApiEnabled === 'yes';
+    const externalApiUrl = req.body.externalApiUrl || '';
+    const externalApiMethod = req.body.externalApiMethod || 'GET';
+    const externalApiHeaders = req.body.externalApiHeaders || '{}';
+    const externalApiBody = req.body.externalApiBody || '{}';
+    const externalApiTimeout = req.body.externalApiTimeout || '5000';
+    const externalApiTransform = req.body.externalApiTransform || '';
 
     if (paperlessUrl !== currentConfig.PAPERLESS_API_URL?.replace('/api', '') || 
         paperlessToken !== currentConfig.PAPERLESS_API_TOKEN) {
