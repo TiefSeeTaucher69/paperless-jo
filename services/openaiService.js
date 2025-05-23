@@ -113,7 +113,7 @@ class OpenAIService {
         .join('\n');
 
       // Get system prompt and model
-      if(config.useExistingData === 'yes') {
+      if(config.useExistingData === 'yes' && config.restrictToExistingTags === 'no' && config.restrictToExistingCorrespondents === 'no') {
         systemPrompt = `
         Prexisting tags: ${existingTagsList}\n\n
         Prexisiting correspondent: ${existingCorrespondentList}\n\n
@@ -126,13 +126,13 @@ class OpenAIService {
       }
       
       // Build restriction prompts with validation
-      const restrictionPrompts = this._buildRestrictionPrompts(
-        existingTags, 
-        existingCorrespondentList, 
-        config, 
-        options
-      );
-      systemPrompt += restrictionPrompts;
+        const restrictionPrompts = this._buildRestrictionPrompts(
+          existingTags, 
+          existingCorrespondentList, 
+          config, 
+          options
+        );
+        systemPrompt += restrictionPrompts;
       
       // Include validated external API data if available
       if (validatedExternalApiData) {
@@ -169,7 +169,7 @@ class OpenAIService {
       }
       
       console.log(`[DEBUG] Token calculation - Prompt: ${totalPromptTokens}, Reserved: ${reservedTokens}, Available: ${availableTokens}`);
-      console.log(`[DEBUG] Restrictions applied: Tags=${config.restrictToExistingTags === 'yes' || options.restrictToExistingTags}, Correspondents=${config.restrictToExistingCorrespondents === 'yes' || options.restrictToExistingCorrespondents}`);
+      console.log(`[DEBUG] Use existing data: ${config.useExistingData}, Restrictions applied based on useExistingData setting`);
       console.log(`[DEBUG] External API data: ${validatedExternalApiData ? 'included' : 'none'}`);
       
       const truncatedContent = await truncateToTokenLimit(content, availableTokens, model);
@@ -250,9 +250,11 @@ class OpenAIService {
   _buildRestrictionPrompts(existingTags, existingCorrespondentList, config, options) {
     let restrictions = '';
     
-    // Handle tag restrictions
-    const restrictTags = config.restrictToExistingTags === 'yes' || options.restrictToExistingTags === true;
-    if (restrictTags) {
+    // Use existing data setting controls both injection and restriction behavior
+    const useExistingData = config.useExistingData === 'yes';
+    
+    // Handle tag restrictions - only apply if useExistingData is enabled
+    if (useExistingData && config.restrictToExistingTags === 'yes') {
       const existingTagsList = existingTags
         .map(tag => tag.name)
         .join(', ');
@@ -265,9 +267,8 @@ class OpenAIService {
       }
     }
     
-    // Handle correspondent restrictions
-    const restrictCorrespondents = config.restrictToExistingCorrespondents === 'yes' || options.restrictToExistingCorrespondents === true;
-    if (restrictCorrespondents) {
+    // Handle correspondent restrictions - only apply if useExistingData is enabled
+    if (useExistingData && config.restrictToExistingCorrespondents === 'yes') {
       const correspondentListStr = Array.isArray(existingCorrespondentList) 
         ? existingCorrespondentList.join(', ')
         : existingCorrespondentList;
