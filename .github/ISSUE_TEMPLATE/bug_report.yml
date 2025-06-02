@@ -12,6 +12,8 @@ body:
       value: |
         ## 🐞 Bug Report
         Thanks for taking the time to report an issue! Please fill in as much detail as possible to help us investigate and fix it.
+        
+        **⚠️ IMPORTANT: Issues that are missing required information or do not follow this template will be deleted without notice. Please ensure all required fields are completed.**
 
   - type: input
     id: bug_summary
@@ -59,6 +61,15 @@ body:
       label: "❌ Actual Behavior"
       description: "What actually happens?"
       placeholder: "Describe what you see instead of the expected behavior."
+    validations:
+      required: true
+
+  - type: input
+    id: paperless_ai_version
+    attributes:
+      label: "🏷️ Paperless-AI Version"
+      description: "What version of Paperless-AI are you using? You can find this in your settings or docker-compose file."
+      placeholder: "e.g. v1.2.3, latest, commit hash, etc."
     validations:
       required: true
 
@@ -124,7 +135,6 @@ body:
       description: "Enter your browser version (if applicable)."
       placeholder: "e.g. 120.0.6099.199"
 
-
   - type: input
     id: smartphone_browser
     attributes:
@@ -144,6 +154,8 @@ body:
           required: true
         - label: "I have tried debugging this issue on my own"
         - label: "I can provide a fix and submit a PR"
+        - label: "I have provided all required information above"
+          required: true
 
   - type: textarea
     id: extra_notes
