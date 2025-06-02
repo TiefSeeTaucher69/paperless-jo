@@ -80,6 +80,8 @@ body:
       description: "Upload Docker logs (or paste relevant log snippets)."
       placeholder: "Drag & drop files here or paste logs."
       render: shell
+    validations:
+      required: true
 
   - type: textarea
     id: paperless_ngx_logs
@@ -148,6 +150,12 @@ body:
       label: "📝 Additional Information"
       description: "Select any that apply."
       options:
+        - label: "I have checked existing issues and this is not a duplicate"
+          required: true
+        - label: "I have tried debugging this issue on my own"
+        - label: "I can provide a fix and submit a PR"
+        - label: "I have provided all required information above"
+          required: true  options:
         - label: "I have checked existing issues and this is not a duplicate"
           required: true
         - label: "I am sure that this problem is affecting everyone, not only me"
