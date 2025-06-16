@@ -1557,13 +1557,33 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
     content = content.substring(0, 50000);
   }
 
+  // Prepare options for AI service
+  const options = {
+    restrictToExistingTags: config.restrictToExistingTags === 'yes',
+    restrictToExistingCorrespondents: config.restrictToExistingCorrespondents === 'yes'
+  };
+
+  // Get external API data if enabled
+  if (config.externalApiConfig.enabled === 'yes') {
+    try {
+      const externalApiService = require('../services/externalApiService');
+      const externalData = await externalApiService.fetchData();
+      if (externalData) {
+        options.externalApiData = externalData;
+        console.log('[DEBUG] Retrieved external API data for prompt enrichment');
+      }
+    } catch (error) {
+      console.error('[ERROR] Failed to fetch external API data:', error.message);
+    }
+  }
+
   const aiService = AIServiceFactory.getService();
   let analysis;
   if(customPrompt) {
     console.log('[DEBUG] Starting document analysis with custom prompt');
-    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id, customPrompt);
+    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id, customPrompt, options);
   }else{
-    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id);
+    analysis = await aiService.analyzeDocument(content, existingTags, existingCorrespondentList, doc.id, null, options);
   }
   console.log('Repsonse from AI service:', analysis);
   if (analysis.error) {
@@ -1576,9 +1596,17 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
 async function buildUpdateData(analysis, doc) {
   const updateData = {};
 
+  // Create options object with restriction settings
+  const options = {
+    restrictToExistingTags: config.restrictToExistingTags === 'yes' ? true : false,
+    restrictToExistingCorrespondents: config.restrictToExistingCorrespondents === 'yes' ? true : false
+  };
+
+  console.log(`[DEBUG] Building update data with restrictions: tags=${options.restrictToExistingTags}, correspondents=${options.restrictToExistingCorrespondents}`);
+
   // Only process tags if tagging is activated
   if (config.limitFunctions?.activateTagging !== 'no') {
-    const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags);
+    const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags, options);
     if (errors.length > 0) {
       console.warn('[ERROR] Some tags could not be processed:', errors);
     }
@@ -1588,7 +1616,7 @@ async function buildUpdateData(analysis, doc) {
     // get tags from .env file and split them by comma and make an array
     console.log('[DEBUG] Tagging is deactivated but AI processed tag will be added');
     const tags = config.addAIProcessedTags.split(',');
-    const { tagIds, errors } = await paperlessService.processTags(tags);
+    const { tagIds, errors } = await paperlessService.processTags(tags, options);
     if (errors.length > 0) {
       console.warn('[ERROR] Some tags could not be processed:', errors);
     }
@@ -1662,7 +1690,7 @@ async function buildUpdateData(analysis, doc) {
   // Only process correspondent if correspondent detection is activated
   if (config.limitFunctions?.activateCorrespondents !== 'no' && analysis.document.correspondent) {
     try {
-      const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.document.correspondent);
+      const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.document.correspondent, options);
       if (correspondent) {
         updateData.correspondent = correspondent.id;
       }
@@ -2655,7 +2683,16 @@ router.get('/settings', async (req, res) => {
     AZURE_ENDPOINT: process.env.AZURE_ENDPOINT|| '',
     AZURE_API_KEY: process.env.AZURE_API_KEY || '',
     AZURE_DEPLOYMENT_NAME: process.env.AZURE_DEPLOYMENT_NAME || '',
-    AZURE_API_VERSION: process.env.AZURE_API_VERSION || ''
+    AZURE_API_VERSION: process.env.AZURE_API_VERSION || '',
+    RESTRICT_TO_EXISTING_TAGS: process.env.RESTRICT_TO_EXISTING_TAGS || 'no',
+    RESTRICT_TO_EXISTING_CORRESPONDENTS: process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS || 'no',
+    EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED || 'no',
+    EXTERNAL_API_URL: process.env.EXTERNAL_API_URL || '',
+    EXTERNAL_API_METHOD: process.env.EXTERNAL_API_METHOD || 'GET',
+    EXTERNAL_API_HEADERS: process.env.EXTERNAL_API_HEADERS || '{}',
+    EXTERNAL_API_BODY: process.env.EXTERNAL_API_BODY || '{}',
+    EXTERNAL_API_TIMEOUT: process.env.EXTERNAL_API_TIMEOUT || '5000',
+    EXTERNAL_API_TRANSFORM: process.env.EXTERNAL_API_TRANSFORM || ''
   };
   
   if (isConfigured) {
@@ -2970,13 +3007,15 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
     const { content, existingTags, id } = req.body;
     let existingCorrespondentList = await paperlessService.listCorrespondentsNames();
     existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
+    let existingTagsList = await paperlessService.listTagNames();
+    existingTagsList = existingTagsList.map(tags => tags.name)
     if (!content || typeof content !== 'string') {
       console.log('Invalid content received:', content);
       return res.status(400).json({ error: 'Valid content string is required' });
     }
 
     if (process.env.AI_PROVIDER === 'openai') {
-      const analyzeDocument = await openaiService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      const analyzeDocument = await openaiService.analyzeDocument(content, existingTagsList, existingCorrespondentList, id || []);
       await documentModel.addOpenAIMetrics(
             id, 
             analyzeDocument.metrics.promptTokens,
@@ -2985,13 +3024,13 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
           )
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'ollama') {
-      const analyzeDocument = await ollamaService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      const analyzeDocument = await ollamaService.analyzeDocument(content, existingTagsList, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'custom') {
-      const analyzeDocument = await customService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      const analyzeDocument = await customService.analyzeDocument(content, existingTagsList, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'azure') {
-      const analyzeDocument = await azureService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      const analyzeDocument = await azureService.analyzeDocument(content, existingTagsList, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
     } else {
       return res.status(500).json({ error: 'AI provider not configured' });
@@ -4005,7 +4044,16 @@ router.post('/settings', express.json(), async (req, res) => {
       AZURE_ENDPOINT: process.env.AZURE_ENDPOINT|| '',
       AZURE_API_KEY: process.env.AZURE_API_KEY || '',
       AZURE_DEPLOYMENT_NAME: process.env.AZURE_DEPLOYMENT_NAME || '',
-      AZURE_API_VERSION: process.env.AZURE_API_VERSION || ''
+      AZURE_API_VERSION: process.env.AZURE_API_VERSION || '',
+      RESTRICT_TO_EXISTING_TAGS: process.env.RESTRICT_TO_EXISTING_TAGS || 'no',
+      RESTRICT_TO_EXISTING_CORRESPONDENTS: process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS || 'no',
+      EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED || 'no',
+      EXTERNAL_API_URL: process.env.EXTERNAL_API_URL || '',
+      EXTERNAL_API_METHOD: process.env.EXTERNAL_API_METHOD || 'GET',
+      EXTERNAL_API_HEADERS: process.env.EXTERNAL_API_HEADERS || '{}',
+      EXTERNAL_API_BODY: process.env.EXTERNAL_API_BODY || '{}',
+      EXTERNAL_API_TIMEOUT: process.env.EXTERNAL_API_TIMEOUT || '5000',
+      EXTERNAL_API_TRANSFORM: process.env.EXTERNAL_API_TRANSFORM || ''
     };
 
     // Process custom fields
@@ -4041,6 +4089,19 @@ router.post('/settings', express.json(), async (req, res) => {
       if (typeof value === 'string') return value.split(',').filter(Boolean).map(item => item.trim());
       return [];
     };
+
+    // Extract tag and correspondent restriction settings with defaults
+    const restrictToExistingTags = req.body.restrictToExistingTags === 'on' || req.body.restrictToExistingTags === 'yes';
+    const restrictToExistingCorrespondents = req.body.restrictToExistingCorrespondents === 'on' || req.body.restrictToExistingCorrespondents === 'yes';
+    
+    // Extract external API settings with defaults
+    const externalApiEnabled = req.body.externalApiEnabled === 'on' || req.body.externalApiEnabled === 'yes';
+    const externalApiUrl = req.body.externalApiUrl || '';
+    const externalApiMethod = req.body.externalApiMethod || 'GET';
+    const externalApiHeaders = req.body.externalApiHeaders || '{}';
+    const externalApiBody = req.body.externalApiBody || '{}';
+    const externalApiTimeout = req.body.externalApiTimeout || '5000';
+    const externalApiTransform = req.body.externalApiTransform || '';
 
     if (paperlessUrl !== currentConfig.PAPERLESS_API_URL?.replace('/api', '') || 
         paperlessToken !== currentConfig.PAPERLESS_API_TOKEN) {
@@ -4122,12 +4183,25 @@ router.post('/settings', express.json(), async (req, res) => {
       });
     }
 
-    // Handle limit functions
-    updatedConfig.ACTIVATE_TAGGING = activateTagging ? 'yes' : 'no';
-    updatedConfig.ACTIVATE_CORRESPONDENTS = activateCorrespondents ? 'yes' : 'no';
-    updatedConfig.ACTIVATE_DOCUMENT_TYPE = activateDocumentType ? 'yes' : 'no';
-    updatedConfig.ACTIVATE_TITLE = activateTitle ? 'yes' : 'no';
-    updatedConfig.ACTIVATE_CUSTOM_FIELDS = activateCustomFields ? 'yes' : 'no';
+      // Handle limit functions
+      updatedConfig.ACTIVATE_TAGGING = activateTagging ? 'yes' : 'no';
+      updatedConfig.ACTIVATE_CORRESPONDENTS = activateCorrespondents ? 'yes' : 'no';
+      updatedConfig.ACTIVATE_DOCUMENT_TYPE = activateDocumentType ? 'yes' : 'no';
+      updatedConfig.ACTIVATE_TITLE = activateTitle ? 'yes' : 'no';
+      updatedConfig.ACTIVATE_CUSTOM_FIELDS = activateCustomFields ? 'yes' : 'no';
+      
+      // Handle tag and correspondent restrictions
+      updatedConfig.RESTRICT_TO_EXISTING_TAGS = restrictToExistingTags ? 'yes' : 'no';
+      updatedConfig.RESTRICT_TO_EXISTING_CORRESPONDENTS = restrictToExistingCorrespondents ? 'yes' : 'no';
+      
+      // Handle external API integration
+      updatedConfig.EXTERNAL_API_ENABLED = externalApiEnabled ? 'yes' : 'no';
+      updatedConfig.EXTERNAL_API_URL = externalApiUrl || '';
+      updatedConfig.EXTERNAL_API_METHOD = externalApiMethod || 'GET';
+      updatedConfig.EXTERNAL_API_HEADERS = externalApiHeaders || '{}';
+      updatedConfig.EXTERNAL_API_BODY = externalApiBody || '{}';
+      updatedConfig.EXTERNAL_API_TIMEOUT = externalApiTimeout || '5000';
+      updatedConfig.EXTERNAL_API_TRANSFORM = externalApiTransform || '';
 
     // Handle API key
     let apiToken = process.env.API_KEY;

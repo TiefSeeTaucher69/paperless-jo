@@ -19,14 +19,38 @@ const limitFunctions = {
   activateCustomFields: parseEnvBoolean(process.env.ACTIVATE_CUSTOM_FIELDS, 'yes')
 };
 
+// Initialize AI restrictions with defaults
+const aiRestrictions = {
+  restrictToExistingTags: parseEnvBoolean(process.env.RESTRICT_TO_EXISTING_TAGS, 'no'),
+  restrictToExistingCorrespondents: parseEnvBoolean(process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS, 'no')
+};
+
+console.log('Loaded restriction settings:', {
+  RESTRICT_TO_EXISTING_TAGS: aiRestrictions.restrictToExistingTags,
+  RESTRICT_TO_EXISTING_CORRESPONDENTS: aiRestrictions.restrictToExistingCorrespondents
+});
+
+// Initialize external API configuration
+const externalApiConfig = {
+  enabled: parseEnvBoolean(process.env.EXTERNAL_API_ENABLED, 'no'),
+  url: process.env.EXTERNAL_API_URL || '',
+  method: process.env.EXTERNAL_API_METHOD || 'GET',
+  headers: process.env.EXTERNAL_API_HEADERS || '{}',
+  body: process.env.EXTERNAL_API_BODY || '{}',
+  timeout: parseInt(process.env.EXTERNAL_API_TIMEOUT || '5000', 10),
+  transformationTemplate: process.env.EXTERNAL_API_TRANSFORM || ''
+};
+
 console.log('Loaded environment variables:', {
   PAPERLESS_API_URL: process.env.PAPERLESS_API_URL,
   PAPERLESS_API_TOKEN: '******',
-  LIMIT_FUNCTIONS: limitFunctions
+  LIMIT_FUNCTIONS: limitFunctions,
+  AI_RESTRICTIONS: aiRestrictions,
+  EXTERNAL_API: externalApiConfig.enabled === 'yes' ? 'enabled' : 'disabled'
 });
 
 module.exports = {
-  PAPERLESS_AI_VERSION: '3.0.4',
+  PAPERLESS_AI_VERSION: '3.0.5',
   CONFIGURED: false,
   disableAutomaticProcessing: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
@@ -34,6 +58,11 @@ module.exports = {
   responseTokens: process.env.RESPONSE_TOKENS || 1000,
   addAIProcessedTag: process.env.ADD_AI_PROCESSED_TAG || 'no',
   addAIProcessedTags: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
+  // AI restrictions config
+  restrictToExistingTags: aiRestrictions.restrictToExistingTags,
+  restrictToExistingCorrespondents: aiRestrictions.restrictToExistingCorrespondents,
+  // External API config
+  externalApiConfig: externalApiConfig,
   paperless: {
     apiUrl: process.env.PAPERLESS_API_URL,
     apiToken: process.env.PAPERLESS_API_TOKEN

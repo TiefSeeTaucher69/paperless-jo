@@ -503,6 +503,143 @@
                                     </div>
                                 </div>
         
+                                <!-- Tag & Correspondent Restrictions Section -->
+                                <div class="border-t pt-4 space-y-4">
+                                    <div class="space-y-2">
+                                        <h3 class="text-lg font-medium flex items-center gap-2 text-primary">
+                                            <i class="fas fa-filter"></i>
+                                            AI Restrictions
+                                        </h3>
+                                        
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div class="border border-gray-200 shadow-sm rounded-lg hover:border-blue-500 transition-colors duration-200">
+                                                <label for="restrictToExistingTags" class="flex items-center p-4 cursor-pointer w-full">
+                                                    <input type="checkbox" 
+                                                        id="restrictToExistingTags" 
+                                                        name="restrictToExistingTags" 
+                                                        class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                        <%= config.RESTRICT_TO_EXISTING_TAGS === 'yes' ? 'checked' : '' %>>
+                                                    <div class="ml-3">
+                                                        <div class="flex items-center text-gray-900 font-medium">
+                                                            <i class="fas fa-tags mr-2 text-blue-500"></i>
+                                                            Restrict to Existing Tags
+                                                        </div>
+                                                        <p class="text-sm text-gray-500 mt-1">AI will only use tags that already exist in Paperless-ngx</p>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                            
+                                            <div class="border border-gray-200 shadow-sm rounded-lg hover:border-blue-500 transition-colors duration-200">
+                                                <label for="restrictToExistingCorrespondents" class="flex items-center p-4 cursor-pointer w-full">
+                                                    <input type="checkbox" 
+                                                        id="restrictToExistingCorrespondents" 
+                                                        name="restrictToExistingCorrespondents" 
+                                                        class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                        <%= config.RESTRICT_TO_EXISTING_CORRESPONDENTS === 'yes' ? 'checked' : '' %>>
+                                                    <div class="ml-3">
+                                                        <div class="flex items-center text-gray-900 font-medium">
+                                                            <i class="fas fa-user mr-2 text-blue-500"></i>
+                                                            Restrict to Existing Correspondents
+                                                        </div>
+                                                        <p class="text-sm text-gray-500 mt-1">AI will only use correspondents that already exist in Paperless-ngx</p>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- External API Integration Section -->
+                                <div class="border-t pt-4 space-y-4">
+                                    <div class="space-y-2">
+                                        <h3 class="text-lg font-medium flex items-center gap-2 text-primary">
+                                            <i class="fas fa-plug"></i>
+                                            External API Integration
+                                        </h3>
+                                        
+                                        <div class="border border-gray-200 shadow-sm rounded-lg hover:border-blue-500 transition-colors duration-200 mb-4">
+                                            <label for="externalApiEnabled" class="flex items-center p-4 cursor-pointer w-full">
+                                                <input type="checkbox" 
+                                                    id="externalApiEnabled" 
+                                                    name="externalApiEnabled" 
+                                                    class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                    <%= config.EXTERNAL_API_ENABLED === 'yes' ? 'checked' : '' %>>
+                                                <div class="ml-3">
+                                                    <div class="flex items-center text-gray-900 font-medium">
+                                                        <i class="fas fa-globe mr-2 text-blue-500"></i>
+                                                        Enable External API Integration
+                                                    </div>
+                                                    <p class="text-sm text-gray-500 mt-1">Enrich AI prompts with data from external API</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        
+                                        <div id="externalApiSettings" class="space-y-4 <%= config.EXTERNAL_API_ENABLED === 'yes' ? '' : 'hidden' %>">
+                                            <div class="space-y-2">
+                                                <label for="externalApiUrl" class="text-sm font-medium">API URL</label>
+                                                <input type="text" 
+                                                    id="externalApiUrl" 
+                                                    name="externalApiUrl"
+                                                    value="<%= config.EXTERNAL_API_URL || '' %>"
+                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    placeholder="https://api.example.com/data">
+                                            </div>
+                                            
+                                            <div class="space-y-2">
+                                                <label for="externalApiMethod" class="text-sm font-medium">HTTP Method</label>
+                                                <select id="externalApiMethod" 
+                                                        name="externalApiMethod"
+                                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                                    <option value="GET" <%= config.EXTERNAL_API_METHOD === 'GET' ? 'selected' : '' %>>GET</option>
+                                                    <option value="POST" <%= config.EXTERNAL_API_METHOD === 'POST' ? 'selected' : '' %>>POST</option>
+                                                    <option value="PUT" <%= config.EXTERNAL_API_METHOD === 'PUT' ? 'selected' : '' %>>PUT</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div class="space-y-2">
+                                                <label for="externalApiHeaders" class="text-sm font-medium">Headers (JSON)</label>
+                                                <textarea id="externalApiHeaders"  
+                                                          name="externalApiHeaders"
+                                                          rows="3"
+                                                          class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                          placeholder='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_TOKEN"}'><%= config.EXTERNAL_API_HEADERS || '' %></textarea>
+                                            </div>
+                                            
+                                            <div class="space-y-2">
+                                                <label for="externalApiBody" class="text-sm font-medium">Request Body (JSON) - For POST/PUT</label>
+                                                <textarea id="externalApiBody" 
+                                                          name="externalApiBody"
+                                                          rows="3"
+                                                          class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                          placeholder='{"query": "your_query", "filters": {"key": "value"}}'><%= config.EXTERNAL_API_BODY || '' %></textarea>
+                                            </div>
+                                            
+                                            <div class="space-y-2">
+                                                <label for="externalApiTimeout" class="text-sm font-medium">Timeout (milliseconds)</label>
+                                                <input type="number" 
+                                                       id="externalApiTimeout" 
+                                                       name="externalApiTimeout"
+                                                       value="<%= config.EXTERNAL_API_TIMEOUT || '5000' %>"
+                                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                       placeholder="5000">
+                                            </div>
+                                            
+                                            <div class="space-y-2">
+                                                <label for="externalApiTransform" class="text-sm font-medium">Transform Function (JavaScript)</label>
+                                                <textarea id="externalApiTransform" 
+                                                          name="externalApiTransform"
+                                                          rows="5"
+                                                          class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                          placeholder="// Function to transform API response
+// Return the data you want to include in the prompt
+function transform(data) {
+  return data;
+}"><%= config.EXTERNAL_API_TRANSFORM || '// Function to transform API response\n// Return the data you want to include in the prompt\nfunction transform(data) {\n  return data;\n}' %></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <!-- AI Tag Section -->
                                 <div class="border-t pt-4 space-y-4">
                                     <div class="space-y-2">
