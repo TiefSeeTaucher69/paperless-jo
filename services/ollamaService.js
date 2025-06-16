@@ -373,10 +373,10 @@ class OllamaService {
                 .join(', ');
                 
             if (existingTagsList && existingTagsList.trim() !== '') {
-                restrictions += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.`;
+                restrictions += `\n\nIMPORTANT: You MUST ONLY use tags from this list: ${existingTagsList}. Do not suggest any tags that are not in this list.\n\n`;
             } else {
                 console.warn('[WARNING] Tag restriction enabled but no existing tags provided');
-                restrictions += `\n\nIMPORTANT: No existing tags available for restriction. Please provide minimal, relevant tags.`;
+                restrictions += `\n\nIMPORTANT: No existing tags available for restriction. Please provide minimal, relevant tags.\n\n`;
             }
         }
         
@@ -387,7 +387,7 @@ class OllamaService {
                 : existingCorrespondentList;
                 
             if (correspondentListStr && correspondentListStr.trim() !== '') {
-                restrictions += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. Do not suggest any correspondent that is not in this list.`;
+                restrictions += `\n\nIMPORTANT: You MUST ONLY use correspondents from this list: ${correspondentListStr}. \n\n Do not suggest any correspondent that is not in this list. \n\n`;
             } else {
                 console.warn('[WARNING] Correspondent restriction enabled but no existing correspondents provided');
                 restrictions += `\n\nIMPORTANT: No existing correspondents available for restriction. Leave correspondent empty or use a generic value.`;

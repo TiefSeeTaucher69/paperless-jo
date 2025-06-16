@@ -65,9 +65,7 @@ class OpenAIService {
       }
       
       // Format existing tags
-      const existingTagsList = existingTags
-        .map(tag => tag.name)
-        .join(', ');
+      let existingTagsList = existingTags.join(', ');
 
       // Get external API data if available and validate it
       let externalApiData = options.externalApiData || null;

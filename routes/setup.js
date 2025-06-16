@@ -2999,13 +2999,15 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
     const { content, existingTags, id } = req.body;
     let existingCorrespondentList = await paperlessService.listCorrespondentsNames();
     existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
+    let existingTagsList = await paperlessService.listTagNames();
+    existingTagsList = existingTagsList.map(tags => tags.name)
     if (!content || typeof content !== 'string') {
       console.log('Invalid content received:', content);
       return res.status(400).json({ error: 'Valid content string is required' });
     }
 
     if (process.env.AI_PROVIDER === 'openai') {
-      const analyzeDocument = await openaiService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      const analyzeDocument = await openaiService.analyzeDocument(content, existingTagsList, existingCorrespondentList, id || []);
       await documentModel.addOpenAIMetrics(
             id, 
             analyzeDocument.metrics.promptTokens,
@@ -3014,13 +3016,13 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
           )
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'ollama') {
-      const analyzeDocument = await ollamaService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      const analyzeDocument = await ollamaService.analyzeDocument(content, existingTagsList, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'custom') {
-      const analyzeDocument = await customService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      const analyzeDocument = await customService.analyzeDocument(content, existingTagsList, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
     } else if (process.env.AI_PROVIDER === 'azure') {
-      const analyzeDocument = await azureService.analyzeDocument(content, existingTags, existingCorrespondentList, id || []);
+      const analyzeDocument = await azureService.analyzeDocument(content, existingTagsList, existingCorrespondentList, id || []);
       return res.json(analyzeDocument);
     } else {
       return res.status(500).json({ error: 'AI provider not configured' });
