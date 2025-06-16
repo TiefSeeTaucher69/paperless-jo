@@ -249,8 +249,10 @@ class PaperlessService {
       await this.ensureTagCache();
       
       // Check if we should restrict to existing tags
-      const restrictToExistingTags = config.restrictToExistingTags || 
-                                    (process.env.RESTRICT_TO_EXISTING_TAGS === 'yes');
+      // Explicitly check options first, then env var
+      const restrictToExistingTags = options.restrictToExistingTags === true || 
+                                   (options.restrictToExistingTags === undefined && 
+                                    process.env.RESTRICT_TO_EXISTING_TAGS === 'yes');
       
       // Input validation
       if (!tagNames) {
@@ -917,8 +919,10 @@ async searchForExistingCorrespondent(correspondent) {
     this.initialize();
     
     // Check if we should restrict to existing correspondents
-    const restrictToExistingCorrespondents = options.restrictToExistingCorrespondents || 
-                                           (process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS === 'yes');
+    // Explicitly check options first, then env var
+    const restrictToExistingCorrespondents = options.restrictToExistingCorrespondents === true || 
+                                           (options.restrictToExistingCorrespondents === undefined && 
+                                            process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS === 'yes');
     
     console.log(`[DEBUG] Processing correspondent with restrictToExistingCorrespondents=${restrictToExistingCorrespondents}`);
   

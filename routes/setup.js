@@ -1598,8 +1598,8 @@ async function buildUpdateData(analysis, doc) {
 
   // Create options object with restriction settings
   const options = {
-    restrictToExistingTags: config.restrictToExistingTags === 'yes',
-    restrictToExistingCorrespondents: config.restrictToExistingCorrespondents === 'yes'
+    restrictToExistingTags: config.restrictToExistingTags === 'yes' ? true : false,
+    restrictToExistingCorrespondents: config.restrictToExistingCorrespondents === 'yes' ? true : false
   };
 
   console.log(`[DEBUG] Building update data with restrictions: tags=${options.restrictToExistingTags}, correspondents=${options.restrictToExistingCorrespondents}`);
