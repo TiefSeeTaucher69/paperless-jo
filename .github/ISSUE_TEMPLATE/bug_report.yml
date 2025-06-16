@@ -12,6 +12,8 @@ body:
       value: |
         ## 🐞 Bug Report
         Thanks for taking the time to report an issue! Please fill in as much detail as possible to help us investigate and fix it.
+        
+        **⚠️ IMPORTANT: Issues that are missing required information or do not follow this template will be deleted without notice. Please ensure all required fields are completed.**
 
   - type: input
     id: bug_summary
@@ -62,6 +64,15 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: paperless_ai_version
+    attributes:
+      label: "🏷️ Paperless-AI Version"
+      description: "What version of Paperless-AI are you using? You can find this in your settings or docker-compose file."
+      placeholder: "e.g. v1.2.3, latest, commit hash, etc."
+    validations:
+      required: true
+
   - type: textarea
     id: docker_logs
     attributes:
@@ -69,6 +80,8 @@ body:
       description: "Upload Docker logs (or paste relevant log snippets)."
       placeholder: "Drag & drop files here or paste logs."
       render: shell
+    validations:
+      required: true
 
   - type: textarea
     id: paperless_ngx_logs
@@ -124,7 +137,6 @@ body:
       description: "Enter your browser version (if applicable)."
       placeholder: "e.g. 120.0.6099.199"
 
-
   - type: input
     id: smartphone_browser
     attributes:
@@ -140,10 +152,11 @@ body:
       options:
         - label: "I have checked existing issues and this is not a duplicate"
           required: true
-        - label: "I am sure that this problem is affecting everyone, not only me"
-          required: true
         - label: "I have tried debugging this issue on my own"
         - label: "I can provide a fix and submit a PR"
+        - label: "I am sure that this problem is affecting everyone, not only me"
+        - label: "I have provided all required information above"
+          required: true
 
   - type: textarea
     id: extra_notes
