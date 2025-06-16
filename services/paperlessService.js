@@ -243,11 +243,15 @@ class PaperlessService {
     }
   }
 
-  async processTags(tagNames) {
+  async processTags(tagNames, options = {}) {
     try {
       this.initialize();
       await this.ensureTagCache();
-  
+      
+      // Check if we should restrict to existing tags
+      const restrictToExistingTags = config.restrictToExistingTags || 
+                                    (process.env.RESTRICT_TO_EXISTING_TAGS === 'yes');
+      
       // Input validation
       if (!tagNames) {
         console.warn('[DEBUG] No tags provided to processTags');
@@ -269,6 +273,8 @@ class PaperlessService {
       const tagIds = [];
       const errors = [];
       const processedTags = new Set(); // Prevent duplicates
+      
+      console.log(`[DEBUG] Processing tags with restrictToExistingTags=${restrictToExistingTags}`);
   
       // Process regular tags
       for (const tagName of tagsArray) {
@@ -289,9 +295,13 @@ class PaperlessService {
           // Search for existing tag first
           let tag = await this.findExistingTag(tagName);
           
-          // If no existing tag found, create new one
-          if (!tag) {
+          // If no existing tag found and restrictions are not enabled, create new one
+          if (!tag && !restrictToExistingTags) {
             tag = await this.createTagSafely(tagName);
+          } else if (!tag && restrictToExistingTags) {
+            console.log(`[DEBUG] Tag "${tagName}" does not exist and restrictions are enabled, skipping`);
+            errors.push({ tagName, error: 'Tag does not exist and restrictions are enabled' });
+            continue;
           }
   
           if (tag && tag.id) {
@@ -903,15 +913,17 @@ async searchForExistingCorrespondent(correspondent) {
   }
 }
 
-  async getOrCreateCorrespondent(name) {
+  async getOrCreateCorrespondent(name, options = {}) {
     this.initialize();
     
-    // Entferne nur Sonderzeichen, behalte Leerzeichen
-    // const sanitizedName = name.replace(/[.,]/g, '').trim();
-    // const normalizedName = sanitizedName.toLowerCase();
+    // Check if we should restrict to existing correspondents
+    const restrictToExistingCorrespondents = options.restrictToExistingCorrespondents || 
+                                           (process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS === 'yes');
+    
+    console.log(`[DEBUG] Processing correspondent with restrictToExistingCorrespondents=${restrictToExistingCorrespondents}`);
   
     try {
-        // Suche mit dem bereinigten Namen
+        // Search for the correspondent
         const existingCorrespondent = await this.searchForExistingCorrespondent(name);
         console.log("[DEBUG] Response Correspondent Search: ", existingCorrespondent);
     
@@ -919,8 +931,14 @@ async searchForExistingCorrespondent(correspondent) {
             console.log(`[DEBUG] Found existing correspondent "${name}" with ID ${existingCorrespondent.id}`);
             return existingCorrespondent;
         }
+        
+        // If we're restricting to existing correspondents and none was found, return null
+        if (restrictToExistingCorrespondents) {
+            console.log(`[DEBUG] Correspondent "${name}" does not exist and restrictions are enabled, returning null`);
+            return null;
+        }
     
-        // Erstelle neuen Korrespondenten
+        // Create new correspondent only if restrictions are not enabled
         try {
             const createResponse = await this.client.post('/correspondents/', { 
                 name: name 
@@ -931,13 +949,13 @@ async searchForExistingCorrespondent(correspondent) {
             if (createError.response?.status === 400 && 
                 createError.response?.data?.error?.includes('unique constraint')) {
               
-                // Race condition check
+                // Race condition check - another process might have created it
                 const retryResponse = await this.client.get('/correspondents/', {
                     params: { name: name }
                 });
               
                 const justCreatedCorrespondent = retryResponse.data.results.find(
-                    c => c.name.toLowerCase() === normalizedName
+                    c => c.name.toLowerCase() === name.toLowerCase()
                 );
               
                 if (justCreatedCorrespondent) {

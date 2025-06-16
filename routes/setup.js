@@ -1596,9 +1596,17 @@ async function processDocument(doc, existingTags, existingCorrespondentList, own
 async function buildUpdateData(analysis, doc) {
   const updateData = {};
 
+  // Create options object with restriction settings
+  const options = {
+    restrictToExistingTags: config.restrictToExistingTags === 'yes',
+    restrictToExistingCorrespondents: config.restrictToExistingCorrespondents === 'yes'
+  };
+
+  console.log(`[DEBUG] Building update data with restrictions: tags=${options.restrictToExistingTags}, correspondents=${options.restrictToExistingCorrespondents}`);
+
   // Only process tags if tagging is activated
   if (config.limitFunctions?.activateTagging !== 'no') {
-    const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags);
+    const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags, options);
     if (errors.length > 0) {
       console.warn('[ERROR] Some tags could not be processed:', errors);
     }
@@ -1608,7 +1616,7 @@ async function buildUpdateData(analysis, doc) {
     // get tags from .env file and split them by comma and make an array
     console.log('[DEBUG] Tagging is deactivated but AI processed tag will be added');
     const tags = config.addAIProcessedTags.split(',');
-    const { tagIds, errors } = await paperlessService.processTags(tags);
+    const { tagIds, errors } = await paperlessService.processTags(tags, options);
     if (errors.length > 0) {
       console.warn('[ERROR] Some tags could not be processed:', errors);
     }
@@ -1682,7 +1690,7 @@ async function buildUpdateData(analysis, doc) {
   // Only process correspondent if correspondent detection is activated
   if (config.limitFunctions?.activateCorrespondents !== 'no' && analysis.document.correspondent) {
     try {
-      const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.document.correspondent);
+      const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.document.correspondent, options);
       if (correspondent) {
         updateData.correspondent = correspondent.id;
       }

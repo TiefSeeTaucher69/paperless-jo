@@ -25,6 +25,11 @@ const aiRestrictions = {
   restrictToExistingCorrespondents: parseEnvBoolean(process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS, 'no')
 };
 
+console.log('Loaded restriction settings:', {
+  RESTRICT_TO_EXISTING_TAGS: aiRestrictions.restrictToExistingTags,
+  RESTRICT_TO_EXISTING_CORRESPONDENTS: aiRestrictions.restrictToExistingCorrespondents
+});
+
 // Initialize external API configuration
 const externalApiConfig = {
   enabled: parseEnvBoolean(process.env.EXTERNAL_API_ENABLED, 'no'),
