@@ -15,25 +15,6 @@ class CustomOpenAIService {
   constructor() {
     this.client = null;
     this.tokenizer = null;
-    this.documentAnalysisSchema = {
-            type: "object",
-            properties: {
-                title: { type: "string" },
-                correspondent: { type: "string" },
-                tags: { 
-                    type: "array", 
-                    items: { type: "string" } 
-                },
-                document_type: { type: "string" },
-                document_date: { type: "string" },
-                language: { type: "string" },
-                custom_fields: {
-                    type: "object",
-                    additionalProperties: true
-                }
-            },
-            required: ["title", "correspondent", "tags", "document_type", "document_date", "language"]
-        };
   }
 
   initialize() {
@@ -196,8 +177,6 @@ class CustomOpenAIService {
       // console.log('######################################################################');
 
 
-
-      // Full corrected request:
       const response = await this.client.chat.completions.create({
         model: model,
         messages: [
@@ -211,16 +190,10 @@ class CustomOpenAIService {
           }
         ],
         temperature: 0.3,
-        response_format: {
-            type: "json_schema",
-            json_schema: {
-                schema: this.documentAnalysisSchema
-            }
-        }
       });
       
       // Handle response
-      console.log(`MESSAGE: ${response?.choices?.[0]?.message?.content}`);
+      //console.log(`MESSAGE: ${response?.choices?.[0]?.message?.content}`);
       if (!response?.choices?.[0]?.message?.content) {
         throw new Error('Invalid API response structure');
       }
