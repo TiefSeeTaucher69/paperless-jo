@@ -34,3 +34,6 @@ indexing_complete.flag
 __pycache__/
 main.pyy*
 rag.ejs.old
+surya_env/
+ocr_server.py
+surya_models.py
