@@ -362,10 +362,13 @@ async function scanInitial() {
     ]);
     //get existing correspondent list
     existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
+    
+    // Extract tag names from tag objects
+    const existingTagNames = existingTags.map(tag => tag.name);
 
     for (const doc of documents) {
       try {
-        const result = await processDocument(doc, existingTags, existingCorrespondentList, ownUserId);
+        const result = await processDocument(doc, existingTagNames, existingCorrespondentList, ownUserId);
         if (!result) continue;
 
         const { analysis, originalData } = result;
@@ -397,10 +400,13 @@ async function scanDocuments() {
 
     //get existing correspondent list
     existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
+    
+    // Extract tag names from tag objects
+    const existingTagNames = existingTags.map(tag => tag.name);
 
     for (const doc of documents) {
       try {
-        const result = await processDocument(doc, existingTags, existingCorrespondentList, ownUserId);
+        const result = await processDocument(doc, existingTagNames, existingCorrespondentList, ownUserId);
         if (!result) continue;
 
         const { analysis, originalData } = result;
