@@ -287,12 +287,7 @@ class OllamaService {
         // Get system prompt based on configuration
         if (config.useExistingData === 'yes' && config.restrictToExistingTags === 'no' && config.restrictToExistingCorrespondents === 'no') {
             // Format existing tags
-            const existingTagsList = Array.isArray(existingTags)
-                ? existingTags
-                    .filter(tag => tag && tag.name)
-                    .map(tag => tag.name)
-                    .join(', ')
-                : '';
+            const existingTagsList = existingTags.join(', ');
 
             // Format existing correspondents - handle both array of objects and array of strings
             const existingCorrespondentList = correspondentList
@@ -305,8 +300,8 @@ class OllamaService {
                 .join(', ');
 
             systemPrompt = `
-            Prexisting tags: ${existingTagsList}\n\n
-            Prexisiting correspondent: ${existingCorrespondentList}\n\n
+            Pre-existing tags: ${existingTagsList}\n\n
+            Pre-existing correspondents: ${existingCorrespondentList}\n\n
             ` + process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
             promptTags = '';
         } else {

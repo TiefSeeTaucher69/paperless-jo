@@ -105,8 +105,8 @@ class AzureOpenAIService {
       // Get system prompt and model
       if (config.useExistingData === 'yes' && config.restrictToExistingTags === 'no' && config.restrictToExistingCorrespondents === 'no') {
         systemPrompt = `
-        Prexisting tags: ${existingTagsList}\n\n
-        Prexisiting correspondent: ${existingCorrespondentList}\n\n
+        Pre-existing tags: ${existingTagsList}\n\n
+        Pre-existing correspondents: ${existingCorrespondentList}\n\n
         ` + process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
         promptTags = '';
       } else {
