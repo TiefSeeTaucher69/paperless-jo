@@ -1228,7 +1228,7 @@ async getOrCreateDocumentType(name) {
       
       // Validate title length before sending to API
       if (updateData.title && updateData.title.length > 128) {
-        updateData.title = updateData.title.substring(0, 127) + '…';
+        updateData.title = updateData.title.substring(0, 124) + '…';
         console.warn(`[WARN] Title truncated to 128 characters for document ${documentId}`);
       }
       
