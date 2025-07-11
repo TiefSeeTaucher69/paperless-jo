@@ -1226,6 +1226,12 @@ async getOrCreateDocumentType(name) {
       //   }
       // }
       
+      // Validate title length before sending to API
+      if (updateData.title && updateData.title.length > 128) {
+        updateData.title = updateData.title.substring(0, 124) + '…';
+        console.warn(`[WARN] Title truncated to 128 characters for document ${documentId}`);
+      }
+      
       console.log('[DEBUG] Final update data:', updateData);
       await this.client.patch(`/documents/${documentId}/`, updateData);
       console.log(`[SUCCESS] Updated document ${documentId} with:`, updateData);
