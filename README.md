@@ -71,6 +71,9 @@ It features: Automode, Manual Mode, Ollama and OpenAI, a Chat function to query 
 
 ## Installation
 
+> ⚠️ **Important Note**: If you're installing Paperless-AI for the **first time**, please **restart the container after completing the setup routine** (where you enter your API keys and preferences). This ensures that all services initialize correctly and your RAG index is built properly.  
+> ➕ This step is **not required when updating** an existing installation.
+
 Visit the Wiki for installation:\
 [Click here for Installation](https://github.com/clusterzx/paperless-ai/wiki/2.-Installation)
 -------------------------------------------
