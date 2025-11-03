@@ -60,24 +60,35 @@ class PaperlessService {
 
   // Lädt alle existierenden Tags
   async refreshTagCache() {
-    try {
-      console.log('[DEBUG] Refreshing tag cache...');
-      this.tagCache.clear();
-      let nextUrl = '/tags/';
-      while (nextUrl) {
-        const response = await this.client.get(nextUrl);
-        response.data.results.forEach(tag => {
-          this.tagCache.set(tag.name.toLowerCase(), tag);
-        });
-        nextUrl = response.data.next;
+      try {
+        console.log('[DEBUG] Refreshing tag cache...');
+        this.tagCache.clear();
+        let nextUrl = '/tags/';
+        while (nextUrl) {
+          const response = await this.client.get(nextUrl);
+          response.data.results.forEach(tag => {
+            this.tagCache.set(tag.name.toLowerCase(), tag);
+          });
+          // Fix: Extract only path and query from next URL to prevent HTTP downgrade
+          if (response.data.next) {
+            try {
+              const url = new URL(response.data.next);
+              nextUrl = url.pathname + url.search;
+            } catch (e) {
+              console.error('[ERROR] Failed to parse next URL:', e.message);
+              nextUrl = null;
+            }
+          } else {
+            nextUrl = null;
+          }
+        }
+        this.lastTagRefresh = Date.now();
+        console.log(`[DEBUG] Tag cache refreshed. Found ${this.tagCache.size} tags.`);
+      } catch (error) {
+        console.error('[ERROR] refreshing tag cache:', error.message);
+        throw error;
       }
-      this.lastTagRefresh = Date.now();
-      console.log(`[DEBUG] Tag cache refreshed. Found ${this.tagCache.size} tags.`);
-    } catch (error) {
-      console.error('[ERROR] refreshing tag cache:', error.message);
-      throw error;
     }
-  }
 
   async initializeWithCredentials(apiUrl, apiToken) {
     this.client = axios.create({
@@ -166,24 +177,35 @@ class PaperlessService {
   }
 
   async refreshCustomFieldCache() {
-    try {
-      console.log('[DEBUG] Refreshing custom field cache...');
-      this.customFieldCache.clear();
-      let nextUrl = '/custom_fields/';
-      while (nextUrl) {
-        const response = await this.client.get(nextUrl);
-        response.data.results.forEach(field => {
-          this.customFieldCache.set(field.name.toLowerCase(), field);
-        });
-        nextUrl = response.data.next;
+      try {
+        console.log('[DEBUG] Refreshing custom field cache...');
+        this.customFieldCache.clear();
+        let nextUrl = '/custom_fields/';
+        while (nextUrl) {
+          const response = await this.client.get(nextUrl);
+          response.data.results.forEach(field => {
+            this.customFieldCache.set(field.name.toLowerCase(), field);
+          });
+          // Fix: Extract only path and query from next URL to prevent HTTP downgrade
+          if (response.data.next) {
+            try {
+              const url = new URL(response.data.next);
+              nextUrl = url.pathname + url.search;
+            } catch (e) {
+              console.error('[ERROR] Failed to parse next URL:', e.message);
+              nextUrl = null;
+            }
+          } else {
+            nextUrl = null;
+          }
+        }
+        this.lastCustomFieldRefresh = Date.now();
+        console.log(`[DEBUG] Custom field cache refreshed. Found ${this.customFieldCache.size} fields.`);
+      } catch (error) {
+        console.error('[ERROR] refreshing custom field cache:', error.message);
+        throw error;
       }
-      this.lastCustomFieldRefresh = Date.now();
-      console.log(`[DEBUG] Custom field cache refreshed. Found ${this.customFieldCache.size} fields.`);
-    } catch (error) {
-      console.error('[ERROR] refreshing custom field cache:', error.message);
-      throw error;
     }
-  }
 
 
   async findExistingTag(tagName) {
