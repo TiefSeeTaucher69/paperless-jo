@@ -66,14 +66,36 @@ class PaperlessService {
         let nextUrl = '/tags/';
         while (nextUrl) {
           const response = await this.client.get(nextUrl);
+
+          // Validate response structure
+          if (!response?.data?.results) {
+            console.error('[ERROR] Invalid response structure from API:', response?.data);
+            break;
+          }
+
           response.data.results.forEach(tag => {
             this.tagCache.set(tag.name.toLowerCase(), tag);
           });
+
           // Fix: Extract only path and query from next URL to prevent HTTP downgrade
           if (response.data.next) {
             try {
-              const url = new URL(response.data.next);
-              nextUrl = url.pathname + url.search;
+              const nextUrlObj = new URL(response.data.next);
+              const baseUrlObj = new URL(this.client.defaults.baseURL);
+
+              // Extract path relative to baseURL to avoid double /api/ prefix
+              let relativePath = nextUrlObj.pathname;
+              if (baseUrlObj.pathname && baseUrlObj.pathname !== '/') {
+                // Remove the base path if it's included in the next URL path
+                relativePath = relativePath.replace(baseUrlObj.pathname, '');
+              }
+              // Ensure path starts with /
+              if (!relativePath.startsWith('/')) {
+                relativePath = '/' + relativePath;
+              }
+
+              nextUrl = relativePath + nextUrlObj.search;
+              console.log('[DEBUG] Next page URL:', nextUrl);
             } catch (e) {
               console.error('[ERROR] Failed to parse next URL:', e.message);
               nextUrl = null;
@@ -183,14 +205,36 @@ class PaperlessService {
         let nextUrl = '/custom_fields/';
         while (nextUrl) {
           const response = await this.client.get(nextUrl);
+
+          // Validate response structure
+          if (!response?.data?.results) {
+            console.error('[ERROR] Invalid response structure from API:', response?.data);
+            break;
+          }
+
           response.data.results.forEach(field => {
             this.customFieldCache.set(field.name.toLowerCase(), field);
           });
+
           // Fix: Extract only path and query from next URL to prevent HTTP downgrade
           if (response.data.next) {
             try {
-              const url = new URL(response.data.next);
-              nextUrl = url.pathname + url.search;
+              const nextUrlObj = new URL(response.data.next);
+              const baseUrlObj = new URL(this.client.defaults.baseURL);
+
+              // Extract path relative to baseURL to avoid double /api/ prefix
+              let relativePath = nextUrlObj.pathname;
+              if (baseUrlObj.pathname && baseUrlObj.pathname !== '/') {
+                // Remove the base path if it's included in the next URL path
+                relativePath = relativePath.replace(baseUrlObj.pathname, '');
+              }
+              // Ensure path starts with /
+              if (!relativePath.startsWith('/')) {
+                relativePath = '/' + relativePath;
+              }
+
+              nextUrl = relativePath + nextUrlObj.search;
+              console.log('[DEBUG] Next page URL:', nextUrl);
             } catch (e) {
               console.error('[ERROR] Failed to parse next URL:', e.message);
               nextUrl = null;
