@@ -52,8 +52,18 @@ const externalApiConfig = {
   transformationTemplate: process.env.EXTERNAL_API_TRANSFORM || ''
 };
 
+// Never log connection details from data/.env in clear text
+const maskUrl = (url) => {
+  if (!url) return '(not set)';
+  try {
+    return `${new URL(url).protocol}//***`;
+  } catch {
+    return '***';
+  }
+};
+
 console.log('Loaded environment variables:', {
-  PAPERLESS_API_URL: process.env.PAPERLESS_API_URL,
+  PAPERLESS_API_URL: maskUrl(process.env.PAPERLESS_API_URL),
   PAPERLESS_API_TOKEN: '******',
   LIMIT_FUNCTIONS: limitFunctions,
   AI_RESTRICTIONS: aiRestrictions,
@@ -64,6 +74,7 @@ module.exports = {
   PAPERLESS_AI_VERSION: '3.0.9',
   // Exported for unit tests
   _parseEnvNumber: parseEnvNumber,
+  _maskUrl: maskUrl,
   CONFIGURED: false,
   disableAutomaticProcessing: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,

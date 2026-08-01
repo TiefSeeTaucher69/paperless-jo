@@ -34,3 +34,17 @@ test('Ollama-Sampling-Werte sind Zahlen', () => {
   assert.strictEqual(typeof config.ollama.numPredict, 'number');
   assert.strictEqual(typeof config.ollama.numCtxMax, 'number');
 });
+
+test('_maskUrl behaelt das Schema und maskiert Host und Port', () => {
+  assert.strictEqual(config._maskUrl('http://10.0.0.5:8000'), 'http://***');
+  assert.strictEqual(config._maskUrl('https://paperless.example.org'), 'https://***');
+});
+
+test('_maskUrl meldet fehlende Konfiguration als solche', () => {
+  assert.strictEqual(config._maskUrl(undefined), '(not set)');
+  assert.strictEqual(config._maskUrl(''), '(not set)');
+});
+
+test('_maskUrl gibt bei unparsbarem Wert keinen Klartext preis', () => {
+  assert.strictEqual(config._maskUrl('kein-url-wert'), '***');
+});
