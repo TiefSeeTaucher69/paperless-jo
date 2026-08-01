@@ -26,13 +26,71 @@ darüber fällt anhand der Tuning-Messung aus Phase 2, nicht vorab.
 
 | # | Inhalt | Abhängigkeit | Status |
 |---|---|---|---|
-| 1 | Determinismus und Prompt-Hygiene | — | offen |
+| 0 | Dry-Run-Harness und Fixture-Export | — | gebaut, Baseline ausstehend |
+| 1 | Determinismus, Prompt-Hygiene, Prompt-Härtung | — | geplant |
 | 2 | EntityResolver, Alias-Speicher, Schwellwert-Tuning | — | offen |
 | 3 | Review-UI, Merge, Altbestands-Durchlauf | Phase 2 | offen |
 | 4 | Fingerprint für wiederkehrende Dokumente | Phase 1–3 | nur skizziert |
 
 Phase 1 und 2 sind unabhängig voneinander wirksam. Jede Phase bekommt einen
 eigenen Implementierungsplan und wird einzeln abgenommen.
+
+## Befunde aus dem Umgebungscheck (2026-08-01)
+
+Der Check gegen die laufende Instanz hat drei Dinge zutage gefördert, die den
+Plan verändern.
+
+**`USE_EXISTING_DATA=no` ist die dominante Ursache.** In `_buildPrompt` werden
+die Bestandslisten ausschließlich im `if`-Zweig eingefügt. Bei `no` läuft der
+`else`-Zweig, der sie gar nicht enthält — das Modell sieht die vorhandenen 40
+Tags, 17 Dokumentarten und 16 Korrespondenten also überhaupt nicht und erfindet
+jedes Mal frei. Der konfigurierte System-Prompt enthält auch keinen der
+`%RESTRICTED_*%`-Platzhalter, über die sie alternativ hineinkämen. Empirisch
+bestätigt: derselbe Aufruf liefert mit `yes` einen um 214 Zeichen längeren
+Prompt, der die Bestandsnamen tatsächlich enthält.
+
+**Ein Teil der „Inkonsistenz" ist gar keine.** Unter den Korrespondenten stehen
+vier Varianten des Anwendernamens samt Postanschrift — das Modell trägt den
+Empfänger statt des Absenders ein. Der System-Prompt nennt zwar den Absender,
+stellt ihn aber nie dem Empfänger gegenüber, und regelt weder Anrede noch
+Anschrift, Rechtsform, Tag-Anzahl noch Singular/Plural. Ein Tag lautet
+schlicht `November 2025`. Das repariert keine Dedup-Schicht, sondern nur der
+Prompt. Phase 1 wird deshalb um Prompt-Härtung erweitert.
+
+**Embeddings sind wahrscheinlicher nötig als geschätzt.** Der Bestand enthält
+`Entgeltabrechnung` / `Payroll Statement` / `Verdienstbescheinigung` sowie
+`Meldebescheid` / `Meldebescheinigung` / `Meldebeschreibung`. Diese meinen
+dasselbe, liegen orthografisch aber weit auseinander — genau der blinde Fleck
+der reinen String-Ähnlichkeit. Die Entscheidung fällt weiterhin anhand der
+Messung aus Phase 2, aber Ansatz B ist kein Randfall mehr.
+
+**Konfigurationsfalle:** `paperlessService.initialize()` setzt `baseURL` direkt
+auf `PAPERLESS_API_URL` und ruft dann `/documents/`. Der Wert muss deshalb auf
+`/api` enden. Das Setup-UI zeigt ihn ohne `/api` und hängt es beim Speichern an
+— wer `data/.env` von Hand bearbeitet, erzeugt einen stillen Totalausfall, der
+sich nur als Parse-Fehler äußert. Kandidat für einen Robustheitsfix in Phase 1.
+
+## Phase 0 — Dry-Run-Harness
+
+**Dateien**
+
+- `scripts/export-entity-fixture.js` — exportiert die Namenslisten nach
+  `data/eval/entities.json`
+- `scripts/dry-run-eval.js` — klassifiziert Dokumente über die echte Kette,
+  **ohne** nach Paperless zu schreiben, und wertet aus
+
+**Warum unter `data/`:** Die Namen enthalten personenbezogene Daten, darunter
+Klarnamen und eine Wohnanschrift. `data/` ist gitignored; der Fork ist
+öffentlich. Committete Tests bekommen stattdessen eine synthetische Fixture mit
+denselben Fehlermustern.
+
+**Gemessen wird** je Lauf: Anzahl verschiedener Tags, Dokumentarten und
+Korrespondenten; Gruppen von Schreibvarianten; Korrespondenten mit Anrede oder
+Anschrift im Namen; Tags, die wie ein Datum aussehen; und bei `--repeat > 1` die
+Stabilität zwischen Wiederholungen desselben Dokuments.
+
+**Zweck:** ein Messinstrument, das jede Phase vorher/nachher vergleichbar macht,
+ohne die Instanz zu verändern. Der Bestand in Paperless bleibt unangetastet.
 
 ## Phase 1 — Determinismus und Prompt-Hygiene
 
