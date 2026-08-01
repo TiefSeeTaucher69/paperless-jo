@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Die Ollama-Klassifikation liefert bei identischem Dokument ein identisches Ergebnis und erhält die Bestandslisten nachweislich vollständig im Prompt.
+**Goal:** Die Ollama-Klassifikation liefert bei identischem Dokument ein identisches Ergebnis, erhält die Bestandslisten nachweislich vollständig im Prompt, und liefert plausible Tags sowie ein normiertes Datum statt gelegentlich Freitext-Fragmente oder falscher Datumsformate.
 
-**Architecture:** Sampling wird auf greedy decoding mit festem Seed umgestellt und über Env konfigurierbar. Der Prompt wird korrekt in `system` (Anweisungen, Formatvorgabe, Bestandslisten) und `prompt` (nur Dokumententext) getrennt. Das Kontextfenster wird aus beiden Teilen berechnet; bei Überlauf kürzen wir bewusst nur den Dokumententext. Drei Bugs, die den Kontext stillschweigend beschädigen, werden behoben.
+**Architecture:** Sampling wird auf greedy decoding mit festem Seed umgestellt und über Env konfigurierbar. Der Prompt wird korrekt in `system` (Anweisungen, Formatvorgabe, Bestandslisten) und `prompt` (nur Dokumententext) getrennt. Das Kontextfenster wird aus beiden Teilen berechnet; bei Überlauf kürzen wir bewusst nur den Dokumententext. Drei Bugs, die den Kontext stillschweigend beschädigen, werden behoben. Zwei defensive Nachbearbeitungsfilter fangen ab, was Prompt-Anweisungen allein nicht zuverlässig verhindern: Tags, die eigentlich extrahierte Datenwerte sind, und Datumsangaben in einem anderen Format als `YYYY-MM-DD`.
+
+**Baseline (2026-08-01, 10 Dokumente, repeat 2, vor dieser Phase):** 10 von 10 wiederholten Dokumenten lieferten unterschiedliche Ergebnisse — bis hin zu unterschiedlichen erfundenen Werten in `custom_fields` zwischen zwei Läufen desselben Dokuments. Diese Zahl ist der Maßstab, an dem Task 3 (Determinismus) gemessen wird. Details: `data/eval/dryrun-baseline-*.json` (nicht in git, personenbezogene Daten).
 
 **Tech Stack:** Node.js 22 (CommonJS), Express, axios, `node:test` als Test-Runner (keine neue Dependency).
 
@@ -31,8 +33,10 @@
 | `test/ollamaPrompt.test.js` | Aufteilung system/user, keine Config-Mutation | Create |
 | `test/ollamaContext.test.js` | Kontextfenster und kontrollierte Kürzung | Create |
 | `test/configParse.test.js` | `parseEnvNumber` | Create |
+| `test/ollamaTagFilter.test.js` | Tags, die wie extrahierte Datenwerte statt Kategorien aussehen, werden verworfen | Create |
+| `test/ollamaDateNormalize.test.js` | `document_date` wird auf `YYYY-MM-DD` normiert oder verworfen | Create |
 | `services/restrictionPromptService.js` | Platzhalter-Ersetzung, ein gemeinsamer Listen-Formatierer | Modify |
-| `services/ollamaService.js` | Prompt-Bau, Kontextfenster, API-Optionen | Modify |
+| `services/ollamaService.js` | Prompt-Bau, Kontextfenster, API-Optionen, Tag-Filter, Datumsnormierung | Modify |
 | `services/openaiService.js` | nur Aufrufstelle anpassen | Modify |
 | `services/azureService.js` | nur Aufrufstelle anpassen | Modify |
 | `config/config.js` | Ollama-Sampling-Defaults, `parseEnvNumber`, Log-Maskierung | Modify |
@@ -1483,12 +1487,329 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ---
 
+### Task 8: Tags auf Kategorienamen begrenzen
+
+Baseline-Beobachtung, Dokument 178, zweiter Lauf: `"tags": ["Personal-Nr.: XXXXXX 000", "Abrechnungszeitraum: 01.06.2026-30.06.2026"]`. Das sind keine Kategorien, sondern extrahierte Datenwerte, die eigentlich in `custom_fields` gehören. Eine Prompt-Anweisung allein ist bei einem 7B-Modell keine Garantie; deshalb zusätzlich ein defensiver Nachbearbeitungsfilter: jeder Tag, der einen Doppelpunkt enthält oder unplausibel lang ist, wird verworfen statt nach Paperless geschrieben zu werden.
+
+**Files:**
+- Modify: `services/ollamaService.js` — neue Methoden `_isPlausibleTag`, `_normalizeParsedDocument`; Aufruf in `analyzeDocument`
+- Test: `test/ollamaTagFilter.test.js` (create)
+
+**Interfaces:**
+- Consumes: die Zeile `const parsedResponse = this._processOllamaResponse(response);` in `analyzeDocument`, angelegt in Task 5
+- Produces: `_isPlausibleTag(tag: string) → boolean`; `_normalizeParsedDocument(doc: object) → object` (mutiert `doc` und gibt es zurück)
+
+- [ ] **Step 1: Den fehlschlagenden Test schreiben**
+
+Neue Datei `test/ollamaTagFilter.test.js`:
+
+```js
+const { test } = require('node:test');
+const assert = require('node:assert');
+const ollamaService = require('../services/ollamaService');
+
+test('ein normaler Kategorie-Tag ist plausibel', () => {
+  assert.strictEqual(ollamaService._isPlausibleTag('Sozialversicherung'), true);
+});
+
+test('ein mehrwortiger Kategorie-Tag ist plausibel', () => {
+  assert.strictEqual(ollamaService._isPlausibleTag('Vertrag Änderung'), true);
+});
+
+test('ein Tag mit Doppelpunkt ist ein Datenfeld, kein Kategorie-Tag', () => {
+  assert.strictEqual(ollamaService._isPlausibleTag('Personal-Nr.: XXXXXX 000'), false);
+});
+
+test('ein Tag mit Zeitraumsangabe und Doppelpunkt wird verworfen', () => {
+  assert.strictEqual(ollamaService._isPlausibleTag('Abrechnungszeitraum: 01.06.2026-30.06.2026'), false);
+});
+
+test('ein unplausibel langer Tag wird verworfen', () => {
+  const long = 'x'.repeat(61);
+  assert.strictEqual(ollamaService._isPlausibleTag(long), false);
+});
+
+test('ein Tag an der Laengengrenze von 60 Zeichen bleibt plausibel', () => {
+  const atLimit = 'x'.repeat(60);
+  assert.strictEqual(ollamaService._isPlausibleTag(atLimit), true);
+});
+
+test('ein leerer oder nicht-string Tag ist nicht plausibel', () => {
+  assert.strictEqual(ollamaService._isPlausibleTag(''), false);
+  assert.strictEqual(ollamaService._isPlausibleTag('   '), false);
+  assert.strictEqual(ollamaService._isPlausibleTag(null), false);
+  assert.strictEqual(ollamaService._isPlausibleTag(undefined), false);
+});
+
+test('_normalizeParsedDocument filtert unplausible Tags aus dem Dokument', () => {
+  const doc = {
+    tags: ['Rechnung', 'Personal-Nr.: XXXXXX 000', 'Versicherung'],
+    document_date: null
+  };
+
+  ollamaService._normalizeParsedDocument(doc);
+
+  assert.deepStrictEqual(doc.tags, ['Rechnung', 'Versicherung']);
+});
+
+test('_normalizeParsedDocument laesst ein Dokument ohne tags-Array unangetastet', () => {
+  const doc = { correspondent: 'Finanzamt' };
+  const result = ollamaService._normalizeParsedDocument(doc);
+  assert.strictEqual(result, doc);
+  assert.strictEqual(doc.tags, undefined);
+});
+```
+
+- [ ] **Step 2: Test ausführen, Fehlschlag bestätigen**
+
+Run: `node --test test/ollamaTagFilter.test.js`
+Expected: FAIL — `ollamaService._isPlausibleTag is not a function`
+
+- [ ] **Step 3: `_isPlausibleTag` und `_normalizeParsedDocument` implementieren**
+
+Füge in `services/ollamaService.js` diese beiden Methoden unmittelbar vor `_processOllamaResponse` ein:
+
+```js
+    /**
+     * A category tag is a short label. Anything containing a colon is very
+     * likely a "field: value" fragment the model extracted instead of
+     * categorizing (observed baseline: "Personal-Nr.: XXXXXX 000"). Anything
+     * implausibly long is likely a full sentence, not a label.
+     * @param {*} tag
+     * @returns {boolean}
+     */
+    _isPlausibleTag(tag) {
+        if (typeof tag !== 'string') return false;
+        const trimmed = tag.trim();
+        if (!trimmed) return false;
+        if (trimmed.includes(':')) return false;
+        if (trimmed.length > 60) return false;
+        return true;
+    }
+
+    /**
+     * Defensive post-processing for a parsed model response. Runs
+     * unconditionally after every successful parse, regardless of which
+     * branch of _processOllamaResponse/_parseResponse produced it.
+     * @param {Object} doc
+     * @returns {Object} the same object, mutated
+     */
+    _normalizeParsedDocument(doc) {
+        if (Array.isArray(doc.tags)) {
+            const before = doc.tags.length;
+            doc.tags = doc.tags.filter(tag => this._isPlausibleTag(tag));
+            if (doc.tags.length < before) {
+                console.warn(`[WARNING] Dropped ${before - doc.tags.length} tag(s) that looked like extracted data rather than category labels`);
+            }
+        }
+
+        return doc;
+    }
+```
+
+- [ ] **Step 4: In `analyzeDocument` verdrahten**
+
+Ersetze in `services/ollamaService.js` in `analyzeDocument`:
+
+```js
+            // Process response
+            const parsedResponse = this._processOllamaResponse(response);
+```
+
+durch:
+
+```js
+            // Process response
+            const parsedResponse = this._normalizeParsedDocument(this._processOllamaResponse(response));
+```
+
+- [ ] **Step 5: Tests ausführen, Erfolg bestätigen**
+
+Run: `npm test`
+Expected: PASS — 45 Tests bestehen.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add services/ollamaService.js test/ollamaTagFilter.test.js
+git commit -m "fix: Tags filtern, die wie extrahierte Datenwerte aussehen
+
+Baseline-Lauf zeigte Tags wie \"Personal-Nr.: XXXXXX 000\" - keine
+Kategorien, sondern Datenfelder, die das Modell statt custom_fields in
+tags geschrieben hat. Ein Doppelpunkt im Tag ist ein starkes Signal dafuer.
+
+Defensiver Nachbearbeitungsfilter, nicht nur eine Prompt-Anweisung: ein 7B-
+Modell haelt Formatvorgaben nicht zuverlaessig ein.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Task 9: `document_date` auf `YYYY-MM-DD` normieren
+
+Baseline-Beobachtung, Dokument 178: derselbe Prompt lieferte einmal `"2026-07-22"` (korrekt), einmal `"22.07.2026"` (deutsches Format). `document_date` wird in `buildUpdateData` ungeprüft nach `updateData.created` durchgereicht (`server.js`, Funktion `buildUpdateData`) — ein falsches Format kann dort einen fehlerhaften Wert in Paperless schreiben. Erweitert `_normalizeParsedDocument` aus Task 8 um eine zweite Normalisierung.
+
+**Files:**
+- Modify: `services/ollamaService.js` — neue Methode `_normalizeDocumentDate`, `_normalizeParsedDocument` erweitert
+- Test: `test/ollamaDateNormalize.test.js` (create)
+
+**Interfaces:**
+- Consumes: `_normalizeParsedDocument` aus Task 8
+- Produces: `_normalizeDocumentDate(value: string) → string|null` (null bedeutet: verwerfen, Aufrufer in `server.js` fällt bereits heute auf `doc.created` zurück, wenn `analysis.document.document_date` falsy ist)
+
+- [ ] **Step 1: Den fehlschlagenden Test schreiben**
+
+Neue Datei `test/ollamaDateNormalize.test.js`:
+
+```js
+const { test } = require('node:test');
+const assert = require('node:assert');
+const ollamaService = require('../services/ollamaService');
+
+test('ein ISO-Datum bleibt unveraendert', () => {
+  assert.strictEqual(ollamaService._normalizeDocumentDate('2026-07-22'), '2026-07-22');
+});
+
+test('ein deutsches Datum wird zu ISO konvertiert', () => {
+  assert.strictEqual(ollamaService._normalizeDocumentDate('22.07.2026'), '2026-07-22');
+});
+
+test('ein einstelliger Tag/Monat im deutschen Format wird nicht erkannt', () => {
+  // Bewusst konservativ: nur das zweistellige Format wird konvertiert,
+  // alles andere lieber verwerfen als falsch raten.
+  assert.strictEqual(ollamaService._normalizeDocumentDate('2.7.2026'), null);
+});
+
+test('ein unbekanntes Format wird verworfen, nicht geraten', () => {
+  assert.strictEqual(ollamaService._normalizeDocumentDate('22. Juli 2026'), null);
+});
+
+test('null und undefined werden verworfen', () => {
+  assert.strictEqual(ollamaService._normalizeDocumentDate(null), null);
+  assert.strictEqual(ollamaService._normalizeDocumentDate(undefined), null);
+});
+
+test('_normalizeParsedDocument normiert document_date im Dokument', () => {
+  const doc = { tags: [], document_date: '22.07.2026' };
+  ollamaService._normalizeParsedDocument(doc);
+  assert.strictEqual(doc.document_date, '2026-07-22');
+});
+
+test('_normalizeParsedDocument verwirft ein unparsebares document_date', () => {
+  const doc = { tags: [], document_date: '22. Juli 2026' };
+  ollamaService._normalizeParsedDocument(doc);
+  assert.strictEqual(doc.document_date, null);
+});
+
+test('_normalizeParsedDocument laesst ein fehlendes document_date unangetastet', () => {
+  const doc = { tags: [] };
+  ollamaService._normalizeParsedDocument(doc);
+  assert.strictEqual(doc.document_date, undefined);
+});
+```
+
+- [ ] **Step 2: Test ausführen, Fehlschlag bestätigen**
+
+Run: `node --test test/ollamaDateNormalize.test.js`
+Expected: FAIL — `ollamaService._normalizeDocumentDate is not a function`
+
+- [ ] **Step 3: `_normalizeDocumentDate` implementieren**
+
+Füge in `services/ollamaService.js` unmittelbar nach `_isPlausibleTag` (vor `_normalizeParsedDocument`) ein:
+
+```js
+    /**
+     * Normalize document_date to YYYY-MM-DD. Accepts ISO as-is and converts
+     * unambiguous German DD.MM.YYYY notation (observed in the baseline run
+     * alongside correct ISO output from the same prompt). Anything else is
+     * dropped rather than guessed, so the caller's existing fallback to the
+     * document's current created date applies instead of writing a wrong one.
+     * @param {*} value
+     * @returns {string|null}
+     */
+    _normalizeDocumentDate(value) {
+        if (typeof value !== 'string') return null;
+        const trimmed = value.trim();
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            return trimmed;
+        }
+
+        const german = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        if (german) {
+            const [, day, month, year] = german;
+            return `${year}-${month}-${day}`;
+        }
+
+        return null;
+    }
+```
+
+- [ ] **Step 4: `_normalizeParsedDocument` um die Datumsnormierung erweitern**
+
+Ersetze in `services/ollamaService.js` die **gesamte** Methode `_normalizeParsedDocument` (aus Task 8) durch:
+
+```js
+    /**
+     * Defensive post-processing for a parsed model response. Runs
+     * unconditionally after every successful parse, regardless of which
+     * branch of _processOllamaResponse/_parseResponse produced it.
+     * @param {Object} doc
+     * @returns {Object} the same object, mutated
+     */
+    _normalizeParsedDocument(doc) {
+        if (Array.isArray(doc.tags)) {
+            const before = doc.tags.length;
+            doc.tags = doc.tags.filter(tag => this._isPlausibleTag(tag));
+            if (doc.tags.length < before) {
+                console.warn(`[WARNING] Dropped ${before - doc.tags.length} tag(s) that looked like extracted data rather than category labels`);
+            }
+        }
+
+        if (doc.document_date) {
+            const normalized = this._normalizeDocumentDate(doc.document_date);
+            if (normalized !== doc.document_date) {
+                console.warn(`[WARNING] document_date "${doc.document_date}" did not match YYYY-MM-DD, normalized to ${normalized ?? '(verworfen, Aufrufer faellt auf doc.created zurueck)'}`);
+            }
+            doc.document_date = normalized;
+        }
+
+        return doc;
+    }
+```
+
+- [ ] **Step 5: Tests ausführen, Erfolg bestätigen**
+
+Run: `npm test`
+Expected: PASS — 53 Tests bestehen.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add services/ollamaService.js test/ollamaDateNormalize.test.js
+git commit -m "fix: document_date auf YYYY-MM-DD normieren oder verwerfen
+
+Baseline-Lauf zeigte fuer dasselbe Dokument in zwei Laeufen \"2026-07-22\"
+und \"22.07.2026\" - der Prompt schreibt YYYY-MM-DD vor, das Modell haelt
+sich nicht zuverlaessig daran. document_date landet ungeprueft in
+updateData.created; ein falsches Format kann dort einen fehlerhaften Wert
+nach Paperless schreiben.
+
+Unbekannte Formate werden verworfen statt geraten - der bestehende
+Fallback auf doc.created in server.js greift dann automatisch.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
 ## Abschluss von Phase 1
 
 - [ ] **Vollständiger Testlauf**
 
 Run: `npm test`
-Expected: PASS — 36 Tests, 0 Fehlschläge.
+Expected: PASS — 53 Tests, 0 Fehlschläge.
 
 - [ ] **Determinismus am echten Modell prüfen**
 
@@ -1497,6 +1818,19 @@ Verarbeite dasselbe Dokument zweimal und vergleiche das Ergebnis. Erwartung: ide
 - [ ] **Bestandslisten im Prompt prüfen**
 
 Öffne die von `writePromptToFile` geschriebene Log-Datei und prüfe im `--- SYSTEM ---`-Abschnitt, dass die Listen der bestehenden Tags, Korrespondenten und Dokumentarten tatsächlich enthalten und nicht leer sind. Das ist das Abnahmekriterium aus der Roadmap.
+
+- [ ] **Baseline-Vergleich mit dem Dry-Run-Harness**
+
+```bash
+node scripts/dry-run-eval.js --limit 10 --repeat 2 --label nach-phase1
+```
+
+Vergleiche den neuen Report unter `data/eval/` mit
+`data/eval/dryrun-baseline-*.json` vom 2026-08-01. Erwartung: die
+Stabilitätsrate sinkt deutlich unter 10 von 10 instabilen Dokumenten; die
+Anrede-/Anschrift-im-Namen- und Datums-Tag-Treffer aus der Baseline treten
+seltener oder gar nicht mehr auf. Beide Reports enthalten personenbezogene
+Daten und bleiben unter `data/eval/` (nicht in git).
 
 - [ ] **Roadmap-Status fortschreiben**
 
