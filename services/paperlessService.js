@@ -1340,6 +1340,75 @@ async getOrCreateDocumentType(name, options = {}) {
     }
   }
 
+  async _findDocumentsWithEntity(type, id) {
+    const filterFieldMap = {
+      tag: 'tags__id',
+      correspondent: 'correspondent__id',
+      document_type: 'document_type__id'
+    };
+    const filterField = filterFieldMap[type];
+    if (!filterField) {
+      throw new Error(`mergeEntity: unbekannter Typ "${type}"`);
+    }
+
+    let documents = [];
+    let page = 1;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const response = await this.client.get('/documents/', {
+        params: { [filterField]: id, page, page_size: 100 }
+      });
+      const { results, next } = response.data;
+      documents = documents.concat(results.map(doc => ({ id: doc.id })));
+      hasNextPage = Boolean(next);
+      page++;
+    }
+
+    return documents;
+  }
+
+  async _bulkReassignDocuments(type, documentIds, fromId, toId) {
+    const methodMap = {
+      tag: 'modify_tags',
+      correspondent: 'set_correspondent',
+      document_type: 'set_document_type'
+    };
+    const parametersMap = {
+      tag: { add_tags: [toId], remove_tags: [fromId] },
+      correspondent: { correspondent: toId },
+      document_type: { document_type: toId }
+    };
+
+    await this.client.post('/documents/bulk_edit/', {
+      documents: documentIds,
+      method: methodMap[type],
+      parameters: parametersMap[type]
+    });
+  }
+
+  async mergeEntity(type, fromId, toId, { dryRun = true } = {}) {
+    this.initialize();
+    const affected = await this._findDocumentsWithEntity(type, fromId);
+
+    if (dryRun) {
+      return { affectedCount: affected.length, documentIds: affected.map(d => d.id), deleted: false };
+    }
+
+    if (affected.length > 0) {
+      await this._bulkReassignDocuments(type, affected.map(d => d.id), fromId, toId);
+    }
+
+    // Erst nach verifiziert leerem fromId loeschen - der einzige unumkehrbare Schritt.
+    const remaining = await this._findDocumentsWithEntity(type, fromId);
+    if (remaining.length > 0) {
+      throw new Error(`Merge unvollstaendig: ${remaining.length} Dokument(e) zeigen noch auf fromId=${fromId}`);
+    }
+
+    await this.client.delete(`/${type}s/${fromId}/`);
+    return { affectedCount: affected.length, documentIds: affected.map(d => d.id), deleted: true };
+  }
+
   async getTagTextFromId(tagId) {
     this.initialize();
     try {
