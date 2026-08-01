@@ -105,6 +105,12 @@ module.exports = {
     numPredict: parseEnvNumber(process.env.OLLAMA_NUM_PREDICT, 512),
     numCtxMax: parseEnvNumber(process.env.OLLAMA_NUM_CTX_MAX, 8192)
   },
+  entityResolver: {
+    enabled: parseEnvBoolean(process.env.ENTITY_RESOLVER_ENABLED, 'no') === 'yes',
+    autoThreshold: parseEnvNumber(process.env.ENTITY_RESOLVER_AUTO_THRESHOLD, 0.90),
+    judgeMin: parseEnvNumber(process.env.ENTITY_RESOLVER_JUDGE_MIN, 0.65),
+    dbPath: process.env.ENTITY_RESOLVER_DB_PATH || path.join(process.cwd(), 'data', 'entities.db')
+  },
   custom: {
     apiUrl: process.env.CUSTOM_BASE_URL || '',
     apiKey: process.env.CUSTOM_API_KEY || '',
