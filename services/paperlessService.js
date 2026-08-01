@@ -155,6 +155,50 @@ class PaperlessService {
     }
   }
 
+  _getEntityResolver() {
+    if (!this._entityResolverInstance) {
+      const EntityStore = require('../models/entityStore');
+      const EntityResolver = require('./entityResolver');
+      const entityJudge = require('./entityJudge');
+
+      const store = new EntityStore(config.entityResolver.dbPath);
+      this._entityResolverInstance = new EntityResolver({
+        store,
+        judge: (type, a, b) => entityJudge.judge(type, a, b),
+        config: {
+          autoThreshold: config.entityResolver.autoThreshold,
+          judgeMin: config.entityResolver.judgeMin
+        }
+      });
+    }
+    return this._entityResolverInstance;
+  }
+
+  // Zentrale Fehlerbarriere: deaktiviert oder jeder interne Fehler => heutiges Verhalten (create).
+  async _resolveEntity(type, name, existingEntities) {
+    if (!config.entityResolver.enabled) {
+      return { action: 'create' };
+    }
+    try {
+      const resolver = this._getEntityResolver();
+      return await resolver.resolve(type, name, existingEntities);
+    } catch (error) {
+      console.warn(`[WARNING] entityResolver fehlgeschlagen fuer "${name}" (${type}), falle zurueck auf bisheriges Verhalten:`, error.message);
+      return { action: 'create' };
+    }
+  }
+
+  _recordEntityQueue(type, proposedName, proposedId, decision) {
+    try {
+      this._getEntityResolver().recordCreatedAndQueued({
+        type, proposedName, proposedId,
+        candidate: decision.candidate, similarity: decision.similarity, verdict: decision.verdict
+      });
+    } catch (error) {
+      console.warn(`[WARNING] Konnte Review-Queue-Eintrag fuer "${proposedName}" nicht schreiben:`, error.message);
+    }
+  }
+
   async initializeWithCredentials(apiUrl, apiToken) {
     this.client = axios.create({
       baseURL: apiUrl,
@@ -405,16 +449,27 @@ class PaperlessService {
         try {
           // Search for existing tag first
           let tag = await this.findExistingTag(tagName);
-          
-          // If no existing tag found and restrictions are not enabled, create new one
-          if (!tag && !restrictToExistingTags) {
-            tag = await this.createTagSafely(tagName);
-          } else if (!tag && restrictToExistingTags) {
-            console.log(`[DEBUG] Tag "${tagName}" does not exist and restrictions are enabled, skipping`);
-            errors.push({ tagName, error: 'Tag does not exist and restrictions are enabled' });
-            continue;
+
+          if (!tag) {
+            const decision = await this._resolveEntity('tag', tagName, Array.from(this.tagCache.values()));
+
+            if (decision.action === 'map') {
+              tag = { id: decision.id, name: decision.canonicalName };
+            } else if (decision.action === 'skip') {
+              errors.push({ tagName, error: 'Vorschlag ist leer' });
+              continue;
+            } else if (restrictToExistingTags) {
+              console.log(`[DEBUG] Tag "${tagName}" does not exist and restrictions are enabled, skipping`);
+              errors.push({ tagName, error: 'Tag does not exist and restrictions are enabled' });
+              continue;
+            } else {
+              tag = await this.createTagSafely(tagName);
+              if (decision.action === 'create_and_queue' && tag && tag.id) {
+                this._recordEntityQueue('tag', tagName, tag.id, decision);
+              }
+            }
           }
-  
+
           if (tag && tag.id) {
             tagIds.push(tag.id);
             processedTags.add(normalizedName);
@@ -1085,35 +1140,52 @@ async searchForExistingCorrespondent(correspondent) {
             console.log(`[DEBUG] Found existing correspondent "${name}" with ID ${existingCorrespondent.id}`);
             return existingCorrespondent;
         }
-        
+
+        await this.ensureCorrespondentCache();
+        const decision = await this._resolveEntity('correspondent', name, Array.from(this.correspondentCache.values()));
+
+        if (decision.action === 'skip') {
+            return null;
+        }
+
+        if (decision.action === 'map') {
+            return { id: decision.id, name: decision.canonicalName };
+        }
+
         // If we're restricting to existing correspondents and none was found, return null
         if (restrictToExistingCorrespondents) {
             console.log(`[DEBUG] Correspondent "${name}" does not exist and restrictions are enabled, returning null`);
             return null;
         }
-    
+
         // Create new correspondent only if restrictions are not enabled
         try {
-            const createResponse = await this.client.post('/correspondents/', { 
-                name: name 
+            const createResponse = await this.client.post('/correspondents/', {
+                name: name
             });
             console.log(`[DEBUG] Created new correspondent "${name}" with ID ${createResponse.data.id}`);
+            if (decision.action === 'create_and_queue') {
+                this._recordEntityQueue('correspondent', name, createResponse.data.id, decision);
+            }
             return createResponse.data;
         } catch (createError) {
-            if (createError.response?.status === 400 && 
+            if (createError.response?.status === 400 &&
                 createError.response?.data?.error?.includes('unique constraint')) {
-              
+
                 // Race condition check - another process might have created it
                 const retryResponse = await this.client.get('/correspondents/', {
                     params: { name: name }
                 });
-              
+
                 const justCreatedCorrespondent = retryResponse.data.results.find(
                     c => c.name.toLowerCase() === name.toLowerCase()
                 );
-              
+
                 if (justCreatedCorrespondent) {
                     console.log(`[DEBUG] Retrieved correspondent "${name}" after constraint error with ID ${justCreatedCorrespondent.id}`);
+                    if (decision.action === 'create_and_queue') {
+                        this._recordEntityQueue('correspondent', name, justCreatedCorrespondent.id, decision);
+                    }
                     return justCreatedCorrespondent;
                 }
             }
@@ -1172,32 +1244,49 @@ async getOrCreateDocumentType(name) {
           console.log(`[DEBUG] Found existing document type "${name}" with ID ${existingDocType.id}`);
           return existingDocType;
       }
-  
+
+      await this.ensureDocumentTypeCache();
+      const decision = await this._resolveEntity('document_type', name, Array.from(this.documentTypeCache.values()));
+
+      if (decision.action === 'skip') {
+          return null;
+      }
+
+      if (decision.action === 'map') {
+          return { id: decision.id, name: decision.canonicalName };
+      }
+
       // Erstelle neuen document_type
       try {
-          const createResponse = await this.client.post('/document_types/', { 
+          const createResponse = await this.client.post('/document_types/', {
               name: name,
               matching_algorithm: 1, // 1 = ANY
               match: "",  // Optional: Kann später angepasst werden
               is_insensitive: true
           });
           console.log(`[DEBUG] Created new document type "${name}" with ID ${createResponse.data.id}`);
+          if (decision.action === 'create_and_queue') {
+              this._recordEntityQueue('document_type', name, createResponse.data.id, decision);
+          }
           return createResponse.data;
       } catch (createError) {
-          if (createError.response?.status === 400 && 
+          if (createError.response?.status === 400 &&
               createError.response?.data?.error?.includes('unique constraint')) {
-            
+
               // Race condition check
               const retryResponse = await this.client.get('/document_types/', {
                   params: { name: name }
               });
-            
+
               const justCreatedDocType = retryResponse.data.results.find(
                   dt => dt.name.toLowerCase() === name.toLowerCase()
               );
-            
+
               if (justCreatedDocType) {
                   console.log(`[DEBUG] Retrieved document type "${name}" after constraint error with ID ${justCreatedDocType.id}`);
+                  if (decision.action === 'create_and_queue') {
+                      this._recordEntityQueue('document_type', name, justCreatedDocType.id, decision);
+                  }
                   return justCreatedDocType;
               }
           }
