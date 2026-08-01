@@ -110,6 +110,18 @@ class EntityStore {
     }
   }
 
+  findQueueEntryPair(entityType, proposedNormalized, candidateNormalized) {
+    try {
+      return this.db.prepare(`
+        SELECT * FROM entity_review_queue
+        WHERE entity_type = ? AND proposed_normalized = ? AND candidate_normalized = ?
+      `).get(entityType, proposedNormalized, candidateNormalized) || null;
+    } catch (error) {
+      console.error('[ERROR] entityStore.findQueueEntryPair:', error.message);
+      return null;
+    }
+  }
+
   insertQueueEntry({ entityType, proposedName, proposedId, candidateName, candidateId, similarity, llmVerdict, llmReason, status, documentId }) {
     try {
       const now = new Date().toISOString();

@@ -153,6 +153,29 @@ test('updateQueueStatus liefert false, wenn die id nicht existiert', () => {
   assert.strictEqual(store.updateQueueStatus(999999, 'merged'), false);
 });
 
+test('findQueueEntryPair findet Eintraege unabhaengig vom status, null wenn keiner existiert', () => {
+  const store = freshStore();
+  const proposedNormalized = normalizeForType('Mahnung', 'tag');
+  const candidateNormalized = normalizeForType('Mahnungen', 'tag');
+
+  assert.strictEqual(store.findQueueEntryPair('tag', proposedNormalized, candidateNormalized), null);
+
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Mahnung', proposedId: 1, candidateName: 'Mahnungen', candidateId: 2, similarity: 0.8, llmVerdict: 'unsure', llmReason: null, status: 'open', documentId: null });
+  const openFound = store.findQueueEntryPair('tag', proposedNormalized, candidateNormalized);
+  assert.ok(openFound);
+  assert.strictEqual(openFound.status, 'open');
+
+  store.updateQueueStatus(openFound.id, 'merged');
+  const mergedFound = store.findQueueEntryPair('tag', proposedNormalized, candidateNormalized);
+  assert.ok(mergedFound);
+  assert.strictEqual(mergedFound.status, 'merged');
+
+  store.updateQueueStatus(openFound.id, 'rejected');
+  const rejectedFound = store.findQueueEntryPair('tag', proposedNormalized, candidateNormalized);
+  assert.ok(rejectedFound);
+  assert.strictEqual(rejectedFound.status, 'rejected');
+});
+
 test('countOpenQueueEntries zaehlt nur offene Eintraege', () => {
   const store = freshStore();
   assert.strictEqual(store.countOpenQueueEntries(), 0);

@@ -26,7 +26,9 @@ class EntityBackfillService {
         if (similarity < this.judgeMin) {
           continue;
         }
-        if (this.store.findRejectedPair(entityType, normalizedProposed, normalizedCandidate)) {
+        // Ueberspringt jedes bereits existierende Paar (egal ob open/merged/rejected) - verhindert,
+        // dass ein erneuter Backfill-Lauf einen echten LLM-Verdict auf einer noch offenen Zeile ueberschreibt.
+        if (this.store.findQueueEntryPair(entityType, normalizedProposed, normalizedCandidate)) {
           continue;
         }
 
