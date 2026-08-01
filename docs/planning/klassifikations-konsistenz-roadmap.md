@@ -30,7 +30,8 @@ darüber fällt anhand der Tuning-Messung aus Phase 2, nicht vorab.
 | 1 | Determinismus, Prompt-Hygiene, Prompt-Härtung | — | erledigt |
 | 2 | EntityResolver, Alias-Speicher, Schwellwert-Tuning | — | erledigt |
 | 3 | Review-UI, Merge, Altbestands-Durchlauf | Phase 2 | offen |
-| 4 | Fingerprint für wiederkehrende Dokumente | Phase 1–3 | nur skizziert |
+| 4 | Embeddings-Ähnlichkeitskanal | Phase 2, Messung Task 11 | offen (neu) |
+| 5 | Fingerprint für wiederkehrende Dokumente | Phase 1–4 | nur skizziert |
 
 Phase 1 und 2 sind unabhängig voneinander wirksam. Jede Phase bekommt einen
 eigenen Implementierungsplan und wird einzeln abgenommen.
@@ -244,11 +245,53 @@ Folgeentscheidung, kein Teil dieser Phase.
 **Abnahmekriterium:** ein Merge ist an echten Daten durchgeführt, das gelöschte
 Ziel war nachweislich leer, und kein Dokument hat einen Wert verloren.
 
-## Phase 4 — Fingerprint (skizziert)
+## Präzisierungen aus der Planung von Phase 3 (2026-08-01)
+
+Per `superpowers:brainstorming` geklärt, bevor der Implementierungsplan
+entsteht. Vollständige Begründung im Design-Spec, Abschnitt „Phase 3".
+
+- **Scope-Entscheidung:** Embeddings bleiben außerhalb von Phase 3 und werden
+  zur neuen Phase 4 (siehe unten), damit UI/Merge-Infrastruktur nicht mit
+  einem neuen, eigenständig zu tunenden Ähnlichkeitskanal vermischt wird.
+- **`document_id`-Nachreichen:** über einen `options`-Parameter von
+  `server.js` durch `processTags`/`getOrCreateCorrespondent`/
+  `getOrCreateDocumentType` bis zu `_recordEntityQueue` durchgereicht. Kein
+  Schema-Change — `recordCreatedAndQueued` und `insertQueueEntry` nehmen
+  `documentId` bereits entgegen, nur kein Aufrufer hat ihn bisher gesetzt.
+- **Auth für `routes/review.js`:** korrigiert gegenüber dem ersten
+  Planungsstand — `routes/auth.js` exportiert bereits `isAuthenticated`
+  (Redirect) und `authenticateJWT` (JSON 401/403), von `routes/setup.js`
+  importiert, aber nie genutzt. `routes/review.js` importiert direkt von
+  dort; keine neue `middleware/auth.js`, keine dritte Kopie derselben Logik.
+- **Merge-Bestätigung:** zweistufig. Erster Klick ruft `mergeEntity` mit
+  `dryRun: true` auf und zeigt die betroffenen Dokumente an, erst der zweite
+  Klick löst den echten Merge aus.
+- **Altbestands-Durchlauf:** synchroner Request pro Entity-Typ, ausgelöst über
+  einen Button auf der Review-Seite — bei den gemessenen Bestandsgrößen
+  (~40 Tags, 17 Dokumentarten, 16 Korrespondenten) wenige tausend
+  Vergleichspaare ohne Netzwerk-Call, kein Hintergrund-Job nötig.
+
+## Phase 4 — Embeddings-Ähnlichkeitskanal (skizziert)
+
+Aus Phase 3 herausgelöst (Planungsentscheidung 2026-08-01), damit Review-UI/
+Merge/Altbestand und ein neuer, eigenständig zu tunender Ähnlichkeitskanal
+nicht in einem Plan vermischt werden — konsistent mit dem Prinzip, dass jede
+Phase einzeln geplant und abgenommen wird.
+
+Laut Messung aus Phase 2 (Task 11) strukturell nötig, nicht optional: reine
+Trigram-Ähnlichkeit erkennt orthografisch ferne Synonyme wie
+`Entgeltabrechnung`/`Verdienstbescheinigung` (0.10) oder
+`Entgeltabrechnung`/`Payroll Statement` (0.06) bei keiner sinnvollen Schwelle.
+Näheres in
+[docs/superpowers/specs/2026-08-01-klassifikations-konsistenz-design.md](../superpowers/specs/2026-08-01-klassifikations-konsistenz-design.md),
+Abschnitt „Bewusst ausgeschlossen". Noch nicht entworfen — eigener
+Design-Durchlauf folgt nach Phase 3.
+
+## Phase 5 — Fingerprint (skizziert)
 
 Fingerprint aus Korrespondent und Dokumentstruktur erkennt wiederkehrende
 Dokumente; bei Treffer wird die frühere Klassifikation als starker Vorschlag
-übernommen. Wird erst entworfen, wenn Phase 1 bis 3 laufen und gemessen ist,
+übernommen. Wird erst entworfen, wenn Phase 1 bis 4 laufen und gemessen ist,
 wie viel Inkonsistenz dann überhaupt noch bleibt.
 
 ## Offene Risiken

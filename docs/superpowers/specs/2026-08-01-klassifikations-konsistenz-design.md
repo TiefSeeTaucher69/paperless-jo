@@ -284,6 +284,73 @@ entscheiden.
 
 ## Phase 3 — Review-UI, Merge, Altbestand
 
+### Präzisierungen aus der Planung (2026-08-01, `superpowers:brainstorming`)
+
+**Scope:** Embeddings (Ansatz B) bleiben außerhalb dieser Phase, obwohl die
+Messung sie für Synonym-Duplikate wie `Entgeltabrechnung`/
+`Verdienstbescheinigung` als nötig zeigt (siehe „Bewusst ausgeschlossen").
+Grund: Review-UI/Merge/Altbestand und ein neuer, eigenständig zu tunender
+Ähnlichkeitskanal sind zwei unterschiedliche Bausteine — vermischt in einem
+Plan wäre Phase 3 zu groß und schwer einzeln abzunehmen. Embeddings wird
+eigene Phase 4 in der Roadmap, nach Phase 3 entworfen.
+
+**`document_id`-Nachreichen:** kleine additive Signaturänderung statt
+Herleitung im Nachhinein. `server.js` reicht die Dokument-ID über ein
+`options`-Objekt an `processTags`, `getOrCreateCorrespondent` und
+`getOrCreateDocumentType` durch; diese reichen es an
+`_recordEntityQueue(type, name, id, decision, documentId)` weiter, das es an
+den bereits vorhandenen `documentId`-Parameter von
+`entityResolver.recordCreatedAndQueued` übergibt. Weder `entityStore` noch
+das Datenbankschema ändern sich — beide akzeptieren `documentId` schon,
+nur setzt ihn aktuell kein Aufrufer. Der doppelte `buildUpdateData`-Pfad in
+`routes/setup.js` bekommt die ID auf demselben Weg mit, ohne dass die
+Duplizierung angefasst wird.
+
+**Auth:** Korrektur gegenüber dem ersten Planungsstand — `routes/auth.js`
+exportiert bereits `isAuthenticated` (Redirect zu `/login`) und
+`authenticateJWT` (JSON 401/403), funktional identisch zu dem, was eine neue
+`middleware/auth.js` liefern würde, inklusive API-Key-Unterstützung.
+`routes/setup.js` importiert beide bereits (`routes/setup.js:20`), nutzt sie
+aber nicht — die inline definierte Middleware dort dupliziert dieselbe Logik
+zusätzlich um den „ist die App konfiguriert"-Redirect. Statt eine weitere,
+dritte Kopie in `middleware/auth.js` anzulegen, importiert `routes/review.js`
+`isAuthenticated`/`authenticateJWT` direkt aus `routes/auth.js` — keine neue
+Datei, keine Duplikation, `routes/setup.js` bleibt unangetastet.
+
+**Endpunkte in `routes/review.js`:**
+
+| Methode | Pfad | Auth | Zweck |
+|---|---|---|---|
+| GET | `/review` | `isAuthenticated` | Seite mit offenen Queue-Einträgen |
+| POST | `/api/review/:id/merge` | `authenticateJWT` | Dry-Run-Vorschau oder echter Merge, per Body-Flag `dryRun` |
+| POST | `/api/review/:id/reject` | `authenticateJWT` | Setzt `status='rejected'` |
+| POST | `/api/review/backfill/:entityType` | `authenticateJWT` | Löst Altbestands-Durchlauf für einen Typ aus |
+
+**Merge-Bestätigung ist zweistufig:** erster Klick ruft `mergeEntity` mit
+`dryRun: true` auf, UI zeigt `affectedCount` und die betroffenen
+Dokument-IDs in einem Bestätigungsdialog; erst der zweite Klick sendet
+`dryRun: false` und löst Alias-Schreiben plus `status='merged'` aus. Schlägt
+der echte Merge fehl, bleibt der Queue-Eintrag `open`, es wird nichts
+gelöscht (siehe „Fehlerverhalten").
+
+**Altbestands-Durchlauf läuft synchron,** ausgelöst über einen Button je
+Entity-Typ auf der Review-Seite. Bei den gemessenen Bestandsgrößen (~40 Tags,
+17 Dokumentarten, 16 Korrespondenten) sind das wenige tausend Vergleichspaare
+ohne Netzwerk-Call — kein Hintergrund-Job-Mechanismus nötig, den es im
+Projekt noch nicht gibt. Der Vergleich ruft dabei Normalisierung und
+Ähnlichkeit direkt auf, nicht die volle Kaskade — Stufen 1–3 (Alias-Tabelle,
+exakter Treffer, Normalisierung-gleich) sind sinnlos, wenn beide Seiten des
+Paares bereits im Bestand existieren.
+
+**`mergeEntity` nutzt den bestehenden Axios-Client** (`this.client` in
+`paperlessService.js`, bereits mit `baseURL` und Token konfiguriert) statt
+einer neuen Instanz — Muster wie alle bisherigen API-Aufrufe in dieser Datei.
+
+**Dashboard-Zähler:** neue `.stat-box` im bestehenden `material-card`
+(gleiches Muster wie die übrigen Kacheln in `views/dashboard.ejs`), zeigt
+`COUNT(*) FROM entity_review_queue WHERE status='open'`, klickbar zu
+`/review`.
+
 ### Review-Seite
 
 Neu: `views/review.ejs` unter dem bestehenden `layout.ejs` sowie
@@ -405,7 +472,9 @@ Fehlerpfad fällt auf das heutige Verhalten zurück.
   Gesicht. Reine String-Ähnlichkeit kann diese Klasse von Dubletten
   grundsätzlich nicht auflösen, unabhängig von der Schwellwert-Wahl.
   Ansatz B (Embeddings) ist für genau diesen Fall weiterhin nötig, nicht nur
-  eine Option — Vormerkung für Phase 3 oder eine eigene Phase.
+  eine Option. Entscheidung aus der Phase-3-Planung (2026-08-01): eigene
+  Phase 4, nicht Teil von Phase 3 — siehe Roadmap und Abschnitt
+  „Präzisierungen aus der Planung" oben.
 
   Eine weitere Konsequenz der Messung: der ursprünglich geschätzte
   `JUDGE_MIN = 0.65` liegt oberhalb der gemessenen Ähnlichkeit für
