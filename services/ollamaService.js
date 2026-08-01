@@ -509,6 +509,32 @@ The custom_fields are optional; only fill in values you actually find in the doc
     }
 
     /**
+     * Normalize document_date to YYYY-MM-DD. Accepts ISO as-is and converts
+     * unambiguous German DD.MM.YYYY notation (observed in the baseline run
+     * alongside correct ISO output from the same prompt). Anything else is
+     * dropped rather than guessed, so the caller's existing fallback to the
+     * document's current created date applies instead of writing a wrong one.
+     * @param {*} value
+     * @returns {string|null}
+     */
+    _normalizeDocumentDate(value) {
+        if (typeof value !== 'string') return null;
+        const trimmed = value.trim();
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            return trimmed;
+        }
+
+        const german = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        if (german) {
+            const [, day, month, year] = german;
+            return `${year}-${month}-${day}`;
+        }
+
+        return null;
+    }
+
+    /**
      * Defensive post-processing for a parsed model response. Runs
      * unconditionally after every successful parse, regardless of which
      * branch of _processOllamaResponse/_parseResponse produced it.
@@ -522,6 +548,14 @@ The custom_fields are optional; only fill in values you actually find in the doc
             if (doc.tags.length < before) {
                 console.warn(`[WARNING] Dropped ${before - doc.tags.length} tag(s) that looked like extracted data rather than category labels`);
             }
+        }
+
+        if (doc.document_date) {
+            const normalized = this._normalizeDocumentDate(doc.document_date);
+            if (normalized !== doc.document_date) {
+                console.warn(`[WARNING] document_date "${doc.document_date}" did not match YYYY-MM-DD, normalized to ${normalized ?? '(verworfen, Aufrufer faellt auf doc.created zurueck)'}`);
+            }
+            doc.document_date = normalized;
         }
 
         return doc;
