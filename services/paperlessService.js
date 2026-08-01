@@ -1141,8 +1141,12 @@ async searchForExistingCorrespondent(correspondent) {
             return existingCorrespondent;
         }
 
-        await this.ensureCorrespondentCache();
-        const decision = await this._resolveEntity('correspondent', name, Array.from(this.correspondentCache.values()));
+        let existingCorrespondents = [];
+        if (config.entityResolver.enabled) {
+            await this.ensureCorrespondentCache();
+            existingCorrespondents = Array.from(this.correspondentCache.values());
+        }
+        const decision = await this._resolveEntity('correspondent', name, existingCorrespondents);
 
         if (decision.action === 'skip') {
             return null;
@@ -1245,8 +1249,12 @@ async getOrCreateDocumentType(name) {
           return existingDocType;
       }
 
-      await this.ensureDocumentTypeCache();
-      const decision = await this._resolveEntity('document_type', name, Array.from(this.documentTypeCache.values()));
+      let existingDocumentTypes = [];
+      if (config.entityResolver.enabled) {
+          await this.ensureDocumentTypeCache();
+          existingDocumentTypes = Array.from(this.documentTypeCache.values());
+      }
+      const decision = await this._resolveEntity('document_type', name, existingDocumentTypes);
 
       if (decision.action === 'skip') {
           return null;
