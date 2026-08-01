@@ -1,0 +1,154 @@
+<!-- views/review.ejs -->
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Queue - Paperless-AI</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <style>
+        .modal {
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .modal.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <button id="themeToggle" class="theme-toggle">
+        <i class="fas fa-moon dark:fas fa-sun"></i>
+    </button>
+
+    <div class="layout-container">
+        <button id="mobileMenuButton" class="mobile-menu-button">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="/favicon.ico" class="no-invert" alt="Paperless AI Logo" style="height: 60px;">
+                <h1 class="brand-title">Paperless-AI<small style="display: block;"><%= version %></small></h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li><a href="/dashboard" class="sidebar-link"><i class="fas fa-home"></i><span>Dashboard</span></a></li>
+                    <li><a href="/manual" class="sidebar-link"><i class="fas fa-file-alt"></i><span>Manual</span></a></li>
+                    <li><a href="/chat" class="sidebar-link"><i class="fa-solid fa-comment"></i><span>Chat</span></a></li>
+                    <li><a href="/history" class="sidebar-link"><i class="fa-solid fa-clock-rotate-left"></i><span>History</span></a></li>
+                    <li><a href="/review" class="sidebar-link active"><i class="fa-solid fa-code-compare"></i><span>Review Queue</span></a></li>
+                    <li><a href="/settings" class="sidebar-link"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+                    <li><a href="/logout" class="sidebar-link"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="content-wrapper">
+                <div class="content-header flex justify-between items-center mb-6">
+                    <h1 class="content-title">Review Queue</h1>
+                </div>
+
+                <div class="flex flex-wrap gap-4 mb-6">
+                    <button class="backfill-btn px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors" data-entity-type="tag">Altbestand: Tags pruefen</button>
+                    <button class="backfill-btn px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors" data-entity-type="correspondent">Altbestand: Korrespondenten pruefen</button>
+                    <button class="backfill-btn px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors" data-entity-type="document_type">Altbestand: Dokumentarten pruefen</button>
+                </div>
+
+                <div class="material-card">
+                    <div class="overflow-x-auto">
+                        <table class="w-full" id="reviewTable">
+                            <thead>
+                                <tr>
+                                    <th>Typ</th>
+                                    <th>Vorschlag</th>
+                                    <th>Kandidat</th>
+                                    <th>Aehnlichkeit</th>
+                                    <th>Judge</th>
+                                    <th>Dokument</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% queue.forEach(function(entry) { %>
+                                <tr data-queue-id="<%= entry.id %>">
+                                    <td><%= entry.entity_type %></td>
+                                    <td><%= entry.proposed_name %></td>
+                                    <td><%= entry.candidate_name %></td>
+                                    <td><%= entry.similarity.toFixed(2) %></td>
+                                    <td><%= entry.llm_verdict || '-' %></td>
+                                    <td>
+                                        <% if (entry.documentLink) { %>
+                                            <a href="<%= entry.documentLink %>" target="_blank" class="text-blue-500 hover:underline">Ansehen</a>
+                                        <% } else { %>
+                                            <span class="text-gray-400">-</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <button class="merge-btn px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" data-id="<%= entry.id %>">Zusammenfuehren</button>
+                                            <button class="reject-btn px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors" data-id="<%= entry.id %>">Sind verschieden</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <% }); %>
+                                <% if (queue.length === 0) { %>
+                                <tr><td colspan="7" class="text-center text-gray-400 py-6">Keine offenen Eintraege</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="mergeConfirmModal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">Merge bestaetigen</h3>
+                <button class="modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-content">
+                <p class="mb-4" id="mergePreviewText"></p>
+                <div class="flex justify-end gap-4">
+                    <button id="cancelMerge" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">Abbrechen</button>
+                    <button id="confirmMerge" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">Endgueltig zusammenfuehren</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuButton = document.getElementById('mobileMenuButton');
+            const sidebar = document.querySelector('.sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+            function toggleSidebar(event) {
+                event.stopPropagation();
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+            }
+
+            mobileMenuButton.addEventListener('click', toggleSidebar);
+            sidebarOverlay.addEventListener('click', function(event) {
+                event.stopPropagation();
+                if (sidebar.classList.contains('active')) toggleSidebar(event);
+            });
+            sidebar.addEventListener('click', function(event) { event.stopPropagation(); });
+        });
+    </script>
+    <script src="js/review.js"></script>
+</body>
+</html>
