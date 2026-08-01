@@ -8,6 +8,7 @@ const AIServiceFactory = require('./services/aiServiceFactory');
 const documentModel = require('./models/document');
 const setupService = require('./services/setupService');
 const setupRoutes = require('./routes/setup');
+const reviewRoutes = require('./routes/review');
 
 // Add environment variables for RAG service if not already set
 process.env.RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://localhost:8000';
@@ -433,6 +434,7 @@ async function scanDocuments() {
 
 // Routes
 app.use('/', setupRoutes);
+app.use('/', reviewRoutes);
 const authRoutes = require('./routes/auth');
 const ragRoutes = require('./routes/rag');
 
