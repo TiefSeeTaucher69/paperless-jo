@@ -20,7 +20,8 @@
 - Log-Präfixe wie im Bestand: `[DEBUG]`, `[ERROR]`, `[WARNING]`.
 - `data/.env` enthält echte Zugangsdaten. Weder Tests noch Logs noch Commit-Nachrichten dürfen Werte daraus ausgeben. Tests setzen ihre Env-Variablen selbst und verlassen sich nie auf `data/.env`.
 - Jede Änderung muss bei **fehlenden** Env-Variablen ein Verhalten liefern, das zum heutigen Stand passt oder es verbessert — nie einen Absturz.
-- Arbeitsbranch: `docs/klassifikations-konsistenz` (bereits ausgecheckt). Erste Aufgabe wechselt auf `feat/phase1-determinismus`.
+- **Vor Task 1:** `git checkout docs/klassifikations-konsistenz` — dieser Branch trägt Spec, Roadmap, diesen Plan sowie den bereits gebauten Dry-Run-Harness (`scripts/dry-run-eval.js`, `scripts/export-entity-fixture.js`). Der Branch ist rein lokal, hat keinen Remote-Tracking-Branch. Task 1, Step 1 zweigt von dort auf `feat/phase1-determinismus` ab.
+- `data/.env` muss vorhanden sein, `PAPERLESS_API_URL` muss auf `/api` enden (sonst liefert Paperless die Login-Seite statt JSON). Mit `node scripts/dry-run-eval.js --limit 1` lässt sich das vorab prüfen, ohne etwas zu verändern.
 - Token-Schätzung bleibt bei `Math.ceil(length / 4)`. Genauere Zählung ist ausdrücklich nicht Teil dieser Phase.
 
 ## File Structure
@@ -1811,9 +1812,12 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 Run: `npm test`
 Expected: PASS — 53 Tests, 0 Fehlschläge.
 
-- [ ] **Determinismus am echten Modell prüfen**
-
-Verarbeite dasselbe Dokument zweimal und vergleiche das Ergebnis. Erwartung: identische Tags, identischer Titel, identische Dokumentart, identischer Korrespondent.
+> **Nicht `npm run dev` / `npm start` verwenden, um Determinismus zu prüfen.**
+> `DISABLE_AUTOMATIC_PROCESSING` ist in `data/.env` nicht gesetzt (Default: aus)
+> und `PROCESS_PREDEFINED_DOCUMENTS=yes` ist gesetzt — ein normaler Serverstart
+> verarbeitet sofort Dokumente und schreibt nach Paperless. Für alle folgenden
+> Prüfungen ausschließlich `scripts/dry-run-eval.js` verwenden; es ruft nur
+> `aiService.analyzeDocument` auf und schreibt nie zurück.
 
 - [ ] **Bestandslisten im Prompt prüfen**
 
@@ -1830,7 +1834,9 @@ Vergleiche den neuen Report unter `data/eval/` mit
 Stabilitätsrate sinkt deutlich unter 10 von 10 instabilen Dokumenten; die
 Anrede-/Anschrift-im-Namen- und Datums-Tag-Treffer aus der Baseline treten
 seltener oder gar nicht mehr auf. Beide Reports enthalten personenbezogene
-Daten und bleiben unter `data/eval/` (nicht in git).
+Daten und bleiben unter `data/eval/` (nicht in git — auf einem frischen
+Checkout oder einer anderen Maschine existiert die alte Baseline-Datei
+möglicherweise nicht; dieser Lauf wird dann selbst zur Baseline für Phase 2).
 
 - [ ] **Roadmap-Status fortschreiben**
 
