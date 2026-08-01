@@ -667,14 +667,10 @@ The custom_fields are optional; only fill in values you actually find in the doc
      * @param {Object} response - Response object
      */
     async _logPromptAndResponse(systemPrompt, userPrompt, response) {
-        const content = '================================================================================\n'
-            + '--- SYSTEM ---\n' + systemPrompt + '\n\n'
-            + '--- USER ---\n' + userPrompt + '\n\n'
-            + JSON.stringify(response)
-            + '\n\n'
+        const responseBlock = '--- RESPONSE ---\n' + JSON.stringify(response) + '\n'
             + '================================================================================\n\n';
 
-        await writePromptToFile(content);
+        await writePromptToFile(systemPrompt, userPrompt + '\n\n' + responseBlock);
     }
 
     /**
