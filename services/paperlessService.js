@@ -9,9 +9,14 @@ class PaperlessService {
   constructor() {
     this.client = null;
     this.tagCache = new Map();
+    this.correspondentCache = new Map();
+    this.documentTypeCache = new Map();
     this.customFieldCache = new Map();
     this.lastTagRefresh = 0;
+    this.lastCorrespondentRefresh = 0;
+    this.lastDocumentTypeRefresh = 0;
     this.CACHE_LIFETIME = 3000; // 3 Sekunden
+    this._entityResolverInstance = null;
   }
 
   initialize() {
@@ -111,6 +116,44 @@ class PaperlessService {
         throw error;
       }
     }
+
+  async ensureCorrespondentCache() {
+    const now = Date.now();
+    if (this.correspondentCache.size === 0 || (now - this.lastCorrespondentRefresh) > this.CACHE_LIFETIME) {
+      await this.refreshCorrespondentCache();
+    }
+  }
+
+  async refreshCorrespondentCache() {
+    try {
+      const all = await this.listCorrespondentsNames();
+      this.correspondentCache.clear();
+      all.forEach(c => this.correspondentCache.set(c.name.toLowerCase(), c));
+      this.lastCorrespondentRefresh = Date.now();
+      console.log(`[DEBUG] Correspondent cache refreshed. Found ${this.correspondentCache.size} correspondents.`);
+    } catch (error) {
+      console.error('[ERROR] refreshing correspondent cache:', error.message);
+    }
+  }
+
+  async ensureDocumentTypeCache() {
+    const now = Date.now();
+    if (this.documentTypeCache.size === 0 || (now - this.lastDocumentTypeRefresh) > this.CACHE_LIFETIME) {
+      await this.refreshDocumentTypeCache();
+    }
+  }
+
+  async refreshDocumentTypeCache() {
+    try {
+      const all = await this.listDocumentTypesNames();
+      this.documentTypeCache.clear();
+      all.forEach(dt => this.documentTypeCache.set(dt.name.toLowerCase(), dt));
+      this.lastDocumentTypeRefresh = Date.now();
+      console.log(`[DEBUG] Document type cache refreshed. Found ${this.documentTypeCache.size} document types.`);
+    } catch (error) {
+      console.error('[ERROR] refreshing document type cache:', error.message);
+    }
+  }
 
   async initializeWithCredentials(apiUrl, apiToken) {
     this.client = axios.create({
