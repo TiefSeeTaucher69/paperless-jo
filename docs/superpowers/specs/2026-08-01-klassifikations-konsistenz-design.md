@@ -249,8 +249,10 @@ CREATE TABLE entity_review_queue (
   id INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL,
   proposed_name TEXT NOT NULL,
+  proposed_normalized TEXT NOT NULL, -- fuer den Negativ-Cache-Lookup, siehe unten
   proposed_id INTEGER,              -- der neu angelegte Eintrag
   candidate_name TEXT NOT NULL,
+  candidate_normalized TEXT NOT NULL,
   candidate_id INTEGER NOT NULL,
   similarity REAL NOT NULL,
   llm_verdict TEXT,
@@ -259,12 +261,21 @@ CREATE TABLE entity_review_queue (
   document_id INTEGER,
   created_at TEXT NOT NULL,
   resolved_at TEXT,
-  UNIQUE(entity_type, proposed_name, candidate_name)
+  UNIQUE(entity_type, proposed_normalized, candidate_normalized)
 );
 ```
 
 Eine Tabelle dient zugleich als Queue und als Negativ-Cache; `status='rejected'`
 ist beides. Das `UNIQUE`-Constraint verhindert Mehrfacheinträge desselben Paars.
+
+**Nachtrag aus der Implementierung (Task 11, finaler Review):** Der
+Negativ-Cache-Lookup (`findRejectedPair`) muss auf normalisierten Namen
+arbeiten, nicht auf den rohen — sonst verfehlt eine Schreibvariante
+(Gross-/Kleinschreibung, Whitespace) eines bereits abgelehnten Paars den
+Cache und löst einen unnötigen erneuten Judge-Call aus. Deshalb tragen
+`proposed_normalized`/`candidate_normalized` das `UNIQUE`-Constraint;
+`proposed_name`/`candidate_name` bleiben roh erhalten, für die
+Review-UI in Phase 3 (Anzeige des tatsächlichen Vorschlags).
 
 Bekannte Einschränkung: Ein Alias hängt an einer Paperless-ID. Wird der Eintrag
 dort von Hand gelöscht, zeigt der Alias ins Leere. Der Resolver behandelt das
@@ -278,6 +289,15 @@ entscheiden.
 Neu: `views/review.ejs` unter dem bestehenden `layout.ejs` sowie
 `routes/review.js` als eigene Route, statt `routes/setup.js` weiter wachsen zu
 lassen.
+
+**Offener Punkt aus Phase 2:** `document_id` in `entity_review_queue` wird
+bislang nie befüllt — `paperlessService`s drei Einhängepunkte kennen die
+Dokument-ID nicht, nur `server.js`s `processDocument`/`buildUpdateData` tut
+das, und dorthin reicht Phase 2 bewusst nicht (siehe „Bewusst
+ausgeschlossen"). Phase 3 muss die ID entweder durch `options` bis zu
+`_recordEntityQueue` durchreichen (kleine additive Signaturänderung in
+`processTags`/`getOrCreateCorrespondent`/`getOrCreateDocumentType`) oder den
+„Link zum auslösenden Dokument" der Review-Seite anders herleiten.
 
 Die Seite listet offene Paare mit Typ, Vorschlag gegen Kandidat,
 Ähnlichkeitswert, Judge-Urteil samt Begründung und Link zum auslösenden
@@ -371,6 +391,27 @@ Fehlerpfad fällt auf das heutige Verhalten zurück.
 
 - **Embeddings als zweiter Ähnlichkeitskanal.** Zurückgestellt; die Entscheidung
   fällt anhand der Tuning-Ergebnisse aus Phase 2.
+
+  **Ergebnis der Messung (Task 11, finaler Review):** Trigram-Ähnlichkeit
+  erkennt orthografisch nahe Varianten zuverlässig (`Meldebescheid` /
+  `Meldebescheinigung` = 0.71, `Meldebeschreibung` / `Meldebescheinigung` =
+  0.63), scheitert aber strukturell an orthografisch fernen Synonymen
+  (`Entgeltabrechnung` / `Verdienstbescheinigung` = 0.10,
+  `Entgeltabrechnung` / `Payroll Statement` = 0.06). Das ist kein
+  Schwellwert-Problem: Stufe 4 wählt je Vorschlag nur den
+  ähnlichsten Kandidaten für den Judge aus, und bei einer Ähnlichkeit von
+  0.06–0.10 wird dieses Paar bei keiner sinnvollen `JUDGE_MIN`-Einstellung
+  je als Kandidat ausgewählt — der Judge bekommt das Paar also nie zu
+  Gesicht. Reine String-Ähnlichkeit kann diese Klasse von Dubletten
+  grundsätzlich nicht auflösen, unabhängig von der Schwellwert-Wahl.
+  Ansatz B (Embeddings) ist für genau diesen Fall weiterhin nötig, nicht nur
+  eine Option — Vormerkung für Phase 3 oder eine eigene Phase.
+
+  Eine weitere Konsequenz der Messung: der ursprünglich geschätzte
+  `JUDGE_MIN = 0.65` liegt oberhalb der gemessenen Ähnlichkeit für
+  `Meldebeschreibung`/`Meldebescheinigung` (0.63) — mit dem geschätzten Wert
+  hätte dieses Paar den Judge nie erreicht. Die gemessenen Werte aus Task 11
+  stehen in `data/.env` (nicht im Repository, enthält Zugangsdaten).
 - **Geschlossenes Vokabular per JSON-Schema-`enum`.** Widerspricht dem Wunsch
   nach offenem Vokabular und sprengt bei wachsender Liste den Kontext eines
   7B-Modells.
