@@ -54,3 +54,105 @@ test('Stufe 3: normalisierter Treffer -> map, Alias wird geschrieben', async () 
   assert.ok(alias, 'Alias sollte geschrieben worden sein');
   assert.strictEqual(alias.source, 'auto');
 });
+
+test('Stufe 4a: Aehnlichkeit >= AUTO_THRESHOLD -> map, Alias source=auto', async () => {
+  const store = new EntityStore(':memory:');
+  const resolver = makeResolver({ store });
+
+  // "Verdienstbescheinigungen"/"Verdienstbescheinigung" liegen mit der echten
+  // Trigram-Dice-Implementierung bei ~0.91, also ueber dem Default-AUTO_THRESHOLD (0.90).
+  const result = await resolver.resolve('document_type', 'Verdienstbescheinigungen', [{ id: 1, name: 'Verdienstbescheinigung' }]);
+  assert.strictEqual(result.action, 'map');
+  assert.strictEqual(result.via, 'similarity');
+  assert.strictEqual(store.findAlias('document_type', 'verdienstbescheinigungen').source, 'auto');
+});
+
+test('Stufe 4b: als rejected bekanntes Paar -> create, kein LLM-Call trotz hoher Aehnlichkeit', async () => {
+  const store = new EntityStore(':memory:');
+  store.insertQueueEntry({
+    entityType: 'document_type', proposedName: 'Verdienstbescheinigungen', proposedId: 9,
+    candidateName: 'Verdienstbescheinigung', candidateId: 1, similarity: 0.91,
+    llmVerdict: 'different', llmReason: 'Nutzerentscheidung', status: 'rejected'
+  });
+  const resolver = makeResolver({ store }); // judge wirft, falls aufgerufen
+
+  const result = await resolver.resolve('document_type', 'Verdienstbescheinigungen', [{ id: 1, name: 'Verdienstbescheinigung' }]);
+  assert.deepStrictEqual(result, { action: 'create' });
+});
+
+test('Stufe 4c: JUDGE_MIN <= Aehnlichkeit < AUTO_THRESHOLD, Judge sagt same -> map, Alias source=llm', async () => {
+  const store = new EntityStore(':memory:');
+  const judge = async (type, a, b) => ({ verdict: 'same', reason: 'gleiche Sache, andere Schreibweise' });
+  const resolver = new EntityResolver({ store, judge, config: { autoThreshold: 0.99, judgeMin: 0.1 } });
+
+  const result = await resolver.resolve('document_type', 'Meldebeschreibung', [{ id: 4, name: 'Meldebescheinigung' }]);
+  assert.strictEqual(result.action, 'map');
+  assert.strictEqual(result.via, 'llm');
+  assert.strictEqual(store.findAlias('document_type', 'meldebeschreibung').source, 'llm');
+});
+
+test('Stufe 4c: Judge sagt different -> create, Negativ-Eintrag geschrieben', async () => {
+  const store = new EntityStore(':memory:');
+  const judge = async () => ({ verdict: 'different', reason: 'unterschiedliche Dokumentarten' });
+  const resolver = new EntityResolver({ store, judge, config: { autoThreshold: 0.99, judgeMin: 0.1 } });
+
+  const result = await resolver.resolve('document_type', 'Verdienstbescheinigung', [{ id: 4, name: 'Meldebescheinigung' }]);
+  assert.strictEqual(result.action, 'create');
+  assert.ok(store.findRejectedPair('document_type', 'Verdienstbescheinigung', 'Meldebescheinigung'));
+});
+
+test('Stufe 4c: Judge sagt unsure -> create_and_queue, ohne Queue-Eintrag zu schreiben', async () => {
+  const store = new EntityStore(':memory:');
+  const judge = async () => ({ verdict: 'unsure', reason: 'nicht eindeutig' });
+  const resolver = new EntityResolver({ store, judge, config: { autoThreshold: 0.99, judgeMin: 0.1 } });
+
+  const result = await resolver.resolve('document_type', 'Verdienstbescheinigung', [{ id: 4, name: 'Meldebescheinigung' }]);
+  assert.strictEqual(result.action, 'create_and_queue');
+  assert.deepStrictEqual(result.candidate, { id: 4, name: 'Meldebescheinigung' });
+  assert.strictEqual(result.verdict, 'unsure');
+  assert.strictEqual(store.findRejectedPair('document_type', 'Verdienstbescheinigung', 'Meldebescheinigung'), null);
+});
+
+test('Fehlerverhalten: Judge wirft (nicht erreichbar) -> unsure statt Absturz', async () => {
+  const store = new EntityStore(':memory:');
+  const judge = async () => { throw new Error('ECONNREFUSED'); };
+  const resolver = new EntityResolver({ store, judge, config: { autoThreshold: 0.99, judgeMin: 0.1 } });
+
+  const result = await resolver.resolve('document_type', 'Verdienstbescheinigung', [{ id: 4, name: 'Meldebescheinigung' }]);
+  assert.strictEqual(result.action, 'create_and_queue');
+  assert.strictEqual(result.verdict, 'unsure');
+});
+
+test('Fehlerverhalten: Judge liefert unparsbares Urteil -> unsure', async () => {
+  const store = new EntityStore(':memory:');
+  const judge = async () => ({ verdict: 'ja klar', reason: 'kaputte Antwort' });
+  const resolver = new EntityResolver({ store, judge, config: { autoThreshold: 0.99, judgeMin: 0.1 } });
+
+  const result = await resolver.resolve('document_type', 'Verdienstbescheinigung', [{ id: 4, name: 'Meldebescheinigung' }]);
+  assert.strictEqual(result.action, 'create_and_queue');
+  assert.strictEqual(result.verdict, 'unsure');
+});
+
+test('Stufe 4d: Aehnlichkeit unter JUDGE_MIN -> create, kein Judge-Call', async () => {
+  const resolver = makeResolver(); // judge wirft, falls aufgerufen
+  const result = await resolver.resolve('correspondent', 'Voellig Anderer Name', [{ id: 1, name: 'Stadtwerke Musterstadt' }]);
+  assert.deepStrictEqual(result, { action: 'create' });
+});
+
+test('recordCreatedAndQueued schreibt den Queue-Eintrag mit der echten proposed_id', async () => {
+  const store = new EntityStore(':memory:');
+  const resolver = makeResolver({ store });
+
+  resolver.recordCreatedAndQueued({
+    type: 'document_type', proposedName: 'Verdienstbescheinigung', proposedId: 55,
+    candidate: { id: 4, name: 'Meldebescheinigung' }, similarity: 0.42, verdict: 'unsure',
+    documentId: 123
+  });
+
+  const found = store.db.prepare(
+    `SELECT * FROM entity_review_queue WHERE proposed_name = ? AND candidate_name = ?`
+  ).get('Verdienstbescheinigung', 'Meldebescheinigung');
+  assert.strictEqual(found.proposed_id, 55);
+  assert.strictEqual(found.status, 'open');
+  assert.strictEqual(found.document_id, 123);
+});
