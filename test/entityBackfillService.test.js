@@ -63,6 +63,31 @@ test('run ueberspringt bereits als rejected bekannte Paare', () => {
   }
 });
 
+test('run ueberschreibt den llm_verdict eines bereits offenen Queue-Eintrags nicht', () => {
+  const store = new EntityStore(':memory:');
+  try {
+    store.insertQueueEntry({
+      entityType: 'tag',
+      proposedName: 'Mahnung', proposedId: 2,
+      candidateName: 'Mahnungen', candidateId: 1,
+      similarity: 0.9, llmVerdict: 'unsure', llmReason: 'Vom Live-Pfad gesetzt', status: 'open', documentId: null
+    });
+
+    const service = new EntityBackfillService({ store, judgeMin: 0.5 });
+    const result = service.run('tag', [
+      { id: 1, name: 'Mahnungen' },
+      { id: 2, name: 'Mahnung' }
+    ]);
+
+    assert.strictEqual(result.inserted, 0);
+    const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE entity_type = 'tag'`).get();
+    assert.strictEqual(row.llm_verdict, 'unsure');
+    assert.strictEqual(row.status, 'open');
+  } finally {
+    store.close();
+  }
+});
+
 test('run vergleicht jedes Paar nur einmal bei mehr als zwei Eintraegen', () => {
   const store = new EntityStore(':memory:');
   try {
