@@ -2,6 +2,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const { normalizeForType } = require('../services/entityNormalizer');
 
 class EntityStore {
   constructor(dbPath) {
@@ -38,8 +39,10 @@ class EntityStore {
         id INTEGER PRIMARY KEY,
         entity_type TEXT NOT NULL,
         proposed_name TEXT NOT NULL,
+        proposed_normalized TEXT NOT NULL,
         proposed_id INTEGER,
         candidate_name TEXT NOT NULL,
+        candidate_normalized TEXT NOT NULL,
         candidate_id INTEGER NOT NULL,
         similarity REAL NOT NULL,
         llm_verdict TEXT,
@@ -48,7 +51,7 @@ class EntityStore {
         document_id INTEGER,
         created_at TEXT NOT NULL,
         resolved_at TEXT,
-        UNIQUE(entity_type, proposed_name, candidate_name)
+        UNIQUE(entity_type, proposed_normalized, candidate_normalized)
       )
     `).run();
   }
@@ -92,12 +95,15 @@ class EntityStore {
     }
   }
 
-  findRejectedPair(entityType, proposedName, candidateName) {
+  // proposedNormalized/candidateNormalized MUESSEN bereits normalisiert sein (siehe
+  // services/entityNormalizer.js#normalizeForType) - der Aufrufer normalisiert, damit
+  // z.B. "meldebescheinigung" und "Meldebescheinigung" denselben Cache-Eintrag treffen.
+  findRejectedPair(entityType, proposedNormalized, candidateNormalized) {
     try {
       return this.db.prepare(`
         SELECT * FROM entity_review_queue
-        WHERE entity_type = ? AND proposed_name = ? AND candidate_name = ? AND status = 'rejected'
-      `).get(entityType, proposedName, candidateName) || null;
+        WHERE entity_type = ? AND proposed_normalized = ? AND candidate_normalized = ? AND status = 'rejected'
+      `).get(entityType, proposedNormalized, candidateNormalized) || null;
     } catch (error) {
       console.error('[ERROR] entityStore.findRejectedPair:', error.message);
       return null;
@@ -107,18 +113,22 @@ class EntityStore {
   insertQueueEntry({ entityType, proposedName, proposedId, candidateName, candidateId, similarity, llmVerdict, llmReason, status, documentId }) {
     try {
       const now = new Date().toISOString();
+      // proposed_name/candidate_name bleiben roh (fuer Anzeige), proposed_normalized/
+      // candidate_normalized dienen ausschliesslich dem Negativ-Cache-Abgleich in findRejectedPair.
+      const proposedNormalized = normalizeForType(proposedName, entityType);
+      const candidateNormalized = normalizeForType(candidateName, entityType);
       this.db.prepare(`
         INSERT INTO entity_review_queue
-          (entity_type, proposed_name, proposed_id, candidate_name, candidate_id, similarity, llm_verdict, llm_reason, status, document_id, created_at, resolved_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(entity_type, proposed_name, candidate_name) DO UPDATE SET
+          (entity_type, proposed_name, proposed_normalized, proposed_id, candidate_name, candidate_normalized, candidate_id, similarity, llm_verdict, llm_reason, status, document_id, created_at, resolved_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(entity_type, proposed_normalized, candidate_normalized) DO UPDATE SET
           proposed_id = excluded.proposed_id,
           status = excluded.status,
           llm_verdict = excluded.llm_verdict,
           llm_reason = excluded.llm_reason,
           resolved_at = CASE WHEN excluded.status != 'open' THEN excluded.created_at ELSE entity_review_queue.resolved_at END
       `).run(
-        entityType, proposedName, proposedId ?? null, candidateName, candidateId, similarity,
+        entityType, proposedName, proposedNormalized, proposedId ?? null, candidateName, candidateNormalized, candidateId, similarity,
         llmVerdict ?? null, llmReason ?? null, status, documentId ?? null,
         now, status !== 'open' ? now : null
       );

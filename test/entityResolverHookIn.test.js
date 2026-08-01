@@ -478,6 +478,25 @@ test('getOrCreateDocumentType: create_and_queue greift auch im Race-Condition-Re
   }
 });
 
+test('_getEntityResolver(): lazy construction verdrahtet autoThreshold/judgeMin aus config.entityResolver', () => {
+  const originalInstance = paperlessService._entityResolverInstance;
+  const originalDbPath = config.entityResolver.dbPath;
+
+  try {
+    config.entityResolver.dbPath = ':memory:';
+    paperlessService._entityResolverInstance = null;
+
+    const resolver = paperlessService._getEntityResolver();
+
+    assert.strictEqual(resolver.autoThreshold, config.entityResolver.autoThreshold);
+    assert.strictEqual(resolver.judgeMin, config.entityResolver.judgeMin);
+    resolver.store.close();
+  } finally {
+    config.entityResolver.dbPath = originalDbPath;
+    paperlessService._entityResolverInstance = originalInstance;
+  }
+});
+
 test('aktivierter Resolver mit echter EntityResolver/EntityStore-Verdrahtung schreibt echte Zeile in entity_review_queue', async () => {
   const originalInstance = paperlessService._entityResolverInstance;
   const originalSearch = paperlessService.searchForExistingCorrespondent;
