@@ -80,8 +80,6 @@ class ReviewManager {
         } catch (error) {
             console.error('Merge fehlgeschlagen:', error);
             alert('Merge fehlgeschlagen. Bitte erneut versuchen.');
-        } finally {
-            this.pendingMergeId = null;
         }
     }
 
