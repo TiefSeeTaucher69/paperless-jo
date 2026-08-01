@@ -62,6 +62,32 @@ const maskUrl = (url) => {
   }
 };
 
+// Initialize entity resolver thresholds with [0,1] range clamping. Values outside
+// that range would make the similarity cascade behave nonsensically (e.g. a
+// threshold > 1 could never be reached, one < 0 would always be reached), so we
+// clamp and warn rather than silently trusting whatever came from the env.
+const clampThreshold = (value, label) => {
+  if (value < 0 || value > 1) {
+    const clamped = Math.min(1, Math.max(0, value));
+    console.warn(`[WARNING] ${label}=${value} liegt ausserhalb des gueltigen Bereichs [0,1] und wird auf ${clamped} geklemmt`);
+    return clamped;
+  }
+  return value;
+};
+
+const entityResolverAutoThreshold = clampThreshold(
+  parseEnvNumber(process.env.ENTITY_RESOLVER_AUTO_THRESHOLD, 0.90),
+  'ENTITY_RESOLVER_AUTO_THRESHOLD'
+);
+const entityResolverJudgeMin = clampThreshold(
+  parseEnvNumber(process.env.ENTITY_RESOLVER_JUDGE_MIN, 0.65),
+  'ENTITY_RESOLVER_JUDGE_MIN'
+);
+
+if (entityResolverJudgeMin > entityResolverAutoThreshold) {
+  console.warn(`[WARNING] ENTITY_RESOLVER_JUDGE_MIN (${entityResolverJudgeMin}) > ENTITY_RESOLVER_AUTO_THRESHOLD (${entityResolverAutoThreshold}): Stufe 4c (LLM-Judge) ist damit unerreichbar`);
+}
+
 console.log('Loaded environment variables:', {
   PAPERLESS_API_URL: maskUrl(process.env.PAPERLESS_API_URL),
   PAPERLESS_API_TOKEN: '******',
@@ -107,8 +133,8 @@ module.exports = {
   },
   entityResolver: {
     enabled: parseEnvBoolean(process.env.ENTITY_RESOLVER_ENABLED, 'no') === 'yes',
-    autoThreshold: parseEnvNumber(process.env.ENTITY_RESOLVER_AUTO_THRESHOLD, 0.90),
-    judgeMin: parseEnvNumber(process.env.ENTITY_RESOLVER_JUDGE_MIN, 0.65),
+    autoThreshold: entityResolverAutoThreshold,
+    judgeMin: entityResolverJudgeMin,
     dbPath: process.env.ENTITY_RESOLVER_DB_PATH || path.join(process.cwd(), 'data', 'entities.db')
   },
   custom: {
