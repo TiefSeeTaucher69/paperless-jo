@@ -1,14 +1,14 @@
-# 📄 Paperless-AI
+# 📄 paperless-jo
 
-[![GitHub commit activity](https://img.shields.io/github/commit-activity/t/clusterzx/paperless-ai)](https://github.com/clusterzx/paperless-ai/commits/main)
-[![Docker Pulls](https://img.shields.io/docker/pulls/clusterzx/paperless-ai)](https://hub.docker.com/r/clusterzx/paperless-ai)
-[![GitHub Stars](https://img.shields.io/github/stars/clusterzx)](https://github.com/clusterzx)
-[![License](https://img.shields.io/github/license/clusterzx/paperless-ai?cacheSeconds=1)](LICENSE)
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/t/TiefSeeTaucher69/paperless-jo)](https://github.com/TiefSeeTaucher69/paperless-jo/commits/main)
+[![GitHub Stars](https://img.shields.io/github/stars/TiefSeeTaucher69/paperless-jo)](https://github.com/TiefSeeTaucher69/paperless-jo)
+[![License](https://img.shields.io/github/license/TiefSeeTaucher69/paperless-jo?cacheSeconds=1)](LICENSE)
 
-# ⚠️ IMPORTANT NOTICE:
-This repo is currently not maintained. I appreciate all the efforts from the community pushing PRs and creating issues.
-I'm currently rewriting the entire codebase with a more stable, up-to-date architecture. But I'm limited to evenings, and doing support here while also working on the rewrite just isn't feasible for me.
-With the upcoming official AI integration in Paperless-ngx itself, I'm also not sure if I'll complete the rewrite or continue maintaining this repo at all.
+# 🍴 Fork Notice
+
+**paperless-jo** is a personal fork of [Paperless-AI](https://github.com/clusterzx/paperless-ai) by [clusterzx](https://github.com/clusterzx), MIT-licensed. The upstream project is currently unmaintained while its author works on a full rewrite of unclear continuation, so this fork exists to keep evolving the current codebase for a self-hosted homelab setup (Paperless-ngx + local Ollama).
+
+Everything below describes the underlying Paperless-AI project and mostly still applies here; sections specific to the original maintainer's infrastructure (Docker Hub releases, Discord, donations) have been adjusted or removed for this fork.
 
 ---
 
@@ -121,6 +121,8 @@ Then open a Pull Request via GitHub.
 
 ## 🆘 Support & Community
 
+These are the upstream Paperless-AI project's channels, useful for questions about the underlying tool in general. For anything specific to this fork's changes, use [this repo's issues](https://github.com/TiefSeeTaucher69/paperless-jo/issues) instead.
+
 - [Issues](https://github.com/clusterzx/paperless-ai/issues)
 - [Discord](https://discord.gg/AvNekAfK38)
 
@@ -132,9 +134,6 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ---
 
-## 🙏 Support Development
+## 🙏 Credit
 
-[![Patreon](https://img.shields.io/badge/Patreon-F96854?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/c/clusterzx)
-[![PayPal](https://img.shields.io/badge/PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/paypalme/bech0r)
-[![BuyMeACoffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/clusterzx)
-[![Ko-Fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/clusterzx)
+The vast majority of this codebase is [clusterzx](https://github.com/clusterzx)'s original work. If you'd like to support them, see the donation links on the [upstream repository](https://github.com/clusterzx/paperless-ai).
