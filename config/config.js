@@ -10,6 +10,15 @@ const parseEnvBoolean = (value, defaultValue = 'yes') => {
   return value.toLowerCase() === 'true' || value === '1' || value.toLowerCase() === 'yes' ? 'yes' : 'no';
 };
 
+// Helper function to parse numeric env vars with a fallback
+const parseEnvNumber = (value, defaultValue) => {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return defaultValue;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
+};
+
 // Initialize limit functions with defaults
 const limitFunctions = {
   activateTagging: parseEnvBoolean(process.env.ACTIVATE_TAGGING, 'yes'),
@@ -53,6 +62,8 @@ console.log('Loaded environment variables:', {
 
 module.exports = {
   PAPERLESS_AI_VERSION: '3.0.9',
+  // Exported for unit tests
+  _parseEnvNumber: parseEnvNumber,
   CONFIGURED: false,
   disableAutomaticProcessing: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
   predefinedMode: process.env.PROCESS_PREDEFINED_DOCUMENTS,
@@ -75,7 +86,13 @@ module.exports = {
   },
   ollama: {
     apiUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
-    model: process.env.OLLAMA_MODEL || 'llama3.2'
+    model: process.env.OLLAMA_MODEL || 'llama3.2',
+    // Deterministic defaults: classification is a labelling task, not a
+    // creative one. Same document must yield the same answer.
+    temperature: parseEnvNumber(process.env.OLLAMA_TEMPERATURE, 0),
+    seed: parseEnvNumber(process.env.OLLAMA_SEED, 42),
+    numPredict: parseEnvNumber(process.env.OLLAMA_NUM_PREDICT, 512),
+    numCtxMax: parseEnvNumber(process.env.OLLAMA_NUM_CTX_MAX, 8192)
   },
   custom: {
     apiUrl: process.env.CUSTOM_BASE_URL || '',

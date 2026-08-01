@@ -547,11 +547,11 @@ class OllamaService {
             stream: false,
             format: schema,
             options: {
-                temperature: 0.7,
-                top_p: 0.9,
+                temperature: config.ollama.temperature,
+                seed: config.ollama.seed,
+                top_p: 1,
                 repeat_penalty: 1.1,
-                top_k: 7,
-                num_predict: 256,
+                num_predict: config.ollama.numPredict,
                 num_ctx: numCtx
             }
         });
