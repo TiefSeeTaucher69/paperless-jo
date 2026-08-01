@@ -28,7 +28,7 @@ darüber fällt anhand der Tuning-Messung aus Phase 2, nicht vorab.
 |---|---|---|---|
 | 0 | Dry-Run-Harness und Fixture-Export | — | gebaut, Baseline ausstehend |
 | 1 | Determinismus, Prompt-Hygiene, Prompt-Härtung | — | erledigt |
-| 2 | EntityResolver, Alias-Speicher, Schwellwert-Tuning | — | offen |
+| 2 | EntityResolver, Alias-Speicher, Schwellwert-Tuning | — | erledigt |
 | 3 | Review-UI, Merge, Altbestands-Durchlauf | Phase 2 | offen |
 | 4 | Fingerprint für wiederkehrende Dokumente | Phase 1–3 | nur skizziert |
 
@@ -176,6 +176,43 @@ Dokumente und schreibt nach Paperless.
 
 **Abnahmekriterium:** die Tuning-Messung liegt vor und die Schwellwerte sind
 begründet gesetzt. Aus derselben Messung folgt die Entscheidung über Embeddings.
+
+## Befunde aus der Umsetzung von Phase 2 (2026-08-01)
+
+Implementiert per `superpowers:subagent-driven-development`: 11 Tasks
+task-weise per TDD, je mit eigenem Task-Review, plus ein finaler
+Whole-Branch-Review über den gesamten Phase-2-Umfang. Vollständiger
+Implementierungsplan:
+[docs/superpowers/plans/2026-08-01-phase2-entityresolver.md](../superpowers/plans/2026-08-01-phase2-entityresolver.md).
+129/129 Tests grün.
+
+**Schwellwerte sind jetzt gemessen, nicht mehr geschätzt.** Reale Ähnlichkeit
+der Beispielpaare: `Meldebescheid`/`Meldebescheinigung` = 0.71,
+`Meldebeschreibung`/`Meldebescheinigung` = 0.63 — beide deutlich unter dem
+ursprünglich geschätzten `AUTO_THRESHOLD` von 0.90, und `Meldebeschreibung`
+läge mit dem geschätzten `JUDGE_MIN` von 0.65 sogar unterhalb des
+Judge-Fensters. Gemessene Werte stehen in `data/.env` (nicht im Repository).
+
+**Embeddings-Entscheidung gefallen: Ansatz B wird für Phase 3+ gebraucht,
+nicht optional.** `Entgeltabrechnung`/`Verdienstbescheinigung` = 0.10,
+`Entgeltabrechnung`/`Payroll Statement` = 0.06 — beide weit unter jeder
+sinnvollen `JUDGE_MIN`. Das ist kein Schwellwert-Problem: Stufe 4 wählt je
+Vorschlag nur den ähnlichsten Kandidaten für den Judge, und bei dieser
+Ähnlichkeit wird das richtige Paar bei keiner Schwelle je ausgewählt — der
+Judge bekommt es nie zu sehen. Reine String-Ähnlichkeit kann diese Klasse
+von Synonym-Dubletten strukturell nicht auflösen. Näheres in
+[docs/superpowers/specs/2026-08-01-klassifikations-konsistenz-design.md](../superpowers/specs/2026-08-01-klassifikations-konsistenz-design.md),
+Abschnitt „Bewusst ausgeschlossen".
+
+**Offener Punkt für Phase 3:** `document_id` in `entity_review_queue` wird
+noch nicht befüllt — die drei Einhängepunkte in `paperlessService` kennen die
+Dokument-ID nicht, nur `server.js` tut das, und dorthin reicht Phase 2 bewusst
+nicht. Phase 3 muss das nachreichen, bevor die Review-Seite den „Link zum
+auslösenden Dokument" anzeigen kann.
+
+**Resolver bleibt deaktiviert (`ENTITY_RESOLVER_ENABLED=no` als Code-Default,
+in der echten `data/.env` nicht gesetzt).** Aktivierung ist eine bewusste
+Folgeentscheidung, kein Teil dieser Phase.
 
 ## Phase 3 — Review-UI, Merge, Altbestand
 
