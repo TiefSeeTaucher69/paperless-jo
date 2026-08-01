@@ -94,3 +94,14 @@ test('mergeEntity fuer type=tag nutzt modify_tags mit add_tags/remove_tags', asy
     parameters: { add_tags: [200], remove_tags: [100] }
   });
 });
+
+test('getOpenReviewQueueCount liefert die Anzahl offener Queue-Eintraege', () => {
+  const original = paperlessService._entityResolverInstance;
+  paperlessService._entityResolverInstance = { store: { countOpenQueueEntries: () => 3 } };
+
+  try {
+    assert.strictEqual(paperlessService.getOpenReviewQueueCount(), 3);
+  } finally {
+    paperlessService._entityResolverInstance = original;
+  }
+});

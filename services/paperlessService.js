@@ -174,6 +174,15 @@ class PaperlessService {
     return this._entityResolverInstance;
   }
 
+  getOpenReviewQueueCount() {
+    try {
+      return this._getEntityResolver().store.countOpenQueueEntries();
+    } catch (error) {
+      console.warn('[WARNING] Konnte offene Review-Queue-Eintraege nicht zaehlen:', error.message);
+      return 0;
+    }
+  }
+
   // Zentrale Fehlerbarriere: deaktiviert oder jeder interne Fehler => heutiges Verhalten (create).
   async _resolveEntity(type, name, existingEntities) {
     if (!config.entityResolver.enabled) {
