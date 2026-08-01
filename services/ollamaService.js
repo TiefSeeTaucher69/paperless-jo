@@ -110,7 +110,7 @@ class OllamaService {
             const response = await this._callOllamaAPI(fitted.user, system, fitted.numCtx, this.documentAnalysisSchema);
 
             // Process response
-            const parsedResponse = this._processOllamaResponse(response);
+            const parsedResponse = this._normalizeParsedDocument(this._processOllamaResponse(response));
 
             // Check for missing data
             if (parsedResponse.tags.length === 0 && parsedResponse.correspondent === null) {
@@ -489,6 +489,42 @@ The custom_fields are optional; only fill in values you actually find in the doc
         }
 
         return response.data;
+    }
+
+    /**
+     * A category tag is a short label. Anything containing a colon is very
+     * likely a "field: value" fragment the model extracted instead of
+     * categorizing (observed baseline: "Personal-Nr.: 003424 000"). Anything
+     * implausibly long is likely a full sentence, not a label.
+     * @param {*} tag
+     * @returns {boolean}
+     */
+    _isPlausibleTag(tag) {
+        if (typeof tag !== 'string') return false;
+        const trimmed = tag.trim();
+        if (!trimmed) return false;
+        if (trimmed.includes(':')) return false;
+        if (trimmed.length > 60) return false;
+        return true;
+    }
+
+    /**
+     * Defensive post-processing for a parsed model response. Runs
+     * unconditionally after every successful parse, regardless of which
+     * branch of _processOllamaResponse/_parseResponse produced it.
+     * @param {Object} doc
+     * @returns {Object} the same object, mutated
+     */
+    _normalizeParsedDocument(doc) {
+        if (Array.isArray(doc.tags)) {
+            const before = doc.tags.length;
+            doc.tags = doc.tags.filter(tag => this._isPlausibleTag(tag));
+            if (doc.tags.length < before) {
+                console.warn(`[WARNING] Dropped ${before - doc.tags.length} tag(s) that looked like extracted data rather than category labels`);
+            }
+        }
+
+        return doc;
     }
 
     /**
