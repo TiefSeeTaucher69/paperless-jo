@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const EntityResolver = require('../services/entityResolver');
 const EntityStore = require('../models/entityStore');
+const { normalizeForType } = require('../services/entityNormalizer');
 
 function makeResolver(overrides = {}) {
   const store = overrides.store || new EntityStore(':memory:');
@@ -80,6 +81,22 @@ test('Stufe 4b: als rejected bekanntes Paar -> create, kein LLM-Call trotz hoher
   assert.deepStrictEqual(result, { action: 'create' });
 });
 
+test('Stufe 4b: rejected Paar wird auch bei Gross-/Kleinschreibungs-/Whitespace-Variante des Rohnamens erkannt (normalisierter Negativ-Cache)', async () => {
+  const store = new EntityStore(':memory:');
+  store.insertQueueEntry({
+    entityType: 'document_type', proposedName: 'verdienstbescheinigungen', proposedId: 9,
+    candidateName: 'Verdienstbescheinigung', candidateId: 1, similarity: 0.91,
+    llmVerdict: 'different', llmReason: 'Nutzerentscheidung', status: 'rejected'
+  });
+  const resolver = makeResolver({ store }); // judge wirft, falls aufgerufen
+
+  // Andere Schreibweise (Grossbuchstaben + fuehrendes/folgendes Leerzeichen) desselben
+  // Namens wie beim Insert -> muss trotzdem als bereits abgelehnt erkannt werden, weil
+  // findRejectedPair jetzt normalisiert statt roh vergleicht.
+  const result = await resolver.resolve('document_type', '  VERDIENSTBESCHEINIGUNGEN  ', [{ id: 1, name: 'Verdienstbescheinigung' }]);
+  assert.deepStrictEqual(result, { action: 'create' });
+});
+
 test('Stufe 4c: JUDGE_MIN <= Aehnlichkeit < AUTO_THRESHOLD, Judge sagt same -> map, Alias source=llm', async () => {
   const store = new EntityStore(':memory:');
   const judge = async (type, a, b) => ({ verdict: 'same', reason: 'gleiche Sache, andere Schreibweise' });
@@ -98,7 +115,11 @@ test('Stufe 4c: Judge sagt different -> create, Negativ-Eintrag geschrieben', as
 
   const result = await resolver.resolve('document_type', 'Verdienstbescheinigung', [{ id: 4, name: 'Meldebescheinigung' }]);
   assert.strictEqual(result.action, 'create');
-  assert.ok(store.findRejectedPair('document_type', 'Verdienstbescheinigung', 'Meldebescheinigung'));
+  assert.ok(store.findRejectedPair(
+    'document_type',
+    normalizeForType('Verdienstbescheinigung', 'document_type'),
+    normalizeForType('Meldebescheinigung', 'document_type')
+  ));
 });
 
 test('Stufe 4c: Judge sagt unsure -> create_and_queue, ohne Queue-Eintrag zu schreiben', async () => {
@@ -110,7 +131,11 @@ test('Stufe 4c: Judge sagt unsure -> create_and_queue, ohne Queue-Eintrag zu sch
   assert.strictEqual(result.action, 'create_and_queue');
   assert.deepStrictEqual(result.candidate, { id: 4, name: 'Meldebescheinigung' });
   assert.strictEqual(result.verdict, 'unsure');
-  assert.strictEqual(store.findRejectedPair('document_type', 'Verdienstbescheinigung', 'Meldebescheinigung'), null);
+  assert.strictEqual(store.findRejectedPair(
+    'document_type',
+    normalizeForType('Verdienstbescheinigung', 'document_type'),
+    normalizeForType('Meldebescheinigung', 'document_type')
+  ), null);
 });
 
 test('Fehlerverhalten: Judge wirft (nicht erreichbar) -> unsure statt Absturz', async () => {

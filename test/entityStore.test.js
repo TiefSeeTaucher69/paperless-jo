@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const EntityStore = require('../models/entityStore');
+const { normalizeForType } = require('../services/entityNormalizer');
 
 function freshStore() {
   return new EntityStore(':memory:');
@@ -43,7 +44,9 @@ test('deleteAlias entfernt den Eintrag', () => {
 
 test('findRejectedPair liefert null ohne Eintrag, gefunden nach insertQueueEntry mit status rejected', () => {
   const store = freshStore();
-  assert.strictEqual(store.findRejectedPair('document_type', 'Verdienstbescheinigung', 'Entgeltabrechnung'), null);
+  const proposedNormalized = normalizeForType('Verdienstbescheinigung', 'document_type');
+  const candidateNormalized = normalizeForType('Entgeltabrechnung', 'document_type');
+  assert.strictEqual(store.findRejectedPair('document_type', proposedNormalized, candidateNormalized), null);
 
   store.insertQueueEntry({
     entityType: 'document_type', proposedName: 'Verdienstbescheinigung', proposedId: 9,
@@ -51,9 +54,44 @@ test('findRejectedPair liefert null ohne Eintrag, gefunden nach insertQueueEntry
     llmVerdict: 'different', llmReason: 'unterschiedliche Dokumentarten', status: 'rejected'
   });
 
-  const found = store.findRejectedPair('document_type', 'Verdienstbescheinigung', 'Entgeltabrechnung');
+  const found = store.findRejectedPair('document_type', proposedNormalized, candidateNormalized);
   assert.ok(found);
   assert.strictEqual(found.status, 'rejected');
+});
+
+test('findRejectedPair matcht ueber Normalisierung: Gross-/Kleinschreibung und Whitespace-Varianten der Rohnamen finden denselben Eintrag', () => {
+  const store = freshStore();
+  store.insertQueueEntry({
+    entityType: 'tag', proposedName: 'meldebescheid', proposedId: 1,
+    candidateName: 'Meldebescheinigung', candidateId: 2, similarity: 0.5,
+    llmVerdict: 'different', llmReason: 'test', status: 'rejected'
+  });
+
+  // Andere Schreibweise/Whitespace als beim Insert, aber gleiche normalisierte Form
+  const found = store.findRejectedPair(
+    'tag',
+    normalizeForType('  MELDEBESCHEID  ', 'tag'),
+    normalizeForType('meldebescheinigung', 'tag')
+  );
+  assert.ok(found, 'Negativ-Cache sollte trotz Roh-Varianten treffen');
+  assert.strictEqual(found.candidate_name, 'Meldebescheinigung');
+});
+
+test('insertQueueEntry speichert proposed_normalized/candidate_normalized neben den rohen Namen', () => {
+  const store = freshStore();
+  store.insertQueueEntry({
+    entityType: 'correspondent', proposedName: 'Müller GmbH', proposedId: 1,
+    candidateName: 'Mueller', candidateId: 2, similarity: 0.6,
+    llmVerdict: 'different', llmReason: 'test', status: 'rejected'
+  });
+
+  const row = store.db.prepare(
+    `SELECT * FROM entity_review_queue WHERE proposed_name = ?`
+  ).get('Müller GmbH');
+
+  assert.strictEqual(row.proposed_name, 'Müller GmbH', 'roher Name bleibt fuer Anzeige erhalten');
+  assert.strictEqual(row.proposed_normalized, normalizeForType('Müller GmbH', 'correspondent'));
+  assert.strictEqual(row.candidate_normalized, normalizeForType('Mueller', 'correspondent'));
 });
 
 test('offene Queue-Eintraege werden von findRejectedPair NICHT gefunden', () => {
@@ -63,7 +101,10 @@ test('offene Queue-Eintraege werden von findRejectedPair NICHT gefunden', () => 
     candidateName: 'B', candidateId: 2, similarity: 0.7,
     llmVerdict: 'unsure', llmReason: null, status: 'open'
   });
-  assert.strictEqual(store.findRejectedPair('tag', 'A', 'B'), null);
+  assert.strictEqual(
+    store.findRejectedPair('tag', normalizeForType('A', 'tag'), normalizeForType('B', 'tag')),
+    null
+  );
 });
 
 test('Fehlerfall: geschlossene DB liefert Fallback statt zu werfen', () => {

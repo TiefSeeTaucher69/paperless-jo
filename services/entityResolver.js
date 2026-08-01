@@ -59,8 +59,11 @@ class EntityResolver {
       return { action: 'create' };
     }
 
-    // Negativ-Cache geht sowohl 4a als auch 4c vor
-    const rejected = this.store.findRejectedPair(type, proposedName, best.entity.name);
+    // Negativ-Cache geht sowohl 4a als auch 4c vor. findRejectedPair vergleicht
+    // normalisiert, damit Gross-/Kleinschreibung oder Whitespace-Varianten des
+    // Paars denselben Cache-Treffer liefern (siehe entityStore.js).
+    const normalizedCandidate = normalizeForType(best.entity.name, type);
+    const rejected = this.store.findRejectedPair(type, normalizedProposed, normalizedCandidate);
 
     if (best.similarity >= this.autoThreshold) {
       if (rejected) {
