@@ -2580,6 +2580,7 @@ router.get('/dashboard', async (req, res) => {
   const tagCount = await paperlessService.getTagCount();
   const correspondentCount = await paperlessService.getCorrespondentCount();
   const documentCount = await paperlessService.getDocumentCount();
+  const openReviewQueueCount = paperlessService.getOpenReviewQueueCount();
   const processedDocumentCount = await documentModel.getProcessedDocumentsCount();
   const metrics = await documentModel.getMetrics();
   const processingTimeStats = await documentModel.getProcessingTimeStats();
@@ -2593,15 +2594,16 @@ router.get('/dashboard', async (req, res) => {
   
   const version = configFile.PAPERLESS_AI_VERSION || ' ';
   
-  res.render('dashboard', { 
-    paperless_data: { 
-      tagCount, 
-      correspondentCount, 
-      documentCount, 
+  res.render('dashboard', {
+    paperless_data: {
+      tagCount,
+      correspondentCount,
+      documentCount,
       processedDocumentCount,
       processingTimeStats,
       tokenDistribution,
-      documentTypes
+      documentTypes,
+      openReviewQueueCount
     }, 
     openai_data: { 
       averagePromptTokens, 
