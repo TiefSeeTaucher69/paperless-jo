@@ -7,6 +7,7 @@ test('%RESTRICTED_TAGS% wird aus einem String-Array befuellt', () => {
     'Erlaubte Tags: %RESTRICTED_TAGS%',
     ['Rechnung', 'Versicherung'],
     [],
+    [],
     {}
   );
 
@@ -18,6 +19,7 @@ test('%RESTRICTED_TAGS% akzeptiert weiterhin ein Objekt-Array', () => {
     'Erlaubte Tags: %RESTRICTED_TAGS%',
     [{ id: 1, name: 'Rechnung' }, { id: 2, name: 'Versicherung' }],
     [],
+    [],
     {}
   );
 
@@ -27,6 +29,7 @@ test('%RESTRICTED_TAGS% akzeptiert weiterhin ein Objekt-Array', () => {
 test('%RESTRICTED_TAGS% wird bei leerer Liste zu Leerstring', () => {
   const result = RestrictionPromptService.processRestrictionsInPrompt(
     'Erlaubte Tags: %RESTRICTED_TAGS%',
+    [],
     [],
     [],
     {}

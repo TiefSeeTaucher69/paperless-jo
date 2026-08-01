@@ -1,5 +1,4 @@
 const {
-    calculateTokens,
     calculateTotalPromptTokens,
     truncateToTokenLimit,
     writePromptToFile
@@ -535,9 +534,11 @@ The custom_fields are optional; only fill in values you actually find in the doc
     }
 
     /**
-     * Defensive post-processing for a parsed model response. Runs
-     * unconditionally after every successful parse, regardless of which
-     * branch of _processOllamaResponse/_parseResponse produced it.
+     * Defensive post-processing for a parsed model response. Runs after
+     * every successful parse in analyzeDocument, regardless of which branch
+     * of _processOllamaResponse/_parseResponse produced it. Not called by
+     * analyzePlayground, so playground results are not tag-filtered or
+     * date-normalized.
      * @param {Object} doc
      * @returns {Object} the same object, mutated
      */
