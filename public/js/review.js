@@ -31,7 +31,7 @@ class ReviewManager {
 
     initialize() {
         document.querySelectorAll('.merge-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.previewMerge(btn.dataset.id));
+            btn.addEventListener('click', () => this.previewMerge(btn));
         });
         document.querySelectorAll('.reject-btn').forEach(btn => {
             btn.addEventListener('click', () => this.reject(btn.dataset.id));
@@ -46,7 +46,10 @@ class ReviewManager {
         this.confirmBtn?.addEventListener('click', () => this.confirmMerge());
     }
 
-    async previewMerge(id) {
+    async previewMerge(button) {
+        const id = button.dataset.id;
+        const proposedName = button.dataset.proposedName;
+        const candidateName = button.dataset.candidateName;
         try {
             const response = await fetch(`/api/review/${id}/merge`, {
                 method: 'POST',
@@ -57,7 +60,7 @@ class ReviewManager {
             const preview = await response.json();
 
             this.pendingMergeId = id;
-            this.previewText.textContent = `${preview.affectedCount} Dokument(e) werden umgehaengt. Fortfahren?`;
+            this.previewText.textContent = `"${proposedName}" wird geloescht. ${preview.affectedCount} Dokument(e) werden zu "${candidateName}" umgehaengt. Fortfahren?`;
             this.showModal();
         } catch (error) {
             console.error('Merge-Vorschau fehlgeschlagen:', error);
