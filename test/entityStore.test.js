@@ -113,3 +113,50 @@ test('Fehlerfall: geschlossene DB liefert Fallback statt zu werfen', () => {
   assert.doesNotThrow(() => store.findAlias('tag', 'rechnung'));
   assert.strictEqual(store.findAlias('tag', 'rechnung'), null);
 });
+
+test('listOpenQueueEntries liefert nur offene Eintraege, sortiert nach created_at', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Rechnung', proposedId: 1, candidateName: 'Rechnungen', candidateId: 2, similarity: 0.8, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Mahnung', proposedId: 3, candidateName: 'Mahnungen', candidateId: 4, similarity: 0.75, llmVerdict: null, llmReason: null, status: 'rejected', documentId: null });
+
+  const open = store.listOpenQueueEntries();
+
+  assert.strictEqual(open.length, 1);
+  assert.strictEqual(open[0].proposed_name, 'Rechnung');
+});
+
+test('getQueueEntryById liefert den Eintrag inklusive document_id, oder null', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Rechnung', proposedId: 1, candidateName: 'Rechnungen', candidateId: 2, similarity: 0.8, llmVerdict: null, llmReason: null, status: 'open', documentId: 42 });
+  const entry = store.listOpenQueueEntries()[0];
+
+  const fetched = store.getQueueEntryById(entry.id);
+  assert.strictEqual(fetched.document_id, 42);
+  assert.strictEqual(store.getQueueEntryById(999999), null);
+});
+
+test('updateQueueStatus setzt status und resolved_at, liefert true bei Treffer', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Rechnung', proposedId: 1, candidateName: 'Rechnungen', candidateId: 2, similarity: 0.8, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  const entry = store.listOpenQueueEntries()[0];
+
+  const updated = store.updateQueueStatus(entry.id, 'merged');
+
+  assert.strictEqual(updated, true);
+  const fetched = store.getQueueEntryById(entry.id);
+  assert.strictEqual(fetched.status, 'merged');
+  assert.ok(fetched.resolved_at);
+});
+
+test('updateQueueStatus liefert false, wenn die id nicht existiert', () => {
+  const store = freshStore();
+  assert.strictEqual(store.updateQueueStatus(999999, 'merged'), false);
+});
+
+test('countOpenQueueEntries zaehlt nur offene Eintraege', () => {
+  const store = freshStore();
+  assert.strictEqual(store.countOpenQueueEntries(), 0);
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Rechnung', proposedId: 1, candidateName: 'Rechnungen', candidateId: 2, similarity: 0.8, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Mahnung', proposedId: 3, candidateName: 'Mahnungen', candidateId: 4, similarity: 0.75, llmVerdict: null, llmReason: null, status: 'rejected', documentId: null });
+  assert.strictEqual(store.countOpenQueueEntries(), 1);
+});

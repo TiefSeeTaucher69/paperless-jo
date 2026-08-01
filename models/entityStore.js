@@ -139,6 +139,48 @@ class EntityStore {
     }
   }
 
+  listOpenQueueEntries() {
+    try {
+      return this.db.prepare(`
+        SELECT * FROM entity_review_queue WHERE status = 'open' ORDER BY created_at ASC
+      `).all();
+    } catch (error) {
+      console.error('[ERROR] entityStore.listOpenQueueEntries:', error.message);
+      return [];
+    }
+  }
+
+  getQueueEntryById(id) {
+    try {
+      return this.db.prepare(`SELECT * FROM entity_review_queue WHERE id = ?`).get(id) || null;
+    } catch (error) {
+      console.error('[ERROR] entityStore.getQueueEntryById:', error.message);
+      return null;
+    }
+  }
+
+  updateQueueStatus(id, status) {
+    try {
+      const result = this.db.prepare(`
+        UPDATE entity_review_queue SET status = ?, resolved_at = ? WHERE id = ?
+      `).run(status, new Date().toISOString(), id);
+      return result.changes > 0;
+    } catch (error) {
+      console.error('[ERROR] entityStore.updateQueueStatus:', error.message);
+      return false;
+    }
+  }
+
+  countOpenQueueEntries() {
+    try {
+      const row = this.db.prepare(`SELECT COUNT(*) as count FROM entity_review_queue WHERE status = 'open'`).get();
+      return row.count;
+    } catch (error) {
+      console.error('[ERROR] entityStore.countOpenQueueEntries:', error.message);
+      return 0;
+    }
+  }
+
   close() {
     try {
       this.db.close();
