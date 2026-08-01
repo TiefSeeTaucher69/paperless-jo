@@ -40,11 +40,11 @@ router.get('/review', isAuthenticated, (req, res) => {
 });
 
 router.post('/api/review/:id/merge', authenticateJWT, async (req, res) => {
-  const { reviewQueueService } = getServices();
   const id = Number(req.params.id);
   const dryRun = req.body?.dryRun !== false;
 
   try {
+    const { reviewQueueService } = getServices();
     const result = dryRun
       ? await reviewQueueService.previewMerge(id)
       : await reviewQueueService.merge(id);
@@ -69,7 +69,6 @@ router.post('/api/review/:id/reject', authenticateJWT, (req, res) => {
 });
 
 router.post('/api/review/backfill/:entityType', authenticateJWT, async (req, res) => {
-  const { backfillService } = getServices();
   const entityType = req.params.entityType;
   const lister = ENTITY_LISTERS[entityType];
 
@@ -78,6 +77,7 @@ router.post('/api/review/backfill/:entityType', authenticateJWT, async (req, res
   }
 
   try {
+    const { backfillService } = getServices();
     const existingEntities = await lister();
     const result = backfillService.run(entityType, existingEntities);
     res.json(result);
