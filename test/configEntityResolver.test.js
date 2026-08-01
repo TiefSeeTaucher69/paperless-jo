@@ -66,3 +66,87 @@ test('entityResolver-Block hat sichere Defaults', () => {
     delete require.cache[require.resolve('../config/config')];
   }
 });
+
+test('ENTITY_RESOLVER_AUTO_THRESHOLD ausserhalb [0,1] wird auf 1 geklemmt und warnt', () => {
+  const savedValue = process.env.ENTITY_RESOLVER_AUTO_THRESHOLD;
+  const savedWarn = console.warn;
+  const warnMessages = [];
+  console.warn = (...args) => { warnMessages.push(args.join(' ')); };
+
+  try {
+    process.env.ENTITY_RESOLVER_AUTO_THRESHOLD = '1.5';
+    delete require.cache[require.resolve('../config/config')];
+    const config = require('../config/config');
+
+    assert.strictEqual(config.entityResolver.autoThreshold, 1);
+    assert.ok(
+      warnMessages.some(msg => msg.includes('ENTITY_RESOLVER_AUTO_THRESHOLD')),
+      'sollte eine Klemm-Warnung fuer ENTITY_RESOLVER_AUTO_THRESHOLD ausgeben'
+    );
+  } finally {
+    console.warn = savedWarn;
+    if (savedValue === undefined) {
+      delete process.env.ENTITY_RESOLVER_AUTO_THRESHOLD;
+    } else {
+      process.env.ENTITY_RESOLVER_AUTO_THRESHOLD = savedValue;
+    }
+    delete require.cache[require.resolve('../config/config')];
+  }
+});
+
+test('ENTITY_RESOLVER_JUDGE_MIN unterhalb 0 wird auf 0 geklemmt', () => {
+  const savedValue = process.env.ENTITY_RESOLVER_JUDGE_MIN;
+  const savedWarn = console.warn;
+  console.warn = () => {};
+
+  try {
+    process.env.ENTITY_RESOLVER_JUDGE_MIN = '-0.3';
+    delete require.cache[require.resolve('../config/config')];
+    const config = require('../config/config');
+
+    assert.strictEqual(config.entityResolver.judgeMin, 0);
+  } finally {
+    console.warn = savedWarn;
+    if (savedValue === undefined) {
+      delete process.env.ENTITY_RESOLVER_JUDGE_MIN;
+    } else {
+      process.env.ENTITY_RESOLVER_JUDGE_MIN = savedValue;
+    }
+    delete require.cache[require.resolve('../config/config')];
+  }
+});
+
+test('ENTITY_RESOLVER_JUDGE_MIN > ENTITY_RESOLVER_AUTO_THRESHOLD warnt, aber wird nicht automatisch korrigiert', () => {
+  const savedJudgeMin = process.env.ENTITY_RESOLVER_JUDGE_MIN;
+  const savedAutoThreshold = process.env.ENTITY_RESOLVER_AUTO_THRESHOLD;
+  const savedWarn = console.warn;
+  const warnMessages = [];
+  console.warn = (...args) => { warnMessages.push(args.join(' ')); };
+
+  try {
+    process.env.ENTITY_RESOLVER_JUDGE_MIN = '0.95';
+    process.env.ENTITY_RESOLVER_AUTO_THRESHOLD = '0.90';
+    delete require.cache[require.resolve('../config/config')];
+    const config = require('../config/config');
+
+    assert.strictEqual(config.entityResolver.judgeMin, 0.95);
+    assert.strictEqual(config.entityResolver.autoThreshold, 0.90);
+    assert.ok(
+      warnMessages.some(msg => msg.includes('unerreichbar')),
+      'sollte vor unerreichbarer Stufe 4c warnen'
+    );
+  } finally {
+    console.warn = savedWarn;
+    if (savedJudgeMin === undefined) {
+      delete process.env.ENTITY_RESOLVER_JUDGE_MIN;
+    } else {
+      process.env.ENTITY_RESOLVER_JUDGE_MIN = savedJudgeMin;
+    }
+    if (savedAutoThreshold === undefined) {
+      delete process.env.ENTITY_RESOLVER_AUTO_THRESHOLD;
+    } else {
+      process.env.ENTITY_RESOLVER_AUTO_THRESHOLD = savedAutoThreshold;
+    }
+    delete require.cache[require.resolve('../config/config')];
+  }
+});
