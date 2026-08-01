@@ -3288,14 +3288,16 @@ router.post('/manual/updateDocument', express.json(), async (req, res) => {
     // Filter out any null or undefined tags
     tags = tags.filter(tag => tag != null);
 
+    const options = { documentId };
+
     // Process new tags to get their IDs
-    const { tagIds, errors } = await paperlessService.processTags(tags);
+    const { tagIds, errors } = await paperlessService.processTags(tags, options);
     if (errors.length > 0) {
       return res.status(400).json({ errors });
     }
 
     // Process correspondent if provided
-    const correspondentData = correspondent ? await paperlessService.getOrCreateCorrespondent(correspondent) : null;
+    const correspondentData = correspondent ? await paperlessService.getOrCreateCorrespondent(correspondent, options) : null;
 
 
     await paperlessService.removeUnusedTagsFromDocument(documentId, tagIds);
