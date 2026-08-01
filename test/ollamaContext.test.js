@@ -62,6 +62,14 @@ test('der system-Teil wird nie gekuerzt', () => {
   const systemTokens = Math.ceil(system.length / 4);
   const userTokens = Math.ceil(result.user.length / 4);
   assert.ok(result.numCtx >= systemTokens + userTokens);
+
+  // Zusaetzlich: der tatsaechliche user-Anteil darf das Budget nicht
+  // sprengen, das nach Abzug von system-Teil und numPredict von
+  // numCtxMax uebrig bleibt. Das belegt, dass der system-Teil beim
+  // Kuerzen wirklich vollstaendig beruecksichtigt wurde.
+  const maxCtx = config.ollama.numCtxMax;
+  const numPredict = config.ollama.numPredict;
+  assert.ok(result.user.length <= (maxCtx - systemTokens - numPredict) * 4);
 });
 
 test('ein uebergrosser system-Teil erzwingt ein Mindestbudget und meldet das', () => {
