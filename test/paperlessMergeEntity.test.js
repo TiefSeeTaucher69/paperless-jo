@@ -95,6 +95,53 @@ test('mergeEntity fuer type=tag nutzt modify_tags mit add_tags/remove_tags', asy
   });
 });
 
+test('mergeEntity mit dryRun=false behandelt 404 beim Loeschen als bereits erledigt', async () => {
+  let getCallCount = 0;
+  const mockClient = {
+    get: async () => {
+      getCallCount++;
+      return getCallCount === 1
+        ? { data: { results: [{ id: 50 }], next: null } }
+        : { data: { results: [], next: null } };
+    },
+    post: async () => ({ data: {} }),
+    delete: async () => {
+      const error = new Error('Request failed with status code 404');
+      error.response = { status: 404 };
+      throw error;
+    }
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.mergeEntity('tag', 9, 10, { dryRun: false })
+  );
+
+  assert.deepStrictEqual(result, { affectedCount: 1, documentIds: [50], deleted: true });
+});
+
+test('mergeEntity mit dryRun=false wirft weiter, wenn das Loeschen nicht mit 404 fehlschlaegt', async () => {
+  let getCallCount = 0;
+  const mockClient = {
+    get: async () => {
+      getCallCount++;
+      return getCallCount === 1
+        ? { data: { results: [{ id: 60 }], next: null } }
+        : { data: { results: [], next: null } };
+    },
+    post: async () => ({ data: {} }),
+    delete: async () => {
+      const error = new Error('Request failed with status code 500');
+      error.response = { status: 500 };
+      throw error;
+    }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 11, 12, { dryRun: false })),
+    /500/
+  );
+});
+
 test('getOpenReviewQueueCount liefert die Anzahl offener Queue-Eintraege', () => {
   const original = paperlessService._entityResolverInstance;
   paperlessService._entityResolverInstance = { store: { countOpenQueueEntries: () => 3 } };

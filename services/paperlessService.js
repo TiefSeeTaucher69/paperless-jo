@@ -1414,7 +1414,14 @@ async getOrCreateDocumentType(name, options = {}) {
       throw new Error(`Merge unvollstaendig: ${remaining.length} Dokument(e) zeigen noch auf fromId=${fromId}`);
     }
 
-    await this.client.delete(`/${type}s/${fromId}/`);
+    try {
+      await this.client.delete(`/${type}s/${fromId}/`);
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        throw error;
+      }
+      // fromId war bereits geloescht (z.B. durch einen frueheren Merge desselben Eintrags) - das ist kein Fehler.
+    }
     return { affectedCount: affected.length, documentIds: affected.map(d => d.id), deleted: true };
   }
 
