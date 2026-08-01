@@ -188,10 +188,10 @@ class PaperlessService {
     }
   }
 
-  _recordEntityQueue(type, proposedName, proposedId, decision) {
+  _recordEntityQueue(type, proposedName, proposedId, decision, documentId) {
     try {
       this._getEntityResolver().recordCreatedAndQueued({
-        type, proposedName, proposedId,
+        type, proposedName, proposedId, documentId,
         candidate: decision.candidate, similarity: decision.similarity, verdict: decision.verdict
       });
     } catch (error) {
@@ -465,7 +465,7 @@ class PaperlessService {
             } else {
               tag = await this.createTagSafely(tagName);
               if (decision.action === 'create_and_queue' && tag && tag.id) {
-                this._recordEntityQueue('tag', tagName, tag.id, decision);
+                this._recordEntityQueue('tag', tagName, tag.id, decision, options.documentId);
               }
             }
           }
@@ -1169,7 +1169,7 @@ async searchForExistingCorrespondent(correspondent) {
             });
             console.log(`[DEBUG] Created new correspondent "${name}" with ID ${createResponse.data.id}`);
             if (decision.action === 'create_and_queue') {
-                this._recordEntityQueue('correspondent', name, createResponse.data.id, decision);
+                this._recordEntityQueue('correspondent', name, createResponse.data.id, decision, options.documentId);
             }
             return createResponse.data;
         } catch (createError) {
@@ -1188,7 +1188,7 @@ async searchForExistingCorrespondent(correspondent) {
                 if (justCreatedCorrespondent) {
                     console.log(`[DEBUG] Retrieved correspondent "${name}" after constraint error with ID ${justCreatedCorrespondent.id}`);
                     if (decision.action === 'create_and_queue') {
-                        this._recordEntityQueue('correspondent', name, justCreatedCorrespondent.id, decision);
+                        this._recordEntityQueue('correspondent', name, justCreatedCorrespondent.id, decision, options.documentId);
                     }
                     return justCreatedCorrespondent;
                 }
@@ -1236,7 +1236,7 @@ async searchForExistingDocumentType(documentType) {
   }
 }
 
-async getOrCreateDocumentType(name) {
+async getOrCreateDocumentType(name, options = {}) {
   this.initialize();
   
   try {
@@ -1274,7 +1274,7 @@ async getOrCreateDocumentType(name) {
           });
           console.log(`[DEBUG] Created new document type "${name}" with ID ${createResponse.data.id}`);
           if (decision.action === 'create_and_queue') {
-              this._recordEntityQueue('document_type', name, createResponse.data.id, decision);
+              this._recordEntityQueue('document_type', name, createResponse.data.id, decision, options.documentId);
           }
           return createResponse.data;
       } catch (createError) {
@@ -1293,7 +1293,7 @@ async getOrCreateDocumentType(name) {
               if (justCreatedDocType) {
                   console.log(`[DEBUG] Retrieved document type "${name}" after constraint error with ID ${justCreatedDocType.id}`);
                   if (decision.action === 'create_and_queue') {
-                      this._recordEntityQueue('document_type', name, justCreatedDocType.id, decision);
+                      this._recordEntityQueue('document_type', name, justCreatedDocType.id, decision, options.documentId);
                   }
                   return justCreatedDocType;
               }
