@@ -130,6 +130,7 @@ class OpenAIService {
         systemPrompt,
         existingTags,
         existingCorrespondentList,
+        existingDocumentTypesList,
         config
       );
 

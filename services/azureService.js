@@ -121,6 +121,7 @@ class AzureOpenAIService {
         systemPrompt,
         existingTags,
         existingCorrespondentList,
+        existingDocumentTypesList,
         config
       );
 

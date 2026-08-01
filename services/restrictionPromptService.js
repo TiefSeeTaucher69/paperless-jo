@@ -6,84 +6,70 @@ class RestrictionPromptService {
   /**
    * Process placeholders in a prompt by replacing them with actual data
    * @param {string} prompt - The original prompt that may contain placeholders
-   * @param {Array} existingTags - Array of existing tags
-   * @param {Array|string} existingCorrespondentList - List of existing correspondents
-   * @param {Object} config - Configuration object (unused but kept for compatibility)
+   * @param {Array} existingTags - Existing tags, as strings or {name} objects
+   * @param {Array|string} existingCorrespondentList - Existing correspondents
+   * @param {Array} existingDocumentTypes - Existing document types
+   * @param {Object} config - Configuration object (unused, kept for compatibility)
    * @returns {string} - Prompt with placeholders replaced
    */
-  static processRestrictionsInPrompt(prompt, existingTags, existingCorrespondentList, config) {
-    // Replace placeholders in the original prompt
-    return this._replacePlaceholders(prompt, existingTags, existingCorrespondentList);
-  }
-
-  /**
-   * Replace placeholders in the prompt with actual data
-   * @param {string} prompt - The original prompt
-   * @param {Array} existingTags - Array of existing tags
-   * @param {Array|string} existingCorrespondentList - List of existing correspondents
-   * @returns {string} - Prompt with placeholders replaced
-   */
-  static _replacePlaceholders(prompt, existingTags, existingCorrespondentList) {
+  static processRestrictionsInPrompt(
+    prompt,
+    existingTags,
+    existingCorrespondentList,
+    existingDocumentTypes,
+    config
+  ) {
     let processedPrompt = prompt;
 
-    // Replace %RESTRICTED_TAGS% placeholder
     if (processedPrompt.includes('%RESTRICTED_TAGS%')) {
-      const tagsList = this._formatTagsList(existingTags);
-      processedPrompt = processedPrompt.replace(/%RESTRICTED_TAGS%/g, tagsList);
+      processedPrompt = processedPrompt.replace(
+        /%RESTRICTED_TAGS%/g,
+        this._formatNameList(existingTags)
+      );
     }
 
-    // Replace %RESTRICTED_CORRESPONDENTS% placeholder
     if (processedPrompt.includes('%RESTRICTED_CORRESPONDENTS%')) {
-      const correspondentsList = this._formatCorrespondentsList(existingCorrespondentList);
-      processedPrompt = processedPrompt.replace(/%RESTRICTED_CORRESPONDENTS%/g, correspondentsList);
+      processedPrompt = processedPrompt.replace(
+        /%RESTRICTED_CORRESPONDENTS%/g,
+        this._formatNameList(existingCorrespondentList)
+      );
+    }
+
+    if (processedPrompt.includes('%RESTRICTED_DOCUMENT_TYPES%')) {
+      processedPrompt = processedPrompt.replace(
+        /%RESTRICTED_DOCUMENT_TYPES%/g,
+        this._formatNameList(existingDocumentTypes)
+      );
     }
 
     return processedPrompt;
   }
 
   /**
-   * Format tags list into a comma-separated string
-   * @param {Array<string|{name:string}>} existingTags - Array of tag names (strings) or tag objects with .name property
-   * @returns {string} - Comma-separated list of tag names or empty string
+   * Format a list of entities into a comma-separated string.
+   * Accepts an array of strings, an array of {name} objects, a mixed array,
+   * or an already formatted string.
+   * @param {Array|string} list
+   * @returns {string} - Comma-separated names, or empty string
    */
-  static _formatTagsList(existingTags) {
-    if (!Array.isArray(existingTags) || existingTags.length === 0) {
+  static _formatNameList(list) {
+    if (!list) {
       return '';
     }
 
-    return existingTags
+    if (typeof list === 'string') {
+      return list.trim();
+    }
+
+    if (!Array.isArray(list)) {
+      return '';
+    }
+
+    return list
       .filter(Boolean)
-      .map(tag => (typeof tag === 'string' ? tag : tag?.name || ''))
+      .map(entry => (typeof entry === 'string' ? entry : entry?.name || ''))
       .filter(name => name.length > 0)
       .join(', ');
-  }
-
-  /**
-   * Format correspondents list into a comma-separated string
-   * @param {Array|string} existingCorrespondentList - List of existing correspondents
-   * @returns {string} - Comma-separated list of correspondent names or empty string
-   */
-  static _formatCorrespondentsList(existingCorrespondentList) {
-    if (!existingCorrespondentList) {
-      return '';
-    }
-
-    if (typeof existingCorrespondentList === 'string') {
-      return existingCorrespondentList.trim();
-    }
-
-    if (Array.isArray(existingCorrespondentList)) {
-      return existingCorrespondentList
-        .filter(Boolean)  // Remove any null/undefined entries
-        .map(correspondent => {
-          if (typeof correspondent === 'string') return correspondent;
-          return correspondent?.name || '';
-        })
-        .filter(name => name.length > 0)  // Remove empty strings
-        .join(', ');
-    }
-
-    return '';
   }
 }
 
