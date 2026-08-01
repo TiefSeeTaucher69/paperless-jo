@@ -97,52 +97,28 @@ class OllamaService {
                 }
             }
 
-            // Build prompt
-            let prompt;
+            // Build prompt: instructions go to `system`, document text to `prompt`
+            let system;
+            let user;
             if (!customPrompt) {
-                prompt = this._buildPrompt(content, existingTags, existingCorrespondentList, existingDocumentTypesList, options);
+                ({ system, user } = this._buildPrompt(
+                    content, existingTags, existingCorrespondentList, existingDocumentTypesList, options
+                ));
             } else {
-                // Parse CUSTOM_FIELDS for custom prompt
-                let customFieldsObj;
-                try {
-                    customFieldsObj = JSON.parse(process.env.CUSTOM_FIELDS);
-                } catch (error) {
-                    console.error('Failed to parse CUSTOM_FIELDS:', error);
-                    customFieldsObj = { custom_fields: [] };
-                }
-
-                const customFieldsTemplate = {};
-                customFieldsObj.custom_fields.forEach((field, index) => {
-                    customFieldsTemplate[index] = {
-                        field_name: field.value,
-                        value: "Fill in the value based on your analysis"
-                    };
-                });
-
-                const customFieldsStr = '"custom_fields": ' + JSON.stringify(customFieldsTemplate, null, 2)
-                    .split('\n')
-                    .map(line => '    ' + line)
-                    .join('\n');
-
-                prompt = customPrompt + '\n\n' + config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr) + "\n\n" + JSON.stringify(content);
+                const customFieldsStr = this._generateCustomFieldsTemplate();
+                system = customPrompt + '\n\n' + config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
+                user = JSON.stringify(content);
                 console.log('[DEBUG] Ollama Service started with custom prompt');
             }
-
-            // Generate custom fields for the prompt
-            const customFieldsStr = this._generateCustomFieldsTemplate();
-
-            // Generate system prompt
-            const systemPrompt = this._generateSystemPrompt(customFieldsStr);
-
-            // Calculate context window size
-            const promptTokenCount = this._calculatePromptTokenCount(prompt);
-            const numCtx = this._calculateNumCtx(promptTokenCount, 1024);
 
             console.log(`[DEBUG] Use existing data: ${config.useExistingData}, Restrictions applied based on useExistingData setting`);
             console.log(`[DEBUG] External API data: ${validatedExternalApiData ? 'included' : 'none'}`);
 
+            // Fit into the context window (Task 6 replaces this line)
+            const numCtx = config.ollama.numCtxMax;
+
             // Call Ollama API
-            const response = await this._callOllamaAPI(prompt, systemPrompt, numCtx, this.documentAnalysisSchema);
+            const response = await this._callOllamaAPI(user, system, numCtx, this.documentAnalysisSchema);
 
             // Process response
             const parsedResponse = this._processOllamaResponse(response);
@@ -153,7 +129,7 @@ class OllamaService {
             }
 
             // Log the prompt and response
-            await this._logPromptAndResponse(prompt, parsedResponse);
+            await this._logPromptAndResponse(system, user, parsedResponse);
 
             // Return results in consistent format
             return {
@@ -244,97 +220,41 @@ class OllamaService {
     }
 
     /**
-     * Build prompt from content and existing data
+     * Build the system and user halves of the prompt.
+     * The system half carries all instructions, the format template and the
+     * pre-existing entity lists. The user half carries only the document text,
+     * so that truncation can never eat the instructions.
+     *
      * @param {string} content - Document content
-     * @param {Array} existingTags - List of existing tags
-     * @param {Array} existingCorrespondent - List of existing correspondents
-     * @param {Array} existingDocumentTypes - List of existing document types
-     * @returns {string} Formatted prompt
+     * @param {Array} existingTags - Existing tags
+     * @param {Array} existingCorrespondent - Existing correspondents
+     * @param {Array} existingDocumentTypes - Existing document types
+     * @param {Object} options - May carry externalApiData
+     * @returns {{system: string, user: string}}
      */
     _buildPrompt(content, existingTags = [], existingCorrespondent = [], existingDocumentTypes = [], options = {}) {
+        const correspondentList = Array.isArray(existingCorrespondent) ? existingCorrespondent : [];
+        const customFieldsStr = this._generateCustomFieldsTemplate();
+        const mustHavePrompt = config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
+        const basePrompt = (process.env.SYSTEM_PROMPT || '').trim() || this._defaultAnalyzerPrompt();
+
         let systemPrompt;
-        let promptTags = '';
 
-        // Validate that existingCorrespondent is an array and handle if it's not
-        const correspondentList = Array.isArray(existingCorrespondent)
-            ? existingCorrespondent
-            : [];
+        if (config.useExistingData === 'yes'
+            && config.restrictToExistingTags === 'no'
+            && config.restrictToExistingCorrespondents === 'no') {
+            const tagList = RestrictionPromptService._formatNameList(existingTags);
+            const correspondentNames = RestrictionPromptService._formatNameList(correspondentList);
+            const documentTypeNames = RestrictionPromptService._formatNameList(existingDocumentTypes);
 
-        // Parse CUSTOM_FIELDS from environment variable
-        let customFieldsObj;
-        try {
-            customFieldsObj = JSON.parse(process.env.CUSTOM_FIELDS);
-        } catch (error) {
-            console.error('Failed to parse CUSTOM_FIELDS:', error);
-            customFieldsObj = { custom_fields: [] };
-        }
-
-        // Generate custom fields template for the prompt
-        const customFieldsTemplate = {};
-
-        customFieldsObj.custom_fields.forEach((field, index) => {
-            customFieldsTemplate[index] = {
-                field_name: field.value,
-                value: "Fill in the value based on your analysis"
-            };
-        });
-
-        // Convert template to string for replacement and wrap in custom_fields
-        const customFieldsStr = '"custom_fields": ' + JSON.stringify(customFieldsTemplate, null, 2)
-            .split('\n')
-            .map(line => '    ' + line)  // Add proper indentation
-            .join('\n');
-
-        // Get system prompt based on configuration
-        if (config.useExistingData === 'yes' && config.restrictToExistingTags === 'no' && config.restrictToExistingCorrespondents === 'no') {
-            // Format existing tags
-            const existingTagsList = existingTags.join(', ');
-
-            // Format existing correspondents - handle both array of objects and array of strings
-            const existingCorrespondentList = correspondentList
-                .filter(Boolean)  // Remove any null/undefined entries
-                .map(correspondent => {
-                    if (typeof correspondent === 'string') return correspondent;
-                    return correspondent?.name || '';
-                })
-                .filter(name => name.length > 0)  // Remove empty strings
-                .join(', ');
-
-            // Format existing document types - handle both array of objects and array of strings
-            const existingDocumentTypesList = existingDocumentTypes
-                .filter(Boolean)  // Remove any null/undefined entries
-                .map(docType => {
-                    if (typeof docType === 'string') return docType;
-                    return docType?.name || '';
-                })
-                .filter(name => name.length > 0)  // Remove empty strings
-                .join(', ');
-
-            systemPrompt = `
-            Pre-existing tags: ${existingTagsList}\n\n
-            Pre-existing correspondents: ${existingCorrespondentList}\n\n
-            Pre-existing document types: ${existingDocumentTypesList}\n\n
-            ` + process.env.SYSTEM_PROMPT + '\n\n' + config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
-            promptTags = '';
+            systemPrompt = `Pre-existing tags: ${tagList}\n\n`
+                + `Pre-existing correspondents: ${correspondentNames}\n\n`
+                + `Pre-existing document types: ${documentTypeNames}\n\n`
+                + `${basePrompt}\n\n${mustHavePrompt}`;
         } else {
-            const mustHavePrompt = config.mustHavePrompt.replace('%CUSTOMFIELDS%', customFieldsStr);
-            systemPrompt = process.env.SYSTEM_PROMPT + '\n\n' + mustHavePrompt;
-            promptTags = '';
+            systemPrompt = `${basePrompt}\n\n${mustHavePrompt}`;
         }
 
-        // Get validated external API data if available
-        let validatedExternalApiData = null;
-        if (options.externalApiData) {
-            try {
-                validatedExternalApiData = this._validateAndTruncateExternalApiData(options.externalApiData);
-                console.log('[DEBUG] External API data validated and included');
-            } catch (error) {
-                console.warn('[WARNING] External API data validation failed:', error.message);
-                validatedExternalApiData = null;
-            }
-        }
-
-        // Process placeholder replacements in system prompt
         systemPrompt = RestrictionPromptService.processRestrictionsInPrompt(
             systemPrompt,
             existingTags,
@@ -343,21 +263,24 @@ class OllamaService {
             config
         );
 
-        // Include validated external API data if available
-        if (validatedExternalApiData) {
-            systemPrompt += `\n\nAdditional context from external API:\n${validatedExternalApiData}`;
+        if (options.externalApiData) {
+            try {
+                const validated = this._validateAndTruncateExternalApiData(options.externalApiData);
+                if (validated) {
+                    systemPrompt += `\n\nAdditional context from external API:\n${validated}`;
+                    console.log('[DEBUG] External API data validated and included');
+                }
+            } catch (error) {
+                console.warn('[WARNING] External API data validation failed:', error.message);
+            }
         }
 
         if (process.env.USE_PROMPT_TAGS === 'yes') {
-            promptTags = process.env.PROMPT_TAGS;
-            systemPrompt = `
-            Take these tags and try to match one or more to the document content.\n\n
-            ` + config.specialPromptPreDefinedTags;
+            systemPrompt = `Take these tags and try to match one or more to the document content.\n\n`
+                + config.specialPromptPreDefinedTags;
         }
 
-        return `${systemPrompt}
-        ${JSON.stringify(content)}
-        `;
+        return { system: systemPrompt, user: JSON.stringify(content) };
     }
 
     /**
@@ -366,7 +289,7 @@ class OllamaService {
      * @param {number} maxTokens - Maximum tokens allowed for external data (default: 500)
      * @returns {string} - Validated and potentially truncated data string
      */
-    async _validateAndTruncateExternalApiData(apiData, maxTokens = 500) {
+    _validateAndTruncateExternalApiData(apiData, maxTokens = 500) {
         if (!apiData) {
             return null;
         }
@@ -420,31 +343,17 @@ class OllamaService {
     }
 
     /**
-     * Generate system prompt for document analysis
-     * @param {string} customFieldsStr - Custom fields as a string
-     * @returns {string} System prompt
+     * Fallback instructions used when SYSTEM_PROMPT is not configured.
+     * Deliberately carries no JSON template: config.mustHavePrompt supplies it,
+     * and two competing templates confused the model.
+     * @returns {string}
      */
-    _generateSystemPrompt(customFieldsStr) {
-        let systemPromptTemplate = `
-            You are a document analyzer. Your task is to analyze documents and extract relevant information. You do not ask back questions. 
-            YOU MUSTNOT: Ask for additional information or clarification, or ask questions about the document, or ask for additional context.
-            YOU MUSTNOT: Return a response without the desired JSON format.
-            YOU MUST: Return the result EXCLUSIVELY as a JSON object. The Tags, Title and Document_Type MUST be in the language that is used in the document.:
-            IMPORTANT: The custom_fields are optional and can be left out if not needed, only try to fill out the values if you find a matching information in the document.
-            Do not change the value of field_name, only fill out the values. If the field is about money only add the number without currency and always use a . for decimal places.
-            {
-                "title": "xxxxx",
-                "correspondent": "xxxxxxxx",
-                "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
-                "document_type": "Invoice/Contract/...",
-                "document_date": "YYYY-MM-DD",
-                "language": "en/de/es/...",
-                %CUSTOMFIELDS%
-            }
-            ALWAYS USE THE INFORMATION TO FILL OUT THE JSON OBJECT. DO NOT ASK BACK QUESTIONS.
-        `;
-
-        return systemPromptTemplate.replace('%CUSTOMFIELDS%', customFieldsStr);
+    _defaultAnalyzerPrompt() {
+        return `You are a document analyzer. Your task is to analyze documents and extract relevant information. You do not ask back questions.
+YOU MUSTNOT: Ask for additional information or clarification, or ask questions about the document, or ask for additional context.
+YOU MUSTNOT: Return a response without the desired JSON format.
+The tags, title and document_type MUST be in the language used in the document.
+The custom_fields are optional; only fill in values you actually find in the document.`;
     }
 
     /**
@@ -663,12 +572,14 @@ class OllamaService {
 
     /**
      * Log prompt and response to file
-     * @param {string} prompt - Prompt text
+     * @param {string} systemPrompt - System half of the prompt
+     * @param {string} userPrompt - User half of the prompt
      * @param {Object} response - Response object
      */
-    async _logPromptAndResponse(prompt, response) {
-        const content = '================================================================================'
-            + prompt + "\n\n"
+    async _logPromptAndResponse(systemPrompt, userPrompt, response) {
+        const content = '================================================================================\n'
+            + '--- SYSTEM ---\n' + systemPrompt + '\n\n'
+            + '--- USER ---\n' + userPrompt + '\n\n'
             + JSON.stringify(response)
             + '\n\n'
             + '================================================================================\n\n';
