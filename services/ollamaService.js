@@ -103,11 +103,11 @@ class OllamaService {
             console.log(`[DEBUG] Use existing data: ${config.useExistingData}, Restrictions applied based on useExistingData setting`);
             console.log(`[DEBUG] External API data: ${externalApiData ? 'provided' : 'none'}`);
 
-            // Fit into the context window (Task 6 replaces this line)
-            const numCtx = config.ollama.numCtxMax;
+            // Fit into the context window; only the document text may be trimmed
+            const fitted = this._fitPromptToContext(system, user);
 
             // Call Ollama API
-            const response = await this._callOllamaAPI(user, system, numCtx, this.documentAnalysisSchema);
+            const response = await this._callOllamaAPI(fitted.user, system, fitted.numCtx, this.documentAnalysisSchema);
 
             // Process response
             const parsedResponse = this._processOllamaResponse(response);
@@ -118,7 +118,7 @@ class OllamaService {
             }
 
             // Log the prompt and response
-            await this._logPromptAndResponse(system, user, parsedResponse);
+            await this._logPromptAndResponse(system, fitted.user, parsedResponse);
 
             // Return results in consistent format
             return {
@@ -128,7 +128,7 @@ class OllamaService {
                     completionTokens: 0,
                     totalTokens: 0
                 },
-                truncated: false
+                truncated: fitted.truncated
             };
         } catch (error) {
             console.error('Error analyzing document with Ollama:', error);
@@ -148,18 +148,20 @@ class OllamaService {
      */
     async analyzePlayground(content, prompt) {
         try {
-            // Calculate context window size
-            const promptTokenCount = await calculateTokens(prompt);
-            const numCtx = this._calculateNumCtx(promptTokenCount, 1024);
-
             // Generate playground system prompt (simpler than full analysis)
             const systemPrompt = this._generatePlaygroundSystemPrompt();
 
+            // Fit into the context window
+            const fitted = this._fitPromptToContext(
+                systemPrompt,
+                prompt + "\n\n" + JSON.stringify(content)
+            );
+
             // Call Ollama API
             const response = await this._callOllamaAPI(
-                prompt + "\n\n" + JSON.stringify(content),
+                fitted.user,
                 systemPrompt,
-                numCtx,
+                fitted.numCtx,
                 this.playgroundSchema
             );
 
@@ -376,22 +378,50 @@ The custom_fields are optional; only fill in values you actually find in the doc
     }
 
     /**
-     * Calculate context window size for Ollama
-     * @param {number} promptTokenCount - Token count for prompt
-     * @param {number} expectedResponseTokens - Expected response token count
-     * @returns {number} Context window size
+     * Fit the prompt into the context window.
+     *
+     * The system half is never touched: it carries the instructions, the format
+     * template and the pre-existing entity lists. Only the document text is
+     * trimmed, and only when it does not fit.
+     *
+     * @param {string} systemPrompt - System half (protected)
+     * @param {string} userPrompt - User half (document text, may be trimmed)
+     * @param {number} [numPredict] - Tokens reserved for the response
+     * @returns {{user: string, numCtx: number, truncated: boolean}}
      */
-    _calculateNumCtx(promptTokenCount, expectedResponseTokens) {
-        const totalTokenUsage = promptTokenCount + expectedResponseTokens;
-        const maxCtxLimit = Number(config.tokenLimit);
+    _fitPromptToContext(systemPrompt, userPrompt, numPredict = config.ollama.numPredict) {
+        const MIN_CTX = 2048;
+        const MIN_DOC_TOKENS = 512;
+        const maxCtx = config.ollama.numCtxMax;
 
-        const numCtx = Math.min(totalTokenUsage, maxCtxLimit);
+        const systemTokens = this._calculatePromptTokenCount(systemPrompt);
+        let budget = maxCtx - systemTokens - numPredict;
+        let user = userPrompt;
+        let truncated = false;
 
-        console.log('Prompt Token Count:', promptTokenCount);
-        console.log('Expected Response Tokens:', expectedResponseTokens);
-        console.log('Dynamic calculated num_ctx:', numCtx);
+        if (budget < MIN_DOC_TOKENS) {
+            console.error(
+                `[ERROR] System prompt (${systemTokens} tokens) plus reserved response `
+                + `(${numPredict} tokens) leaves only ${budget} tokens for the document `
+                + `within OLLAMA_NUM_CTX_MAX=${maxCtx}. Forcing ${MIN_DOC_TOKENS} document `
+                + `tokens and exceeding the configured maximum. Raise OLLAMA_NUM_CTX_MAX or `
+                + `shorten the pre-existing tag/correspondent lists.`
+            );
+            budget = MIN_DOC_TOKENS;
+        }
 
-        return numCtx;
+        if (this._calculatePromptTokenCount(user) > budget) {
+            user = user.substring(0, budget * 4);
+            truncated = true;
+            console.warn(`[WARNING] Document text truncated to ${budget} tokens to protect the system prompt`);
+        }
+
+        const userTokens = this._calculatePromptTokenCount(user);
+        const numCtx = Math.max(MIN_CTX, systemTokens + userTokens + numPredict);
+
+        console.log(`[DEBUG] num_ctx=${numCtx} (system=${systemTokens}, user=${userTokens}, predict=${numPredict}, truncated=${truncated})`);
+
+        return { user, numCtx, truncated };
     }
 
     /**
@@ -583,24 +613,23 @@ The custom_fields are optional; only fill in values you actually find in the doc
      */
     async generateText(prompt) {
         try {
-            // Calculate context window size based on prompt length
-            const promptTokenCount = this._calculatePromptTokenCount(prompt);
-            const numCtx = this._calculateNumCtx(promptTokenCount, 512);
-
             // Simple system prompt for text generation
             const systemPrompt = `You are a helpful assistant. Generate a clear, concise, and informative response to the user's question or request.`;
+
+            // Fit into the context window; free-text generation reserves more tokens
+            const fitted = this._fitPromptToContext(systemPrompt, prompt, 1024);
 
             // Call Ollama API without enforcing a specific response format
             const response = await this.client.post(`${this.apiUrl}/api/generate`, {
                 model: this.model,
-                prompt: prompt,
+                prompt: fitted.user,
                 system: systemPrompt,
                 stream: false,
                 options: {
                     temperature: 0.7,
                     top_p: 0.9,
                     num_predict: 1024,
-                    num_ctx: numCtx
+                    num_ctx: fitted.numCtx
                 }
             });
 
