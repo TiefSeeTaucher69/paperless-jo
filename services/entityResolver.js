@@ -46,8 +46,92 @@ class EntityResolver {
       }
     }
 
-    // Stufe 4 folgt in Task 6
+    // Stufe 4: Ähnlichkeit gegen den besten Kandidaten
+    let best = null;
+    for (const entity of existingEntities) {
+      const sim = diceCoefficient(normalizedProposed, normalizeForType(entity.name, type));
+      if (!best || sim > best.similarity) {
+        best = { entity, similarity: sim };
+      }
+    }
+
+    if (!best) {
+      return { action: 'create' };
+    }
+
+    // Negativ-Cache geht sowohl 4a als auch 4c vor
+    const rejected = this.store.findRejectedPair(type, proposedName, best.entity.name);
+
+    if (best.similarity >= this.autoThreshold) {
+      if (rejected) {
+        return { action: 'create' }; // Stufe 4b: Nutzerentscheidung uebersticht hohe Aehnlichkeit
+      }
+      this.store.insertAlias({
+        entityType: type, aliasNormalized: normalizedProposed,
+        canonicalName: best.entity.name, canonicalId: best.entity.id, source: 'auto'
+      });
+      return { action: 'map', id: best.entity.id, canonicalName: best.entity.name, via: 'similarity' };
+    }
+
+    if (rejected) {
+      return { action: 'create' };
+    }
+
+    if (best.similarity >= this.judgeMin) {
+      const verdict = await this._askJudge(type, proposedName, best.entity.name);
+
+      if (verdict.verdict === 'same') {
+        this.store.insertAlias({
+          entityType: type, aliasNormalized: normalizedProposed,
+          canonicalName: best.entity.name, canonicalId: best.entity.id, source: 'llm'
+        });
+        return { action: 'map', id: best.entity.id, canonicalName: best.entity.name, via: 'llm' };
+      }
+
+      if (verdict.verdict === 'different') {
+        this.store.insertQueueEntry({
+          entityType: type, proposedName, proposedId: null,
+          candidateName: best.entity.name, candidateId: best.entity.id,
+          similarity: best.similarity, llmVerdict: 'different', llmReason: verdict.reason,
+          status: 'rejected'
+        });
+        return { action: 'create' };
+      }
+
+      // 'unsure': proposed_id ist hier noch unbekannt, der Resolver legt nichts an.
+      // Der Aufrufer ruft nach dem tatsaechlichen Anlegen recordCreatedAndQueued auf.
+      return {
+        action: 'create_and_queue',
+        candidate: { id: best.entity.id, name: best.entity.name },
+        similarity: best.similarity,
+        verdict: verdict.verdict
+      };
+    }
+
+    // Stufe 4d
     return { action: 'create' };
+  }
+
+  async _askJudge(type, nameA, nameB) {
+    try {
+      const result = await this.judge(type, nameA, nameB);
+      if (!result || !['same', 'different', 'unsure'].includes(result.verdict)) {
+        return { verdict: 'unsure', reason: 'ungueltige oder leere Judge-Antwort' };
+      }
+      return result;
+    } catch (error) {
+      console.warn(`[WARNING] entityResolver: Judge nicht erreichbar fuer "${nameA}" vs "${nameB}", werte als unsure:`, error.message);
+      return { verdict: 'unsure', reason: `judge nicht erreichbar: ${error.message}` };
+    }
+  }
+
+  recordCreatedAndQueued({ type, proposedName, proposedId, candidate, similarity, verdict, documentId }) {
+    this.store.insertQueueEntry({
+      entityType: type, proposedName, proposedId,
+      candidateName: candidate.name, candidateId: candidate.id,
+      similarity, llmVerdict: verdict, llmReason: null,
+      status: 'open', documentId
+    });
   }
 }
 
