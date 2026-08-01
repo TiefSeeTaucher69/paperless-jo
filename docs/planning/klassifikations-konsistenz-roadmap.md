@@ -27,7 +27,7 @@ darüber fällt anhand der Tuning-Messung aus Phase 2, nicht vorab.
 | # | Inhalt | Abhängigkeit | Status |
 |---|---|---|---|
 | 0 | Dry-Run-Harness und Fixture-Export | — | gebaut, Baseline ausstehend |
-| 1 | Determinismus, Prompt-Hygiene, Prompt-Härtung | — | geplant |
+| 1 | Determinismus, Prompt-Hygiene, Prompt-Härtung | — | erledigt |
 | 2 | EntityResolver, Alias-Speicher, Schwellwert-Tuning | — | offen |
 | 3 | Review-UI, Merge, Altbestands-Durchlauf | Phase 2 | offen |
 | 4 | Fingerprint für wiederkehrende Dokumente | Phase 1–3 | nur skizziert |
