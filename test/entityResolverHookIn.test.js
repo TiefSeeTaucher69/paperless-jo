@@ -547,3 +547,37 @@ test('aktivierter Resolver mit echter EntityResolver/EntityStore-Verdrahtung sch
     store.close();
   }
 });
+
+test('processTags reicht options.documentId bis in die Review-Queue durch', async () => {
+  const originalInstance = paperlessService._entityResolverInstance;
+  const store = new EntityStore(':memory:');
+
+  try {
+    config.entityResolver.enabled = true;
+    paperlessService._entityResolverInstance = new EntityResolver({
+      store,
+      judge: async () => ({ verdict: 'unsure', reason: 'Testfall erzwingt unsure' }),
+      config: { autoThreshold: 1.1, judgeMin: 0 }
+    });
+
+    paperlessService.findExistingTag = async () => null;
+    paperlessService.createTagSafely = async (name) => ({ id: 777, name });
+    paperlessService.ensureTagCache = async () => {};
+    paperlessService.tagCache.clear();
+    paperlessService.tagCache.set('vollkommen anderer tag', { id: 601, name: 'Vollkommen Anderer Tag' });
+
+    await paperlessService.processTags(['Testtag Fuer DocumentId'], { documentId: 4321 });
+
+    const row = store.db.prepare(
+      `SELECT * FROM entity_review_queue WHERE entity_type = ? AND proposed_name = ?`
+    ).get('tag', 'Testtag Fuer DocumentId');
+
+    assert.ok(row, 'Es sollte eine Zeile in entity_review_queue geschrieben worden sein');
+    assert.strictEqual(row.document_id, 4321);
+  } finally {
+    config.entityResolver.enabled = false;
+    paperlessService._entityResolverInstance = originalInstance;
+    paperlessService.tagCache.clear();
+    store.close();
+  }
+});
