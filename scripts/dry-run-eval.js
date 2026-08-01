@@ -46,6 +46,43 @@ function parseArgs(argv) {
 }
 
 // ---------------------------------------------------------------------------
+// Ungefilterte Dokumentliste.
+//
+// paperlessService.getAllDocuments() respektiert PROCESS_PREDEFINED_DOCUMENTS
+// und TAGS aus der .env - das ist fuer den Produktions-Scan richtig, aber
+// fuer die Auswertung falsch: existiert der konfigurierte Filter-Tag nicht
+// (oder ist keinem Dokument zugewiesen), liefert getAllDocuments() eine leere
+// Liste, obwohl Dokumente vorhanden sind. Der Dry-Run soll den vorhandenen
+// Bestand auswerten, nicht den Scan-Filter nachbilden.
+// ---------------------------------------------------------------------------
+
+async function fetchAllDocumentsUnfiltered() {
+  paperlessService.initialize();
+  const client = paperlessService.client;
+  if (!client) {
+    throw new Error('paperlessService.client wurde nicht initialisiert - PAPERLESS_API_URL/TOKEN pruefen');
+  }
+
+  const documents = [];
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await client.get('/documents/', {
+      params: { page, page_size: 100, fields: 'id,title,created,tags,correspondent' }
+    });
+
+    if (!response?.data?.results || !Array.isArray(response.data.results)) break;
+
+    documents.push(...response.data.results);
+    hasMore = response.data.next !== null;
+    page++;
+  }
+
+  return documents;
+}
+
+// ---------------------------------------------------------------------------
 // Grobe Normalisierung, nur fuer die Messung.
 // Phase 2 ersetzt das durch services/entityNormalizer.js mit Tests.
 // ---------------------------------------------------------------------------
@@ -184,7 +221,7 @@ async function main() {
 
   const [existingTags, documents, correspondentObjects, documentTypeObjects] = await Promise.all([
     paperlessService.getTags(),
-    paperlessService.getAllDocuments(),
+    fetchAllDocumentsUnfiltered(),
     paperlessService.listCorrespondentsNames(),
     paperlessService.listDocumentTypesNames()
   ]);
@@ -193,10 +230,10 @@ async function main() {
   // Verbindung kaputt und jede Messung darauf waere wertlos.
   if (!Array.isArray(documents) || documents.length === 0) {
     console.error(
-      '\n[ERROR] Paperless lieferte keine Dokumente. Haeufigste Ursache: '
-      + 'PAPERLESS_API_URL in data/.env endet nicht auf "/api". '
-      + 'paperlessService setzt baseURL direkt auf diesen Wert und ruft dann '
-      + '/documents/ auf; ohne "/api" antwortet Paperless mit der Login-Seite.'
+      '\n[ERROR] Paperless lieferte keine Dokumente. Moegliche Ursachen: '
+      + 'PAPERLESS_API_URL in data/.env endet nicht auf "/api" (Paperless '
+      + 'antwortet dann mit der Login-Seite statt JSON), oder Token/URL sind '
+      + 'falsch, oder die Instanz enthaelt tatsaechlich keine Dokumente.'
     );
     process.exit(1);
   }
