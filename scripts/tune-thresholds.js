@@ -66,8 +66,9 @@ function main() {
   console.log(`Gelabelte Paare: ${pairs.length} (${pairs.filter(p => p.label === 'same').length} same, ${pairs.filter(p => p.label === 'different').length} different)`);
 
   const results = [];
-  for (let t = 0.05; t <= 0.95; t += 0.05) {
-    results.push(evaluateThreshold(pairs, Math.round(t * 100) / 100));
+  for (let i = 1; i <= 19; i++) {
+    const t = i / 20;
+    results.push(evaluateThreshold(pairs, t));
   }
 
   console.log('\nThreshold | Precision | Recall | TP | FP | FN | TN');
