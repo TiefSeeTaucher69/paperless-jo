@@ -94,6 +94,12 @@ ohne die Instanz zu verändern. Der Bestand in Paperless bleibt unangetastet.
 
 ## Phase 1 — Determinismus und Prompt-Hygiene
 
+**Vollständiger Implementierungsplan (maßgeblich, TDD, 9 Tasks, exakte
+Code-Blöcke):**
+[docs/superpowers/plans/2026-08-01-phase1-determinismus-prompt-hygiene.md](../superpowers/plans/2026-08-01-phase1-determinismus-prompt-hygiene.md).
+Die folgende Liste ist eine Kurzfassung zur Orientierung; bei Abweichungen
+gilt der Plan.
+
 **Betroffene Dateien**
 
 - `services/ollamaService.js`
@@ -117,10 +123,20 @@ ohne die Instanz zu verändern. Der Bestand in Paperless bleibt unangetastet.
 7. Prompt-Aufteilung korrigieren: `system` erhält den deutschen `SYSTEM_PROMPT`
    samt Formatvorgabe und Bestandslisten, `prompt` nur noch den Dokumententext.
    Hartkodierten englischen Analyzer-Prompt entfernen.
+8. Tags defensiv filtern, die wie extrahierte Datenwerte statt Kategorien
+   aussehen (Doppelpunkt, unplausible Länge) — ergänzt nach dem Baseline-Lauf.
+9. `document_date` auf `YYYY-MM-DD` normieren oder verwerfen, statt ein
+   abweichendes Format ungeprüft nach `updateData.created` durchzureichen —
+   ergänzt nach dem Baseline-Lauf.
 
-**Abnahmekriterium:** dasselbe Dokument zweimal verarbeitet liefert ein
-identisches Ergebnis, und die Bestandslisten sind im tatsächlich gesendeten
-Prompt nachweisbar enthalten (Prüfung über das bestehende Prompt-Log).
+**Abnahmekriterium:** dasselbe Dokument zweimal über
+`scripts/dry-run-eval.js --repeat 2` verarbeitet liefert ein identisches
+Ergebnis (gemessene Baseline vor Phase 1: 10 von 10 Dokumenten instabil), und
+die Bestandslisten sind im tatsächlich gesendeten Prompt nachweisbar enthalten
+(Prüfung über das bestehende Prompt-Log). Nicht über einen normalen
+Serverstart prüfen — `PROCESS_PREDEFINED_DOCUMENTS=yes` und
+`DISABLE_AUTOMATIC_PROCESSING` ungesetzt bedeuten: ein Start verarbeitet sofort
+Dokumente und schreibt nach Paperless.
 
 ## Phase 2 — EntityResolver
 
