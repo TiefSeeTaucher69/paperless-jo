@@ -83,19 +83,8 @@ class OllamaService {
             // Cache thumbnail
             await this._handleThumbnailCaching(id);
 
-            // Get external API data if available and validate it
+            // Get external API data if available (validation happens once, inside _buildPrompt)
             let externalApiData = options.externalApiData || null;
-            let validatedExternalApiData = null;
-
-            if (externalApiData) {
-                try {
-                    validatedExternalApiData = await this._validateAndTruncateExternalApiData(externalApiData);
-                    console.log('[DEBUG] External API data validated and included');
-                } catch (error) {
-                    console.warn('[WARNING] External API data validation failed:', error.message);
-                    validatedExternalApiData = null;
-                }
-            }
 
             // Build prompt: instructions go to `system`, document text to `prompt`
             let system;
@@ -112,7 +101,7 @@ class OllamaService {
             }
 
             console.log(`[DEBUG] Use existing data: ${config.useExistingData}, Restrictions applied based on useExistingData setting`);
-            console.log(`[DEBUG] External API data: ${validatedExternalApiData ? 'included' : 'none'}`);
+            console.log(`[DEBUG] External API data: ${externalApiData ? 'provided' : 'none'}`);
 
             // Fit into the context window (Task 6 replaces this line)
             const numCtx = config.ollama.numCtxMax;
