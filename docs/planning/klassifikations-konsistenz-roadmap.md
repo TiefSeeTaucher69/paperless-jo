@@ -30,7 +30,7 @@ darüber fällt anhand der Tuning-Messung aus Phase 2, nicht vorab.
 | 1 | Determinismus, Prompt-Hygiene, Prompt-Härtung | — | erledigt |
 | 2 | EntityResolver, Alias-Speicher, Schwellwert-Tuning | — | erledigt |
 | 3 | Review-UI, Merge, Altbestands-Durchlauf | Phase 2 | erledigt |
-| 4 | Embeddings-Ähnlichkeitskanal | Phase 2, Messung Task 11 | offen (neu) |
+| 4 | Embeddings-Ähnlichkeitskanal | Phase 2, Messung Task 11 | erledigt |
 | 5 | Fingerprint für wiederkehrende Dokumente | Phase 1–4 | nur skizziert |
 
 Phase 1 und 2 sind unabhängig voneinander wirksam. Jede Phase bekommt einen
@@ -310,21 +310,22 @@ durchgeführt und vom Nutzer in Paperless-ngx verifiziert (2026-08-02) — die
 gelöschte Entität war weg, betroffene Dokumente zeigten die überlebende
 Entität, sonst nichts verändert.
 
-## Phase 4 — Embeddings-Ähnlichkeitskanal (skizziert)
+## Phase 4 — Embeddings-Ähnlichkeitskanal (2026-08-02)
 
-Aus Phase 3 herausgelöst (Planungsentscheidung 2026-08-01), damit Review-UI/
-Merge/Altbestand und ein neuer, eigenständig zu tunender Ähnlichkeitskanal
-nicht in einem Plan vermischt werden — konsistent mit dem Prinzip, dass jede
-Phase einzeln geplant und abgenommen wird.
+Implementiert per `superpowers:subagent-driven-development`: 10 Tasks
+task-weise per TDD, je mit eigenem Task-Review, plus ein finaler
+Whole-Branch-Review. Vollständiger Implementierungsplan:
+[docs/superpowers/plans/2026-08-02-phase4-embeddings.md](../superpowers/plans/2026-08-02-phase4-embeddings.md),
+Design-Entwurf:
+[docs/superpowers/specs/2026-08-02-phase4-embeddings-design.md](../superpowers/specs/2026-08-02-phase4-embeddings-design.md).
 
-Laut Messung aus Phase 2 (Task 11) strukturell nötig, nicht optional: reine
-Trigram-Ähnlichkeit erkennt orthografisch ferne Synonyme wie
-`Entgeltabrechnung`/`Verdienstbescheinigung` (0.10) oder
-`Entgeltabrechnung`/`Payroll Statement` (0.06) bei keiner sinnvollen Schwelle.
-Näheres in
-[docs/superpowers/specs/2026-08-01-klassifikations-konsistenz-design.md](../superpowers/specs/2026-08-01-klassifikations-konsistenz-design.md),
-Abschnitt „Bewusst ausgeschlossen". Noch nicht entworfen — eigener
-Design-Durchlauf folgt nach Phase 3.
+Der zweite Ähnlichkeitskanal (Ollama-Embeddings, Modell `bge-m3`) läuft
+additiv neben dem Trigram-Kanal und ist per Default abgeschaltet
+(`EMBEDDING_SIMILARITY_ENABLED=no`) — bestehendes Verhalten bleibt ohne
+Konfigurationsänderung exakt gleich. Vor der Aktivierung sind `ollama pull
+bge-m3` auf der Ollama-Instanz und ein Lauf von `scripts/tune-thresholds.js`
+nötig, damit `EMBED_AUTO_THRESHOLD`/`EMBED_JUDGE_MIN` gemessen statt geraten
+sind — genau so, wie schon die Schwellwerte aus Phase 2 hergeleitet wurden.
 
 ## Phase 5 — Fingerprint (skizziert)
 
