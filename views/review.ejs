@@ -72,7 +72,8 @@
                                     <th>Type</th>
                                     <th>Proposed</th>
                                     <th>Candidate</th>
-                                    <th>Similarity</th>
+                                    <th>Trigram</th>
+                                    <th>Embedding</th>
                                     <th>Judge</th>
                                     <th>Document</th>
                                     <th>Actions</th>
@@ -84,7 +85,8 @@
                                     <td><%= entry.entity_type %></td>
                                     <td><%= entry.proposed_name %></td>
                                     <td><%= entry.candidate_name %></td>
-                                    <td><%= entry.similarity.toFixed(2) %></td>
+                                    <td><%= entry.trigram_similarity != null ? entry.trigram_similarity.toFixed(2) : '-' %></td>
+                                    <td><%= entry.embedding_similarity != null ? entry.embedding_similarity.toFixed(2) : '-' %></td>
                                     <td><%= entry.llm_verdict || '-' %></td>
                                     <td>
                                         <% if (entry.documentLink) { %>
@@ -106,7 +108,7 @@
                                 </tr>
                                 <% }); %>
                                 <% if (queue.length === 0) { %>
-                                <tr><td colspan="7" class="text-center text-gray-400 py-6">No open entries</td></tr>
+                                <tr><td colspan="8" class="text-center text-gray-400 py-6">No open entries</td></tr>
                                 <% } %>
                             </tbody>
                         </table>
