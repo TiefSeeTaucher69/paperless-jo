@@ -21,6 +21,7 @@ const { isAuthenticated, getJwtSecret } = require('./auth.js');
 const { csrfProtection } = require('../middleware/csrf');
 const customService = require('../services/customService.js');
 const config = require('../config/config.js');
+const { mapEntitySimilarityFields } = require('./settingsFormMapping');
 require('dotenv').config({ path: '../data/.env' });
 
 /**
@@ -4265,6 +4266,8 @@ router.post('/settings', express.json(), async (req, res) => {
       apiToken = require('crypto').randomBytes(64).toString('hex');
       updatedConfig.API_KEY = apiToken;
     }
+
+    Object.assign(updatedConfig, mapEntitySimilarityFields(req.body));
 
     await setupService.saveConfig(updatedConfig);
     try {
