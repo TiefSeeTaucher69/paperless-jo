@@ -49,7 +49,7 @@ test('findCandidates filtert nach correspondent_id, liefert nicht die Fingerprin
 test('upsertFingerprint bei gleicher document_id ersetzt statt zu duplizieren', () => {
   const store = new DocumentFingerprintStore(':memory:');
   try {
-    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'old-model' });
     store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 2, tagIds: [9], embedding: [0, 1], model: 'bge-m3' });
 
     const candidates = store.findCandidates(5);
@@ -57,6 +57,7 @@ test('upsertFingerprint bei gleicher document_id ersetzt statt zu duplizieren', 
     assert.strictEqual(candidates[0].documentTypeId, 2);
     assert.deepStrictEqual(candidates[0].tagIds, [9]);
     assert.deepStrictEqual(candidates[0].embedding, [0, 1]);
+    assert.strictEqual(candidates[0].model, 'bge-m3'); // ON CONFLICT ersetzt auch model, nicht nur die uebrigen Spalten
   } finally {
     store.close();
   }

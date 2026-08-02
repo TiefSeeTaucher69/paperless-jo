@@ -162,3 +162,33 @@ test('findMatch gefolgt von recordFingerprint fuer denselben Inhalt embedded nur
   await service.recordFingerprint({ documentId: 202, correspondentId: 5, documentTypeId: 3, tagIds: [1, 2], content: 'Wiederkehrender Inhalt' });
   assert.strictEqual(embedCalls, 1);
 });
+
+test('Memo-Cache ist an den Inhalt gebunden: zwei verschiedene Dokumente embedden je einmal, mit unterschiedlichen Vektoren', async () => {
+  const store = fakeStore([
+    { documentId: 101, correspondentId: 5, documentTypeId: 3, tagIds: [1, 2], embedding: [1, 0], model: 'bge-m3' }
+  ]);
+  const vectorsByText = { 'Dokument A': [1, 0], 'Dokument B': [0, 1] };
+  let embedCalls = 0;
+  const embeddingService = {
+    embed: async (text) => {
+      embedCalls++;
+      if (!(text in vectorsByText)) throw new Error(`kein Test-Vektor fuer "${text}" hinterlegt`);
+      return vectorsByText[text];
+    },
+    cosineSimilarity: (a, b) => {
+      const dot = a.reduce((sum, v, i) => sum + v * b[i], 0);
+      const normA = Math.sqrt(a.reduce((sum, v) => sum + v * v, 0));
+      const normB = Math.sqrt(b.reduce((sum, v) => sum + v * v, 0));
+      return dot / (normA * normB);
+    }
+  };
+  const service = new DocumentFingerprintService({ store, embeddingService, similarityThreshold: 0.90, model: 'bge-m3' });
+
+  const matchA = await service.findMatch(5, 'Dokument A');
+  assert.deepStrictEqual(matchA, { tagIds: [1, 2], documentTypeId: 3 });
+
+  const matchB = await service.findMatch(5, 'Dokument B');
+  assert.strictEqual(matchB, null); // Cosine([0,1], [1,0]) = 0, weit unter der Schwelle
+
+  assert.strictEqual(embedCalls, 2); // je ein Call, keine Wiederverwendung des falschen Vektors
+});
