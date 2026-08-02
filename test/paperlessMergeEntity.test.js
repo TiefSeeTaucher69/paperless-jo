@@ -228,3 +228,36 @@ test('getExampleDocumentsForEntity wirft bei unbekanntem Typ', async () => {
     /unknown type/
   );
 });
+
+test('_bulkReassignDocuments chunkt bei mehr als 100 Dokumenten in mehrere bulk_edit-Aufrufe', async () => {
+  const documentIds = Array.from({ length: 250 }, (_, i) => i + 1);
+  const bulkEditCalls = [];
+  const mockClient = {
+    post: async (url, body) => { bulkEditCalls.push(body); return { data: {} }; }
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService._bulkReassignDocuments('tag', documentIds, 5, 6)
+  );
+
+  assert.strictEqual(bulkEditCalls.length, 3);
+  assert.strictEqual(bulkEditCalls[0].documents.length, 100);
+  assert.strictEqual(bulkEditCalls[1].documents.length, 100);
+  assert.strictEqual(bulkEditCalls[2].documents.length, 50);
+  assert.deepStrictEqual(bulkEditCalls[0].parameters, { add_tags: [6], remove_tags: [5] });
+  assert.deepStrictEqual(result, { chunksCompleted: 3, chunksTotal: 3 });
+});
+
+test('_bulkReassignDocuments schickt bei <=100 Dokumenten genau einen bulk_edit-Aufruf', async () => {
+  const bulkEditCalls = [];
+  const mockClient = {
+    post: async (url, body) => { bulkEditCalls.push(body); return { data: {} }; }
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService._bulkReassignDocuments('correspondent', [1, 2, 3], 7, 8)
+  );
+
+  assert.strictEqual(bulkEditCalls.length, 1);
+  assert.deepStrictEqual(result, { chunksCompleted: 1, chunksTotal: 1 });
+});

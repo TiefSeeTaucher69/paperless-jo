@@ -16,6 +16,7 @@ class PaperlessService {
     this.lastCorrespondentRefresh = 0;
     this.lastDocumentTypeRefresh = 0;
     this.CACHE_LIFETIME = 3000; // 3 Sekunden
+    this.BULK_EDIT_CHUNK_SIZE = 100;
     this._entityResolverInstance = null;
   }
 
@@ -1397,11 +1398,23 @@ async getOrCreateDocumentType(name, options = {}) {
       document_type: { document_type: toId }
     };
 
-    await this.client.post('/documents/bulk_edit/', {
-      documents: documentIds,
-      method: methodMap[type],
-      parameters: parametersMap[type]
-    });
+    // Ungechunkt waere ein Tag mit mehreren tausend Dokumenten eine einzige sehr grosse
+    // Anfrage ohne Teilfortschritt (AUDIT-013). In Bloecken senden macht einen Abbruch
+    // eingrenzbar: chunksCompleted zeigt, wie weit der Merge kam.
+    const chunksTotal = Math.ceil(documentIds.length / this.BULK_EDIT_CHUNK_SIZE) || 0;
+    let chunksCompleted = 0;
+
+    for (let i = 0; i < documentIds.length; i += this.BULK_EDIT_CHUNK_SIZE) {
+      const chunk = documentIds.slice(i, i + this.BULK_EDIT_CHUNK_SIZE);
+      await this.client.post('/documents/bulk_edit/', {
+        documents: chunk,
+        method: methodMap[type],
+        parameters: parametersMap[type]
+      });
+      chunksCompleted++;
+    }
+
+    return { chunksCompleted, chunksTotal };
   }
 
   async mergeEntity(type, fromId, toId, { dryRun = true } = {}) {
