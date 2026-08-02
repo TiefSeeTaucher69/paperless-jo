@@ -117,6 +117,14 @@ const documentFingerprintSimilarityThreshold = clampThreshold(
   'FINGERPRINT_SIMILARITY_THRESHOLD'
 );
 
+// Cross-origin browser access is opt-in. Unset = same-origin only, which is
+// correct for the default self-hosted deployment; set a comma-separated list
+// to allow specific origins to call the API with credentials.
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 console.log('Loaded environment variables:', {
   PAPERLESS_API_URL: maskUrl(process.env.PAPERLESS_API_URL),
   PAPERLESS_API_TOKEN: '******',
@@ -177,6 +185,9 @@ module.exports = {
   documentFingerprint: {
     enabled: parseEnvBoolean(process.env.DOCUMENT_FINGERPRINT_ENABLED, 'no') === 'yes',
     similarityThreshold: documentFingerprintSimilarityThreshold
+  },
+  security: {
+    allowedOrigins
   },
   custom: {
     apiUrl: process.env.CUSTOM_BASE_URL || '',
