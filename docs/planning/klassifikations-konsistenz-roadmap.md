@@ -29,7 +29,7 @@ darüber fällt anhand der Tuning-Messung aus Phase 2, nicht vorab.
 | 0 | Dry-Run-Harness und Fixture-Export | — | gebaut, Baseline ausstehend |
 | 1 | Determinismus, Prompt-Hygiene, Prompt-Härtung | — | erledigt |
 | 2 | EntityResolver, Alias-Speicher, Schwellwert-Tuning | — | erledigt |
-| 3 | Review-UI, Merge, Altbestands-Durchlauf | Phase 2 | offen |
+| 3 | Review-UI, Merge, Altbestands-Durchlauf | Phase 2 | erledigt |
 | 4 | Embeddings-Ähnlichkeitskanal | Phase 2, Messung Task 11 | offen (neu) |
 | 5 | Fingerprint für wiederkehrende Dokumente | Phase 1–4 | nur skizziert |
 
@@ -270,6 +270,45 @@ entsteht. Vollständige Begründung im Design-Spec, Abschnitt „Phase 3".
   einen Button auf der Review-Seite — bei den gemessenen Bestandsgrößen
   (~40 Tags, 17 Dokumentarten, 16 Korrespondenten) wenige tausend
   Vergleichspaare ohne Netzwerk-Call, kein Hintergrund-Job nötig.
+
+## Befunde aus der Umsetzung von Phase 3 (2026-08-02)
+
+Implementiert per `superpowers:subagent-driven-development`: 8 Tasks
+task-weise per TDD, je mit eigenem Task-Review, plus ein finaler
+Whole-Branch-Review in zwei Runden (6 Fix-Commits über beide Runden hinweg,
+bevor gemergt wurde). Vollständiger Implementierungsplan:
+[docs/superpowers/plans/2026-08-01-phase3-review-ui-merge-altbestand.md](../superpowers/plans/2026-08-01-phase3-review-ui-merge-altbestand.md).
+156/156 Tests grün.
+
+**Der Whole-Branch-Review fand vier reale Probleme vor dem Merge**, alle
+behoben: ein Modul-Top-Level-DB-Open in `routes/review.js`, das den
+Server-Start hätte crashen lassen können und bei deaktiviertem Resolver
+nicht inert war (→ lazy Konstruktion); ein Merge-Dialog, der nicht zeigte,
+welche Entität gelöscht wird; eine 404-Sackgasse in `mergeEntity`, wenn ein
+Queue-Eintrag auf eine bereits durch einen früheren Merge gelöschte Entität
+zeigte; und ein erneuter Altbestands-Lauf, der das LLM-Judge-Urteil auf noch
+offenen Einträgen stillschweigend überschrieben hätte.
+
+**Nach dem Merge, direkt aus dem Testen in echter Nutzung nachgezogen**
+(nicht Teil des ursprünglichen Plans):
+
+- Sidebar-Navigationslink zur Review-Seite fehlte auf allen anderen Seiten
+  außer der Review-Seite selbst — auf Dashboard, Manual, Chat, History,
+  Settings ergänzt.
+- Die gesamte Review-UI war deutsch trotz sonst englischer Hauptanwendung —
+  Tabellenkopf, Buttons, Modal-Text, Alerts und die an den Client
+  durchgereichten Fehlermeldungen auf Englisch umgestellt.
+- Preview-Funktion ergänzt, die im ursprünglichen Plan fehlte: ein Button je
+  Zeile zieht bis zu drei Beispieldokumente je Seite (Proposed/Candidate)
+  direkt aus Paperless-ngx und verlinkt sie, damit vor einer
+  Merge-Entscheidung nachschaubar ist, wofür eine Entität tatsächlich
+  verwendet wird, statt zu raten. Augen-Symbol (Font Awesome, bereits im
+  Projekt lizenziert und in der History-Ansicht genutzt) statt Text-Button.
+
+**Abnahmekriterium erfüllt:** ein echter Merge wurde an echten Daten
+durchgeführt und vom Nutzer in Paperless-ngx verifiziert (2026-08-02) — die
+gelöschte Entität war weg, betroffene Dokumente zeigten die überlebende
+Entität, sonst nichts verändert.
 
 ## Phase 4 — Embeddings-Ähnlichkeitskanal (skizziert)
 

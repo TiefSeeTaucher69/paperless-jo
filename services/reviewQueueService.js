@@ -11,7 +11,7 @@ class ReviewQueueService {
   _getEntryOrThrow(id) {
     const entry = this.store.getQueueEntryById(id);
     if (!entry) {
-      throw new Error(`Kein Queue-Eintrag mit id=${id}`);
+      throw new Error(`No queue entry with id=${id}`);
     }
     return entry;
   }
