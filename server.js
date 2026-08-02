@@ -7,6 +7,7 @@ const paperlessService = require('./services/paperlessService');
 const AIServiceFactory = require('./services/aiServiceFactory');
 const documentModel = require('./models/document');
 const setupService = require('./services/setupService');
+const { ensureJwtSecret } = require('./services/jwtSecretGuard');
 const setupRoutes = require('./routes/setup');
 const reviewRoutes = require('./routes/review');
 
@@ -713,6 +714,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 async function startServer() {
   const port = process.env.PAPERLESS_AI_PORT || 3000;
   try {
+    await ensureJwtSecret();
     await initializeDataDirectory();
     await saveOpenApiSpec(); // Save OpenAPI specification on startup
     app.listen(port, () => {
