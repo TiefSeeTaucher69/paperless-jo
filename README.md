@@ -62,6 +62,24 @@ Powered by **Retrieval-Augmented Generation (RAG)**, you can now search semantic
 - Set custom output tags for tracked classification  
 ![PPAI_SHOWCASE3](https://github.com/user-attachments/assets/1fc9f470-6e45-43e0-a212-b8fa6225e8dd)
 
+### 🔍 Entity Resolution & Similarity Matching (Experimental)
+
+Configurable from **Settings → Entity Resolution & Similarity Matching**:
+
+- **EntityResolver** — fuzzy-matches AI-suggested tags/correspondents/document
+  types against what already exists in Paperless-ngx (trigram similarity)
+  instead of always creating a new entity. Tune the auto-merge and judge
+  thresholds to your data before relying on it.
+- **Embedding Similarity** — adds a second, semantic matching channel via an
+  Ollama embedding model (`bge-m3` by default). Requires `ollama pull bge-m3`
+  on the Ollama instance used by this app.
+- **Document Fingerprint** — reuses a recurring document's tags/document type
+  based on content similarity. **Not production-ready** (see the project's
+  audit report, AUDIT-003) — leave disabled outside of testing.
+
+Matches below the auto-merge threshold go to the in-app Review Queue
+(`/review`) for manual confirmation instead of being applied automatically.
+
 ---
 
 ## 🚀 Installation
