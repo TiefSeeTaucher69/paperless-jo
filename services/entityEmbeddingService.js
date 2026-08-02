@@ -37,6 +37,17 @@ class EntityEmbeddingService {
 
     return dot / (Math.sqrt(normA) * Math.sqrt(normB));
   }
+
+  async getOrComputeEmbedding(store, entityType, entity) {
+    const cached = store.getEmbedding(entityType, entity.id);
+    if (cached && cached.entity_name === entity.name && cached.model === config.embedding.model) {
+      return cached.vector;
+    }
+
+    const vector = await this.embed(entity.name);
+    store.upsertEmbedding({ entityType, id: entity.id, name: entity.name, model: config.embedding.model, vector });
+    return vector;
+  }
 }
 
 module.exports = new EntityEmbeddingService();
