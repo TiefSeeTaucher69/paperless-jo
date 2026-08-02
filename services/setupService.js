@@ -6,8 +6,8 @@ const config = require('../config/config');
 const AzureOpenAI = require('openai').AzureOpenAI;
 
 class SetupService {
-  constructor() {
-    this.envPath = path.join(process.cwd(), 'data', '.env');
+  constructor(envPath = path.join(process.cwd(), 'data', '.env')) {
+    this.envPath = envPath;
     this.configured = null; // Variable to store the configuration status
   }
 
@@ -328,4 +328,6 @@ class SetupService {
   }
 }
 
-module.exports = new SetupService();
+const setupServiceSingleton = new SetupService();
+setupServiceSingleton.SetupService = SetupService;
+module.exports = setupServiceSingleton;
