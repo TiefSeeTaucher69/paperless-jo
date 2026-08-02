@@ -192,3 +192,30 @@ test('run ignoriert einen einzelnen fehlgeschlagenen Embedding-Call, statt abzub
     store.close();
   }
 });
+
+test('run schreibt keine NaN-Aehnlichkeit, wenn cosineSimilarity einen ungueltigen Wert liefert', async () => {
+  const store = new EntityStore(':memory:');
+  try {
+    const embeddingService = {
+      getOrComputeEmbedding: async () => [1, 0],
+      cosineSimilarity: () => NaN // fehlerhafter Embedding-Service
+    };
+    const service = new EntityBackfillService({
+      store, judgeMin: 0.6, embeddingService, embeddingEnabled: true, embedJudgeMin: 0.90
+    });
+
+    // Trigram allein reicht -> es wird eingefuegt; NaN darf weder similarity (NOT NULL)
+    // vergiften noch als embedding_similarity landen.
+    const result = await service.run('document_type', [
+      { id: 5, name: 'Meldebescheinigung' },
+      { id: 12, name: 'Meldebeschreibung' }
+    ]);
+
+    assert.strictEqual(result.inserted, 1);
+    const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE entity_type = 'document_type'`).get();
+    assert.strictEqual(row.embedding_similarity, null);
+    assert.ok(Number.isFinite(row.similarity) && row.similarity >= 0.6);
+  } finally {
+    store.close();
+  }
+});

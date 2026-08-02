@@ -43,7 +43,8 @@ class EntityBackfillService {
 
         let embeddingSim = null;
         if (vectors.has(candidate.id) && vectors.has(proposed.id)) {
-          embeddingSim = this.embeddingService.cosineSimilarity(vectors.get(candidate.id), vectors.get(proposed.id));
+          const sim = this.embeddingService.cosineSimilarity(vectors.get(candidate.id), vectors.get(proposed.id));
+          embeddingSim = Number.isFinite(sim) ? sim : null;
         }
 
         const reachesThreshold = trigramSim >= this.judgeMin
