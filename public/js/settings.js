@@ -702,22 +702,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
-    // Entity Resolver / Embedding Similarity settings toggles
-    const toggleConfigs = [
-        ['entityResolverEnabled', 'entityResolverSettings'],
-        ['embeddingSimilarityEnabled', 'embeddingSimilaritySettings']
-    ];
-    for (const [checkboxId, panelId] of toggleConfigs) {
-        const checkbox = document.getElementById(checkboxId);
-        const panel = document.getElementById(panelId);
-        if (checkbox && panel) {
-            checkbox.addEventListener('change', function() {
-                panel.classList.toggle('hidden', !this.checked);
-            });
-        }
-    }
-
+    
     const fieldsList = document.getElementById('customFieldsList');
     if (fieldsList) {
         // Initialize Sortable
