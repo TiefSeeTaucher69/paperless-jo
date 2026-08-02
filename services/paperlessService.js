@@ -172,7 +172,8 @@ class PaperlessService {
           judgeMin: config.entityResolver.judgeMin,
           embeddingEnabled: config.embedding.enabled,
           embedAutoThreshold: config.embedding.autoThreshold,
-          embedJudgeMin: config.embedding.judgeMin
+          embedJudgeMin: config.embedding.judgeMin,
+          embeddingExcludedTypes: config.embedding.excludedTypes
         }
       });
     }

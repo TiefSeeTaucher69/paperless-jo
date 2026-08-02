@@ -193,6 +193,33 @@ test('run ignoriert einen einzelnen fehlgeschlagenen Embedding-Call, statt abzub
   }
 });
 
+test('run ueberspringt den Embedding-Kanal fuer einen ausgeschlossenen Typ, kein Embedding-Call', async () => {
+  const store = new EntityStore(':memory:');
+  let calls = 0;
+  try {
+    const embeddingService = {
+      getOrComputeEmbedding: async () => { calls++; return [1, 0]; },
+      cosineSimilarity: () => 1
+    };
+    const service = new EntityBackfillService({
+      store, judgeMin: 0.99, embeddingService, embeddingEnabled: true, embedJudgeMin: 0.90,
+      excludedTypes: ['tag']
+    });
+
+    // Faker-Embedding-Service liefert ueberall Cosine 1 - waere 'tag' nicht ausgeschlossen,
+    // wuerde das trotz weit auseinanderliegender Trigram-Aehnlichkeit einen Eintrag erzeugen.
+    const result = await service.run('tag', [
+      { id: 1, name: 'Ausbildung' },
+      { id: 2, name: 'Bewerbung' }
+    ]);
+
+    assert.strictEqual(result.inserted, 0);
+    assert.strictEqual(calls, 0);
+  } finally {
+    store.close();
+  }
+});
+
 test('run schreibt keine NaN-Aehnlichkeit, wenn cosineSimilarity einen ungueltigen Wert liefert', async () => {
   const store = new EntityStore(':memory:');
   try {
