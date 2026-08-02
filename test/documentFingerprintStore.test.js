@@ -7,7 +7,7 @@ test('upsertFingerprint speichert, findCandidates liefert ihn fuer denselben Kor
   try {
     store.upsertFingerprint({
       documentId: 101, correspondentId: 5, documentTypeId: 3,
-      tagIds: [1, 2], embedding: [1, 0, 0]
+      tagIds: [1, 2], embedding: [1, 0, 0], model: 'bge-m3'
     });
 
     const candidates = store.findCandidates(5);
@@ -17,6 +17,7 @@ test('upsertFingerprint speichert, findCandidates liefert ihn fuer denselben Kor
     assert.strictEqual(candidates[0].documentTypeId, 3);
     assert.deepStrictEqual(candidates[0].tagIds, [1, 2]);
     assert.deepStrictEqual(candidates[0].embedding, [1, 0, 0]);
+    assert.strictEqual(candidates[0].model, 'bge-m3');
   } finally {
     store.close();
   }
@@ -34,8 +35,8 @@ test('findCandidates liefert leeres Array fuer Korrespondenten ohne gespeicherte
 test('findCandidates filtert nach correspondent_id, liefert nicht die Fingerprints anderer Korrespondenten', () => {
   const store = new DocumentFingerprintStore(':memory:');
   try {
-    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0] });
-    store.upsertFingerprint({ documentId: 2, correspondentId: 6, documentTypeId: 1, tagIds: [1], embedding: [1, 0] });
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    store.upsertFingerprint({ documentId: 2, correspondentId: 6, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
 
     const candidates = store.findCandidates(5);
     assert.strictEqual(candidates.length, 1);
@@ -48,14 +49,28 @@ test('findCandidates filtert nach correspondent_id, liefert nicht die Fingerprin
 test('upsertFingerprint bei gleicher document_id ersetzt statt zu duplizieren', () => {
   const store = new DocumentFingerprintStore(':memory:');
   try {
-    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0] });
-    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 2, tagIds: [9], embedding: [0, 1] });
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 2, tagIds: [9], embedding: [0, 1], model: 'bge-m3' });
 
     const candidates = store.findCandidates(5);
     assert.strictEqual(candidates.length, 1);
     assert.strictEqual(candidates[0].documentTypeId, 2);
     assert.deepStrictEqual(candidates[0].tagIds, [9]);
     assert.deepStrictEqual(candidates[0].embedding, [0, 1]);
+  } finally {
+    store.close();
+  }
+});
+
+test('findCandidates liefert model mit zurueck, upsertFingerprint speichert es', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({
+      documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1],
+      embedding: [1, 0], model: 'bge-m3'
+    });
+    const candidates = store.findCandidates(5);
+    assert.strictEqual(candidates[0].model, 'bge-m3');
   } finally {
     store.close();
   }

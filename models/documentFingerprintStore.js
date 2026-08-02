@@ -36,6 +36,18 @@ class DocumentFingerprintStore {
       CREATE INDEX IF NOT EXISTS idx_document_fingerprints_correspondent
       ON document_fingerprints(correspondent_id)
     `).run();
+
+    this._ensureColumn('document_fingerprints', 'model', 'TEXT');
+  }
+
+  // Additive Spalten-Migration: CREATE TABLE IF NOT EXISTS legt bei einer bereits
+  // existierenden Alt-Datenbank keine neuen Spalten an - das muss ALTER TABLE
+  // uebernehmen, idempotent per PRAGMA table_info-Check.
+  _ensureColumn(table, column, definition) {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!columns.some(c => c.name === column)) {
+      this.db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+    }
   }
 
   findCandidates(correspondentId) {
@@ -48,7 +60,8 @@ class DocumentFingerprintStore {
         correspondentId: row.correspondent_id,
         documentTypeId: row.document_type_id,
         tagIds: JSON.parse(row.tag_ids),
-        embedding: this._bufferToVector(row.content_embedding)
+        embedding: this._bufferToVector(row.content_embedding),
+        model: row.model
       }));
     } catch (error) {
       console.error('[ERROR] documentFingerprintStore.findCandidates:', error.message);
@@ -56,20 +69,21 @@ class DocumentFingerprintStore {
     }
   }
 
-  upsertFingerprint({ documentId, correspondentId, documentTypeId, tagIds, embedding }) {
+  upsertFingerprint({ documentId, correspondentId, documentTypeId, tagIds, embedding, model }) {
     try {
       this.db.prepare(`
-        INSERT INTO document_fingerprints (document_id, correspondent_id, document_type_id, tag_ids, content_embedding, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO document_fingerprints (document_id, correspondent_id, document_type_id, tag_ids, content_embedding, model, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(document_id) DO UPDATE SET
           correspondent_id = excluded.correspondent_id,
           document_type_id = excluded.document_type_id,
           tag_ids = excluded.tag_ids,
           content_embedding = excluded.content_embedding,
+          model = excluded.model,
           created_at = excluded.created_at
       `).run(
         documentId, correspondentId, documentTypeId ?? null,
-        JSON.stringify(tagIds), this._vectorToBuffer(embedding), new Date().toISOString()
+        JSON.stringify(tagIds), this._vectorToBuffer(embedding), model ?? null, new Date().toISOString()
       );
       return true;
     } catch (error) {
