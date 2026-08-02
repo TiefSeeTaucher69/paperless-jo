@@ -17,8 +17,7 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
-const { authenticateJWT, isAuthenticated } = require('./auth.js');
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const { authenticateJWT, isAuthenticated, getJwtSecret } = require('./auth.js');
 const customService = require('../services/customService.js');
 const config = require('../config/config.js');
 require('dotenv').config({ path: '../data/.env' });
@@ -142,67 +141,32 @@ let PUBLIC_ROUTES = [
   '/setup'
 ];
 
-// Combined middleware to check authentication and setup
-router.use(async (req, res, next) => {
-  const token = req.cookies.jwt || req.headers.authorization?.split(' ')[1];
-  const apiKey = req.headers['x-api-key'];
-
-  // Public route check
+// Combined middleware to check authentication and setup. The JWT/API-key check
+// itself lives in ./auth.js (isAuthenticated) so it can't drift from the copy
+// used elsewhere; this wrapper only adds the public-route bypass and the
+// first-run "redirect to /setup or /settings" logic that's specific to this router.
+router.use((req, res, next) => {
   if (PUBLIC_ROUTES.some(route => req.path.startsWith(route))) {
     return next();
   }
 
-  // API key authentication
-  if (apiKey && apiKey === process.env.API_KEY) {
-    req.user = { apiKey: true };
-  } else {
-    // Fallback to JWT authentication
-    if (!token) {
-      return res.redirect('/login');
-    }
-
+  isAuthenticated(req, res, async () => {
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      req.user = decoded;
+      const isConfigured = await setupService.isConfigured();
+
+      if (!isConfigured && (!process.env.PAPERLESS_AI_INITIAL_SETUP || process.env.PAPERLESS_AI_INITIAL_SETUP === 'no') && !req.path.startsWith('/setup')) {
+        return res.redirect('/setup');
+      } else if (!isConfigured && process.env.PAPERLESS_AI_INITIAL_SETUP === 'yes' && !req.path.startsWith('/settings')) {
+        return res.redirect('/settings');
+      }
     } catch (error) {
-      res.clearCookie('jwt');
-      return res.redirect('/login');
+      console.error('Error checking setup configuration:', error);
+      return res.status(500).send('Internal Server Error');
     }
-  }
 
-  // Setup check
-  try {
-    const isConfigured = await setupService.isConfigured();
- 
-    if (!isConfigured && (!process.env.PAPERLESS_AI_INITIAL_SETUP || process.env.PAPERLESS_AI_INITIAL_SETUP === 'no') && !req.path.startsWith('/setup')) {
-      return res.redirect('/setup');
-    } else if (!isConfigured && process.env.PAPERLESS_AI_INITIAL_SETUP === 'yes' && !req.path.startsWith('/settings')) {
-      return res.redirect('/settings');
-    }
-  } catch (error) {
-    console.error('Error checking setup configuration:', error);
-    return res.status(500).send('Internal Server Error');
-  }
-  
-  next();
-});
-
-// Protected route middleware for API endpoints
-const protectApiRoute = (req, res, next) => {
-  const token = req.cookies.jwt || req.headers.authorization?.split(' ')[1];
-  
-  if (!token) {
-    return res.status(401).json({ message: 'Authentication required' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
     next();
-  } catch (error) {
-    return res.status(403).json({ message: 'Invalid or expired token' });
-  }
-};
+  });
+});
 
 /**
  * @swagger
@@ -349,11 +313,11 @@ router.post('/login', async (req, res) => {
 
     if (isValidPassword) {
       const token = jwt.sign(
-        { 
-          id: user.id, 
-          username: user.username 
+        {
+          id: user.id,
+          username: user.username
         },
-        JWT_SECRET,
+        getJwtSecret(),
         { expiresIn: '24h' }
       );
       res.cookie('jwt', token, {
@@ -537,7 +501,7 @@ router.get('/sampleData/:id', async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/playground', protectApiRoute, async (req, res) => {
+router.get('/playground', async (req, res) => {
   try {
     const {
       documents,
