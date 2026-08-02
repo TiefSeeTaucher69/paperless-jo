@@ -26,6 +26,7 @@ class ReviewManager {
         this.previewText = document.getElementById('mergePreviewText');
         this.confirmBtn = document.getElementById('confirmMerge');
         this.pendingMergeId = null;
+        this.pendingDocumentIds = null;
         this.docPreviewModal = document.getElementById('previewModal');
         this.docPreviewContent = document.getElementById('previewContent');
         this.initialize();
@@ -125,6 +126,7 @@ class ReviewManager {
             const preview = await response.json();
 
             this.pendingMergeId = id;
+            this.pendingDocumentIds = preview.documentIds;
             this.previewText.textContent = `"${proposedName}" will be deleted. ${preview.affectedCount} document(s) will be reassigned to "${candidateName}". Continue?`;
             this.showModal();
         } catch (error) {
@@ -139,15 +141,19 @@ class ReviewManager {
             const response = await fetch(`/api/review/${this.pendingMergeId}/merge`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
-                body: JSON.stringify({ dryRun: false })
+                body: JSON.stringify({ dryRun: false, documentIds: this.pendingDocumentIds })
             });
-            if (!response.ok) throw new Error('Merge failed');
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.message || 'Merge failed');
+            }
 
             document.querySelector(`tr[data-queue-id="${this.pendingMergeId}"]`)?.remove();
             this.hideModal();
         } catch (error) {
             console.error('Merge failed:', error);
-            alert('Merge failed. Please try again.');
+            alert(error.message || 'Merge failed. Please try again.');
+            this.hideModal();
         }
     }
 
@@ -191,6 +197,7 @@ class ReviewManager {
         this.modal?.classList.remove('show');
         this.modal?.classList.add('hidden');
         this.pendingMergeId = null;
+        this.pendingDocumentIds = null;
     }
 }
 

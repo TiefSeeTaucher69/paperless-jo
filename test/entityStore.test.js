@@ -107,6 +107,32 @@ test('offene Queue-Eintraege werden von findRejectedPair NICHT gefunden', () => 
   );
 });
 
+test('findRejectedPair findet eine Ablehnung auch in umgekehrter Richtung (Backfill- vs. Live-Reihenfolge)', () => {
+  const store = freshStore();
+  const normalizedA = normalizeForType('Stadtwerke Musterstadt', 'correspondent');
+  const normalizedB = normalizeForType('Stadtwerke Beispielstadt', 'correspondent');
+
+  // Backfill legt die Richtung nach ID fest (kleinere ID = candidate): hier proposed=B, candidate=A.
+  store.insertQueueEntry({
+    entityType: 'correspondent', proposedName: 'Stadtwerke Beispielstadt', proposedId: 2,
+    candidateName: 'Stadtwerke Musterstadt', candidateId: 1, similarity: 0.9,
+    llmVerdict: 'different', llmReason: 'test', status: 'rejected'
+  });
+
+  // Der Live-Resolver fragt spaeter in der Gegenrichtung: proposed=A, candidate=B.
+  const found = store.findRejectedPair('correspondent', normalizedA, normalizedB);
+  assert.ok(found, 'Negativ-Cache sollte auch die umgekehrte Richtung treffen');
+  assert.strictEqual(found.status, 'rejected');
+});
+
+test('findRejectedPair liefert weiterhin null, wenn weder Richtung abgelehnt wurde', () => {
+  const store = freshStore();
+  const normalizedA = normalizeForType('Amazon', 'correspondent');
+  const normalizedB = normalizeForType('Ebay', 'correspondent');
+
+  assert.strictEqual(store.findRejectedPair('correspondent', normalizedA, normalizedB), null);
+});
+
 test('Fehlerfall: geschlossene DB liefert Fallback statt zu werfen', () => {
   const store = freshStore();
   store.close();
@@ -174,6 +200,24 @@ test('findQueueEntryPair findet Eintraege unabhaengig vom status, null wenn kein
   const rejectedFound = store.findQueueEntryPair('tag', proposedNormalized, candidateNormalized);
   assert.ok(rejectedFound);
   assert.strictEqual(rejectedFound.status, 'rejected');
+});
+
+test('findQueueEntryPair findet einen Eintrag auch in umgekehrter Richtung (Backfill- vs. Live-Reihenfolge)', () => {
+  const store = freshStore();
+  const normalizedA = normalizeForType('Stadtwerke Musterstadt', 'correspondent');
+  const normalizedB = normalizeForType('Stadtwerke Beispielstadt', 'correspondent');
+
+  // Live-Resolver legt die Richtung nach Rolle fest: hier proposed=B, candidate=A.
+  store.insertQueueEntry({
+    entityType: 'correspondent', proposedName: 'Stadtwerke Beispielstadt', proposedId: 2,
+    candidateName: 'Stadtwerke Musterstadt', candidateId: 1, similarity: 0.9,
+    llmVerdict: 'unsure', llmReason: null, status: 'open'
+  });
+
+  // Der Backfill fragt spaeter in der Gegenrichtung (ID-basiert): proposed=A, candidate=B.
+  const found = store.findQueueEntryPair('correspondent', normalizedA, normalizedB);
+  assert.ok(found, 'sollte auch die umgekehrte Richtung treffen');
+  assert.strictEqual(found.status, 'open');
 });
 
 test('countOpenQueueEntries zaehlt nur offene Eintraege', () => {
@@ -293,4 +337,39 @@ test('Migration: eine bestehende entity_review_queue ohne die neuen Spalten wird
     fs.rmSync(`${dbPath}-wal`, { force: true });
     fs.rmSync(`${dbPath}-shm`, { force: true });
   }
+});
+
+test('insertMergeLog schreibt einen Eintrag, listMergeLogForQueueEntry liefert ihn zurueck', () => {
+  const store = freshStore();
+  const ok = store.insertMergeLog({
+    queueEntryId: 1, entityType: 'correspondent', fromId: 10, toId: 20,
+    affectedCount: 5, chunksCompleted: 1, chunksTotal: 1, status: 'completed', errorMessage: null
+  });
+  assert.strictEqual(ok, true);
+
+  const rows = store.listMergeLogForQueueEntry(1);
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(rows[0].status, 'completed');
+  assert.strictEqual(rows[0].affected_count, 5);
+  assert.strictEqual(rows[0].from_id, 10);
+  assert.strictEqual(rows[0].to_id, 20);
+});
+
+test('insertMergeLog speichert fehlgeschlagene Merges mit Fehlermeldung und Teilfortschritt', () => {
+  const store = freshStore();
+  store.insertMergeLog({
+    queueEntryId: 2, entityType: 'tag', fromId: 30, toId: 40,
+    affectedCount: 120, chunksCompleted: 1, chunksTotal: 2, status: 'failed', errorMessage: 'Netzwerkfehler'
+  });
+
+  const rows = store.listMergeLogForQueueEntry(2);
+  assert.strictEqual(rows[0].status, 'failed');
+  assert.strictEqual(rows[0].chunks_completed, 1);
+  assert.strictEqual(rows[0].chunks_total, 2);
+  assert.strictEqual(rows[0].error_message, 'Netzwerkfehler');
+});
+
+test('listMergeLogForQueueEntry liefert leeres Array ohne Eintraege', () => {
+  const store = freshStore();
+  assert.deepStrictEqual(store.listMergeLogForQueueEntry(999), []);
 });

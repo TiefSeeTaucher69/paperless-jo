@@ -68,6 +68,22 @@ class EntityStore {
       )
     `).run();
 
+    this.db.prepare(`
+      CREATE TABLE IF NOT EXISTS entity_merge_log (
+        id INTEGER PRIMARY KEY,
+        queue_entry_id INTEGER,
+        entity_type TEXT NOT NULL,
+        from_id INTEGER,
+        to_id INTEGER NOT NULL,
+        affected_count INTEGER NOT NULL,
+        chunks_completed INTEGER NOT NULL,
+        chunks_total INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        error_message TEXT,
+        created_at TEXT NOT NULL
+      )
+    `).run();
+
     this._ensureColumn('entity_review_queue', 'trigram_similarity', 'REAL');
     this._ensureColumn('entity_review_queue', 'embedding_similarity', 'REAL');
   }
@@ -170,6 +186,10 @@ class EntityStore {
     return Array.from(new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4));
   }
 
+  // Symmetrisch: der Altbestands-Scan legt die Richtung nach ID fest (kleinere ID = candidate,
+  // entityBackfillService.js), der Live-Resolver dagegen nach Rolle (LLM-Vorschlag = proposed).
+  // Ohne symmetrische Pruefung wuerde eine Ablehnung des einen Scans die andere Richtung nicht
+  // sperren - siehe AUDIT-012.
   // proposedNormalized/candidateNormalized MUESSEN bereits normalisiert sein (siehe
   // services/entityNormalizer.js#normalizeForType) - der Aufrufer normalisiert, damit
   // z.B. "meldebescheinigung" und "Meldebescheinigung" denselben Cache-Eintrag treffen.
@@ -177,20 +197,33 @@ class EntityStore {
     try {
       return this.db.prepare(`
         SELECT * FROM entity_review_queue
-        WHERE entity_type = ? AND proposed_normalized = ? AND candidate_normalized = ? AND status = 'rejected'
-      `).get(entityType, proposedNormalized, candidateNormalized) || null;
+        WHERE entity_type = ? AND status = 'rejected'
+          AND (
+            (proposed_normalized = ? AND candidate_normalized = ?)
+            OR (proposed_normalized = ? AND candidate_normalized = ?)
+          )
+      `).get(entityType, proposedNormalized, candidateNormalized, candidateNormalized, proposedNormalized) || null;
     } catch (error) {
       console.error('[ERROR] entityStore.findRejectedPair:', error.message);
       return null;
     }
   }
 
+  // Symmetrisch wie findRejectedPair (AUDIT-012): der Backfill legt die Richtung nach ID fest,
+  // der Live-Resolver nach Rolle - ohne symmetrische Pruefung koennte ein Backfill-Lauf einen
+  // vom Live-Resolver bereits angelegten Eintrag in der Gegenrichtung erneut anlegen. Im
+  // Unterschied zu findRejectedPair wird hier NICHT nach status gefiltert - jeder Status
+  // (open/merged/rejected) soll das erneute Anlegen verhindern.
   findQueueEntryPair(entityType, proposedNormalized, candidateNormalized) {
     try {
       return this.db.prepare(`
         SELECT * FROM entity_review_queue
-        WHERE entity_type = ? AND proposed_normalized = ? AND candidate_normalized = ?
-      `).get(entityType, proposedNormalized, candidateNormalized) || null;
+        WHERE entity_type = ?
+          AND (
+            (proposed_normalized = ? AND candidate_normalized = ?)
+            OR (proposed_normalized = ? AND candidate_normalized = ?)
+          )
+      `).get(entityType, proposedNormalized, candidateNormalized, candidateNormalized, proposedNormalized) || null;
     } catch (error) {
       console.error('[ERROR] entityStore.findQueueEntryPair:', error.message);
       return null;
@@ -268,6 +301,34 @@ class EntityStore {
     } catch (error) {
       console.error('[ERROR] entityStore.countOpenQueueEntries:', error.message);
       return 0;
+    }
+  }
+
+  // Persistiert jeden echten Merge-Versuch (erfolgreich oder fehlgeschlagen) unabhaengig vom
+  // Queue-Status - der Queue-Eintrag allein sagt nicht, wie viele Chunks liefen oder woran ein
+  // fehlgeschlagener Merge scheiterte (AUDIT-013).
+  insertMergeLog({ queueEntryId = null, entityType, fromId = null, toId, affectedCount, chunksCompleted = 0, chunksTotal = 0, status, errorMessage = null }) {
+    try {
+      this.db.prepare(`
+        INSERT INTO entity_merge_log
+          (queue_entry_id, entity_type, from_id, to_id, affected_count, chunks_completed, chunks_total, status, error_message, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(queueEntryId, entityType, fromId, toId, affectedCount, chunksCompleted, chunksTotal, status, errorMessage, new Date().toISOString());
+      return true;
+    } catch (error) {
+      console.error('[ERROR] entityStore.insertMergeLog:', error.message);
+      return false;
+    }
+  }
+
+  listMergeLogForQueueEntry(queueEntryId) {
+    try {
+      return this.db.prepare(`
+        SELECT * FROM entity_merge_log WHERE queue_entry_id = ? ORDER BY created_at ASC
+      `).all(queueEntryId);
+    } catch (error) {
+      console.error('[ERROR] entityStore.listMergeLogForQueueEntry:', error.message);
+      return [];
     }
   }
 
