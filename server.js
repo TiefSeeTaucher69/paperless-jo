@@ -101,30 +101,25 @@ async function recordDocumentFingerprint(doc, correspondentId, documentTypeId, t
 }
 
 
+// Cross-origin access is opt-in via ALLOWED_ORIGINS (see config/config.js).
+// Same-origin requests (the app's own browser UI) are never affected by CORS
+// headers — this only governs whether *other* origins' JavaScript can read
+// responses. Previously a second, unconditional `Access-Control-Allow-Origin: *`
+// header below silently overrode this middleware's per-origin decision for
+// every response (AUDIT-027) — that duplicate middleware is removed here.
 const corsOptions = {
-  origin: true,
+  origin(origin, callback) {
+    if (!origin || config.security.allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type', 
-    'x-api-key',
-    'Access-Control-Allow-Private-Network'
-  ],
+  allowedHeaders: ['Content-Type', 'x-api-key', 'x-csrf-token'],
   credentials: false
 };
 
 app.use(cors(corsOptions));
-
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Access-Control-Allow-Private-Network');
-  res.header('Access-Control-Allow-Private-Network', 'true');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
