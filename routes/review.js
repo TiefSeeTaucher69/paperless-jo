@@ -23,7 +23,8 @@ function getServices() {
       judgeMin: config.entityResolver.judgeMin,
       embeddingService: config.embedding.enabled ? entityEmbeddingService : null,
       embeddingEnabled: config.embedding.enabled,
-      embedJudgeMin: config.embedding.judgeMin
+      embedJudgeMin: config.embedding.judgeMin,
+      excludedTypes: config.embedding.excludedTypes
     });
   }
   return { store, reviewQueueService, backfillService };

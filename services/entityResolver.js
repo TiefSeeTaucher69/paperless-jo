@@ -12,6 +12,7 @@ class EntityResolver {
     this.embeddingEnabled = Boolean(config.embeddingEnabled) && Boolean(embeddingService);
     this.embedAutoThreshold = config.embedAutoThreshold ?? 0.90;
     this.embedJudgeMin = config.embedJudgeMin ?? 0.65;
+    this.embeddingExcludedTypes = new Set(config.embeddingExcludedTypes || []);
   }
 
   async resolve(type, proposedName, existingEntities) {
@@ -56,8 +57,10 @@ class EntityResolver {
     // gegen dessen EIGENEN Schwellwert - Cosine-Aehnlichkeit und Dice-Koeffizient liegen
     // nicht auf derselben Skala, ein gemeinsamer Schwellwert auf dem Max-Wert waere
     // statistisch nicht belastbar (siehe Design-Doc Phase 4).
+    const embeddingActiveForType = this.embeddingEnabled && !this.embeddingExcludedTypes.has(type);
+
     let proposedVector = null;
-    if (this.embeddingEnabled) {
+    if (embeddingActiveForType) {
       try {
         proposedVector = await this.embeddingService.embed(proposedName);
       } catch (error) {

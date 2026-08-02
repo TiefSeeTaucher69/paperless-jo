@@ -22,6 +22,7 @@ test('embedding-Block hat sichere Defaults', () => {
     assert.strictEqual(config.embedding.autoThreshold, 0.90);
     assert.strictEqual(config.embedding.judgeMin, 0.65);
     assert.ok(config.embedding.apiUrl);
+    assert.deepStrictEqual(config.embedding.excludedTypes, []);
   } finally {
     for (const [key, value] of Object.entries({
       EMBEDDING_SIMILARITY_ENABLED: savedEnv.enabled,
@@ -32,6 +33,20 @@ test('embedding-Block hat sichere Defaults', () => {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
+    delete require.cache[require.resolve('../config/config')];
+  }
+});
+
+test('EMBEDDING_EXCLUDED_TYPES parst eine kommagetrennte Liste, trimmt Whitespace', () => {
+  const saved = process.env.EMBEDDING_EXCLUDED_TYPES;
+  try {
+    process.env.EMBEDDING_EXCLUDED_TYPES = ' tag , document_type ';
+    delete require.cache[require.resolve('../config/config')];
+    const config = require('../config/config');
+    assert.deepStrictEqual(config.embedding.excludedTypes, ['tag', 'document_type']);
+  } finally {
+    if (saved === undefined) delete process.env.EMBEDDING_EXCLUDED_TYPES;
+    else process.env.EMBEDDING_EXCLUDED_TYPES = saved;
     delete require.cache[require.resolve('../config/config')];
   }
 });

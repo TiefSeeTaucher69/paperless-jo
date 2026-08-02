@@ -259,6 +259,32 @@ test('Embedding deaktiviert trotz injiziertem Service -> kein Embedding-Call, Ve
   assert.strictEqual(calls, 0);
 });
 
+test('Embedding-Kanal ausgeschlossen fuer diesen Typ -> kein Embedding-Call trotz embeddingEnabled, faellt auf Trigram-only zurueck', async () => {
+  const store = new EntityStore(':memory:');
+  let calls = 0;
+  const embeddingService = {
+    embed: async () => { calls++; return [1, 0]; },
+    getOrComputeEmbedding: async () => { calls++; return [1, 0]; },
+    cosineSimilarity: () => 1
+  };
+  const resolver = new EntityResolver({
+    store, judge: async () => { throw new Error('Judge sollte nicht aufgerufen werden'); },
+    embeddingService,
+    config: {
+      autoThreshold: 0.90, judgeMin: 0.65,
+      embeddingEnabled: true, embedAutoThreshold: 0.90, embedJudgeMin: 0.65,
+      embeddingExcludedTypes: ['tag']
+    }
+  });
+
+  // Reines Trigram fuer dieses Paar liegt weit unter judgeMin - waere der Typ nicht
+  // ausgeschlossen, wuerde der Fake-Embedding-Service (Cosine 1) einen Auto-Merge ausloesen.
+  const result = await resolver.resolve('tag', 'Voellig Anderer Name', [{ id: 1, name: 'Ausbildung' }]);
+
+  assert.strictEqual(result.action, 'create');
+  assert.strictEqual(calls, 0);
+});
+
 test('Fehlerverhalten: Embedding-Call wirft -> faellt auf Trigram-only zurueck, kein Absturz', async () => {
   const store = new EntityStore(':memory:');
   const embeddingService = {

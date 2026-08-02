@@ -97,6 +97,15 @@ const embeddingJudgeMin = clampThreshold(
   'EMBED_JUDGE_MIN'
 );
 
+// Manche Entitaetstypen (z.B. Tags) sind naturgemaess semantisch dichter geclustert als
+// andere (Dokumentarten, Korrespondenten) - dieselbe Embedding-Schwelle erzeugt dort
+// ueberwiegend thematische statt echte Duplikat-Nachbarschaften. Siehe Messung vom
+// 2026-08-02 in der Phase-5-Roadmap.
+const embeddingExcludedTypes = (process.env.EMBEDDING_EXCLUDED_TYPES || '')
+  .split(',')
+  .map(t => t.trim())
+  .filter(Boolean);
+
 if (embeddingJudgeMin > embeddingAutoThreshold) {
   console.warn(`[WARNING] EMBED_JUDGE_MIN (${embeddingJudgeMin}) > EMBED_AUTO_THRESHOLD (${embeddingAutoThreshold}): die Embedding-Judge-Stufe ist damit unerreichbar`);
 }
@@ -155,7 +164,8 @@ module.exports = {
     apiUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
     model: process.env.EMBEDDING_MODEL || 'bge-m3',
     autoThreshold: embeddingAutoThreshold,
-    judgeMin: embeddingJudgeMin
+    judgeMin: embeddingJudgeMin,
+    excludedTypes: embeddingExcludedTypes
   },
   custom: {
     apiUrl: process.env.CUSTOM_BASE_URL || '',

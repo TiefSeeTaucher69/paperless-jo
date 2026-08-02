@@ -2,22 +2,24 @@ const { normalizeForType } = require('./entityNormalizer');
 const { diceCoefficient } = require('./entitySimilarity');
 
 class EntityBackfillService {
-  constructor({ store, judgeMin, embeddingService = null, embeddingEnabled = false, embedJudgeMin = 0.65 }) {
+  constructor({ store, judgeMin, embeddingService = null, embeddingEnabled = false, embedJudgeMin = 0.65, excludedTypes = [] }) {
     this.store = store;
     this.judgeMin = judgeMin;
     this.embeddingService = embeddingService;
     this.embeddingEnabled = Boolean(embeddingEnabled) && Boolean(embeddingService);
     this.embedJudgeMin = embedJudgeMin;
+    this.excludedTypes = new Set(excludedTypes);
   }
 
   async run(entityType, existingEntities) {
     let inserted = 0;
+    const embeddingActiveForType = this.embeddingEnabled && !this.excludedTypes.has(entityType);
 
     // Embeddings werden VOR der quadratischen Vergleichsschleife einmal pro Entitaet
     // vorgezogen (Cache-Treffer oder ein Call), damit die eigentliche Paarvergleichsschleife
     // ohne weitere Ollama-Calls auskommt - sonst waere jedes Paar ein eigener Call.
     const vectors = new Map();
-    if (this.embeddingEnabled) {
+    if (embeddingActiveForType) {
       for (const entity of existingEntities) {
         try {
           const vector = await this.embeddingService.getOrComputeEmbedding(this.store, entityType, entity);
