@@ -1406,6 +1406,9 @@ async getOrCreateDocumentType(name, options = {}) {
 
   async mergeEntity(type, fromId, toId, { dryRun = true } = {}) {
     this.initialize();
+    if (!Number.isInteger(fromId) || fromId <= 0 || !Number.isInteger(toId) || toId <= 0 || fromId === toId) {
+      throw new Error(`mergeEntity: ungueltige IDs (fromId=${fromId}, toId=${toId})`);
+    }
     const affected = await this._findDocumentsWithEntity(type, fromId);
 
     if (dryRun) {
