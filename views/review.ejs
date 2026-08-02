@@ -85,7 +85,7 @@
                                     <td><%= entry.entity_type %></td>
                                     <td><%= entry.proposed_name %></td>
                                     <td><%= entry.candidate_name %></td>
-                                    <td><%= entry.trigram_similarity != null ? entry.trigram_similarity.toFixed(2) : '-' %></td>
+                                    <td><%= entry.trigram_similarity != null ? entry.trigram_similarity.toFixed(2) : (entry.embedding_similarity == null ? entry.similarity.toFixed(2) : '-') %></td>
                                     <td><%= entry.embedding_similarity != null ? entry.embedding_similarity.toFixed(2) : '-' %></td>
                                     <td><%= entry.llm_verdict || '-' %></td>
                                     <td>
