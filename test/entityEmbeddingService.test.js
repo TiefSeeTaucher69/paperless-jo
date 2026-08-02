@@ -53,3 +53,49 @@ test('cosineSimilarity: Nullvektor ergibt 0 statt NaN', () => {
 test('cosineSimilarity: unterschiedliche Vektorlaenge ergibt 0', () => {
   assert.strictEqual(entityEmbeddingService.cosineSimilarity([1, 0], [1, 0, 0]), 0);
 });
+
+const EntityStore = require('../models/entityStore');
+
+test('getOrComputeEmbedding: Cache-Treffer liest ohne Ollama-Call', async () => {
+  const store = new EntityStore(':memory:');
+  store.upsertEmbedding({ entityType: 'tag', id: 1, name: 'Rechnung', model: 'bge-m3', vector: [0.5, 0.5] });
+  entityEmbeddingService.client = { post: async () => { throw new Error('sollte nicht aufgerufen werden'); } };
+
+  const vector = await entityEmbeddingService.getOrComputeEmbedding(store, 'tag', { id: 1, name: 'Rechnung' });
+  assert.ok(Math.abs(vector[0] - 0.5) < 1e-6 && Math.abs(vector[1] - 0.5) < 1e-6);
+});
+
+test('getOrComputeEmbedding: fehlender Cache-Eintrag wird berechnet und gecached', async () => {
+  const store = new EntityStore(':memory:');
+  let calls = 0;
+  entityEmbeddingService.client = { post: async () => { calls++; return { data: { embeddings: [[0.1, 0.2]] } }; } };
+
+  const vector = await entityEmbeddingService.getOrComputeEmbedding(store, 'tag', { id: 5, name: 'Mahnung' });
+  assert.deepStrictEqual(vector, [0.1, 0.2]);
+  assert.strictEqual(calls, 1);
+
+  const cached = store.getEmbedding('tag', 5);
+  assert.ok(cached);
+});
+
+test('getOrComputeEmbedding: Umbenennung macht den Cache-Eintrag stale, wird neu berechnet', async () => {
+  const store = new EntityStore(':memory:');
+  store.upsertEmbedding({ entityType: 'tag', id: 1, name: 'Alter Name', model: 'bge-m3', vector: [1, 0] });
+  let calls = 0;
+  entityEmbeddingService.client = { post: async () => { calls++; return { data: { embeddings: [[0, 1]] } }; } };
+
+  const vector = await entityEmbeddingService.getOrComputeEmbedding(store, 'tag', { id: 1, name: 'Neuer Name' });
+  assert.deepStrictEqual(vector, [0, 1]);
+  assert.strictEqual(calls, 1);
+});
+
+test('getOrComputeEmbedding: Modellwechsel macht den Cache-Eintrag stale, wird neu berechnet', async () => {
+  const store = new EntityStore(':memory:');
+  store.upsertEmbedding({ entityType: 'tag', id: 1, name: 'Rechnung', model: 'ein-anderes-modell', vector: [1, 0] });
+  let calls = 0;
+  entityEmbeddingService.client = { post: async () => { calls++; return { data: { embeddings: [[0, 1]] } }; } };
+
+  const vector = await entityEmbeddingService.getOrComputeEmbedding(store, 'tag', { id: 1, name: 'Rechnung' });
+  assert.deepStrictEqual(vector, [0, 1]);
+  assert.strictEqual(calls, 1);
+});
