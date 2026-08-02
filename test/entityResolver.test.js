@@ -388,3 +388,27 @@ test('Judge different: entity_review_queue erhaelt trigram_similarity und embedd
   assert.ok(row.embedding_similarity > 0.6 && row.embedding_similarity < 0.8);
   assert.strictEqual(row.status, 'rejected');
 });
+
+test('Judge-Zone verdraengt einen judge-wuerdigen Trigram-Kandidaten nicht: bevorzugt bestTrigram vor dem kombinierten Sieger', async () => {
+  const store = new EntityStore(':memory:');
+  const embeddingService = fakeEmbeddingService({
+    'Entgeltabrechnung': [1, 0],
+    'Entgeltabrechnungen': [0, 1], // Trigram ~0.889 (Judge-Zone), Embedding fern (0)
+    'Voellig Anderes Ding': [0.895, 0.446] // Trigram fern, Embedding ~0.895 -> kombiniert schlaegt bestTrigram, aber unter EMBED_AUTO_THRESHOLD
+  });
+  let askedAboutName = null;
+  const judge = async (type, nameA, nameB) => { askedAboutName = nameB; return { verdict: 'same', reason: 'ok' }; };
+  const resolver = new EntityResolver({
+    store, judge, embeddingService,
+    config: { autoThreshold: 0.90, judgeMin: 0.65, embeddingEnabled: true, embedAutoThreshold: 0.90, embedJudgeMin: 0.65 }
+  });
+
+  const result = await resolver.resolve('document_type', 'Entgeltabrechnung', [
+    { id: 1, name: 'Entgeltabrechnungen' },
+    { id: 2, name: 'Voellig Anderes Ding' }
+  ]);
+
+  assert.strictEqual(askedAboutName, 'Entgeltabrechnungen');
+  assert.strictEqual(result.action, 'map');
+  assert.strictEqual(result.id, 1);
+});
