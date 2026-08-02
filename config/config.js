@@ -110,6 +110,13 @@ if (embeddingJudgeMin > embeddingAutoThreshold) {
   console.warn(`[WARNING] EMBED_JUDGE_MIN (${embeddingJudgeMin}) > EMBED_AUTO_THRESHOLD (${embeddingAutoThreshold}): die Embedding-Judge-Stufe ist damit unerreichbar`);
 }
 
+// Unmeasured placeholder (siehe Design-Doc "Offener Folgeschritt") - braucht eine eigene
+// Tuning-Messung mit gelabelten Dokumentpaaren, bevor der Kanal produktiv scharf geschaltet wird.
+const documentFingerprintSimilarityThreshold = clampThreshold(
+  parseEnvNumber(process.env.FINGERPRINT_SIMILARITY_THRESHOLD, 0.90),
+  'FINGERPRINT_SIMILARITY_THRESHOLD'
+);
+
 console.log('Loaded environment variables:', {
   PAPERLESS_API_URL: maskUrl(process.env.PAPERLESS_API_URL),
   PAPERLESS_API_TOKEN: '******',
@@ -166,6 +173,10 @@ module.exports = {
     autoThreshold: embeddingAutoThreshold,
     judgeMin: embeddingJudgeMin,
     excludedTypes: embeddingExcludedTypes
+  },
+  documentFingerprint: {
+    enabled: parseEnvBoolean(process.env.DOCUMENT_FINGERPRINT_ENABLED, 'no') === 'yes',
+    similarityThreshold: documentFingerprintSimilarityThreshold
   },
   custom: {
     apiUrl: process.env.CUSTOM_BASE_URL || '',
