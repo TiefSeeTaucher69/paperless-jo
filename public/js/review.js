@@ -143,13 +143,17 @@ class ReviewManager {
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
                 body: JSON.stringify({ dryRun: false, documentIds: this.pendingDocumentIds })
             });
-            if (!response.ok) throw new Error('Merge failed');
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.message || 'Merge failed');
+            }
 
             document.querySelector(`tr[data-queue-id="${this.pendingMergeId}"]`)?.remove();
             this.hideModal();
         } catch (error) {
             console.error('Merge failed:', error);
-            alert('Merge failed. Please try again.');
+            alert(error.message || 'Merge failed. Please try again.');
+            this.hideModal();
         }
     }
 

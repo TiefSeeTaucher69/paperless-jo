@@ -202,6 +202,24 @@ test('findQueueEntryPair findet Eintraege unabhaengig vom status, null wenn kein
   assert.strictEqual(rejectedFound.status, 'rejected');
 });
 
+test('findQueueEntryPair findet einen Eintrag auch in umgekehrter Richtung (Backfill- vs. Live-Reihenfolge)', () => {
+  const store = freshStore();
+  const normalizedA = normalizeForType('Stadtwerke Musterstadt', 'correspondent');
+  const normalizedB = normalizeForType('Stadtwerke Beispielstadt', 'correspondent');
+
+  // Live-Resolver legt die Richtung nach Rolle fest: hier proposed=B, candidate=A.
+  store.insertQueueEntry({
+    entityType: 'correspondent', proposedName: 'Stadtwerke Beispielstadt', proposedId: 2,
+    candidateName: 'Stadtwerke Musterstadt', candidateId: 1, similarity: 0.9,
+    llmVerdict: 'unsure', llmReason: null, status: 'open'
+  });
+
+  // Der Backfill fragt spaeter in der Gegenrichtung (ID-basiert): proposed=A, candidate=B.
+  const found = store.findQueueEntryPair('correspondent', normalizedA, normalizedB);
+  assert.ok(found, 'sollte auch die umgekehrte Richtung treffen');
+  assert.strictEqual(found.status, 'open');
+});
+
 test('countOpenQueueEntries zaehlt nur offene Eintraege', () => {
   const store = freshStore();
   assert.strictEqual(store.countOpenQueueEntries(), 0);
