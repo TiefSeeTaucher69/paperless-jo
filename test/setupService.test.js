@@ -184,3 +184,56 @@ test('saveConfig without an options argument still validates by default', async 
     /validateConfig was called, as expected by default/
   );
 });
+
+test('validateConfig rejects an out-of-range ENTITY_RESOLVER_AUTO_THRESHOLD', async () => {
+  const envPath = await tmpEnvPath();
+  const service = new SetupService(envPath);
+  await assert.rejects(
+    () => service.validateConfig({ ENTITY_RESOLVER_AUTO_THRESHOLD: '1.5' }),
+    /ENTITY_RESOLVER_AUTO_THRESHOLD/
+  );
+});
+
+test('validateConfig rejects a non-numeric threshold', async () => {
+  const envPath = await tmpEnvPath();
+  const service = new SetupService(envPath);
+  await assert.rejects(
+    () => service.validateConfig({ EMBED_JUDGE_MIN: 'not-a-number' }),
+    /EMBED_JUDGE_MIN/
+  );
+});
+
+test('validateConfig rejects ENTITY_RESOLVER_JUDGE_MIN greater than ENTITY_RESOLVER_AUTO_THRESHOLD', async () => {
+  const envPath = await tmpEnvPath();
+  const service = new SetupService(envPath);
+  await assert.rejects(
+    () => service.validateConfig({
+      ENTITY_RESOLVER_AUTO_THRESHOLD: '0.5',
+      ENTITY_RESOLVER_JUDGE_MIN: '0.7'
+    }),
+    /ENTITY_RESOLVER_JUDGE_MIN.*ENTITY_RESOLVER_AUTO_THRESHOLD/
+  );
+});
+
+test('validateConfig rejects EMBED_JUDGE_MIN greater than EMBED_AUTO_THRESHOLD', async () => {
+  const envPath = await tmpEnvPath();
+  const service = new SetupService(envPath);
+  await assert.rejects(
+    () => service.validateConfig({
+      EMBED_AUTO_THRESHOLD: '0.4',
+      EMBED_JUDGE_MIN: '0.6'
+    }),
+    /EMBED_JUDGE_MIN.*EMBED_AUTO_THRESHOLD/
+  );
+});
+
+test('validateConfig leaves unset/empty thresholds alone and does not throw on their account', async () => {
+  const envPath = await tmpEnvPath();
+  const service = new SetupService(envPath);
+  // No PAPERLESS_API_URL either -- this call is expected to still reach the
+  // Paperless-connectivity check and reject for THAT reason, not for thresholds.
+  await assert.rejects(
+    () => service.validateConfig({ ENTITY_RESOLVER_AUTO_THRESHOLD: '', EMBED_JUDGE_MIN: undefined }),
+    (err) => !/THRESHOLD|JUDGE_MIN/.test(err.message)
+  );
+});
