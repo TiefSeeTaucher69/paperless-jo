@@ -6,6 +6,7 @@ const paperlessService = require('../services/paperlessService');
 const EntityStore = require('../models/entityStore');
 const ReviewQueueService = require('../services/reviewQueueService');
 const EntityBackfillService = require('../services/entityBackfillService');
+const entityEmbeddingService = require('../services/entityEmbeddingService');
 
 let store = null;
 let reviewQueueService = null;
@@ -17,7 +18,13 @@ function getServices() {
   if (!store) {
     store = new EntityStore(config.entityResolver.dbPath);
     reviewQueueService = new ReviewQueueService({ store, paperlessService });
-    backfillService = new EntityBackfillService({ store, judgeMin: config.entityResolver.judgeMin });
+    backfillService = new EntityBackfillService({
+      store,
+      judgeMin: config.entityResolver.judgeMin,
+      embeddingService: config.embedding.enabled ? entityEmbeddingService : null,
+      embeddingEnabled: config.embedding.enabled,
+      embedJudgeMin: config.embedding.judgeMin
+    });
   }
   return { store, reviewQueueService, backfillService };
 }
@@ -111,7 +118,7 @@ router.post('/api/review/backfill/:entityType', authenticateJWT, async (req, res
   try {
     const { backfillService } = getServices();
     const existingEntities = await lister();
-    const result = backfillService.run(entityType, existingEntities);
+    const result = await backfillService.run(entityType, existingEntities);
     res.json(result);
   } catch (error) {
     console.error(`[ERROR] Altbestands-Durchlauf fuer "${entityType}" fehlgeschlagen:`, error.message);
