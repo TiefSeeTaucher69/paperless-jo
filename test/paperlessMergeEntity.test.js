@@ -49,7 +49,7 @@ test('mergeEntity mit dryRun=false hängt um, verifiziert und loescht', async ()
     paperlessService.mergeEntity('correspondent', 7, 8, { dryRun: false })
   );
 
-  assert.deepStrictEqual(result, { affectedCount: 1, documentIds: [20], deleted: true });
+  assert.deepStrictEqual(result, { affectedCount: 1, documentIds: [20], deleted: true, chunksCompleted: 1, chunksTotal: 1 });
   assert.strictEqual(bulkEditCalls.length, 1);
   assert.strictEqual(bulkEditCalls[0].url, '/documents/bulk_edit/');
   assert.deepStrictEqual(bulkEditCalls[0].body, {
@@ -116,7 +116,7 @@ test('mergeEntity mit dryRun=false behandelt 404 beim Loeschen als bereits erled
     paperlessService.mergeEntity('tag', 9, 10, { dryRun: false })
   );
 
-  assert.deepStrictEqual(result, { affectedCount: 1, documentIds: [50], deleted: true });
+  assert.deepStrictEqual(result, { affectedCount: 1, documentIds: [50], deleted: true, chunksCompleted: 1, chunksTotal: 1 });
 });
 
 test('mergeEntity mit dryRun=false wirft weiter, wenn das Loeschen nicht mit 404 fehlschlaegt', async () => {
@@ -140,6 +140,95 @@ test('mergeEntity mit dryRun=false wirft weiter, wenn das Loeschen nicht mit 404
     () => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 11, 12, { dryRun: false })),
     /500/
   );
+});
+
+test('mergeEntity mit dryRun=false und geaenderten expectedDocumentIds bricht ab und fuehrt keinen bulk_edit aus', async () => {
+  const mockClient = {
+    get: async () => ({ data: { results: [{ id: 20 }, { id: 21 }], next: null } }),
+    post: async () => { throw new Error('post haette nicht aufgerufen werden duerfen'); },
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () =>
+      paperlessService.mergeEntity('tag', 7, 8, { dryRun: false, expectedDocumentIds: [20] })
+    ),
+    /document set changed since preview/
+  );
+});
+
+test('mergeEntity mit dryRun=false und uebereinstimmenden expectedDocumentIds (andere Reihenfolge) fuehrt normal durch', async () => {
+  let getCallCount = 0;
+  const bulkEditCalls = [];
+  const mockClient = {
+    get: async () => {
+      getCallCount++;
+      return getCallCount === 1
+        ? { data: { results: [{ id: 21 }, { id: 20 }], next: null } }
+        : { data: { results: [], next: null } };
+    },
+    post: async (url, body) => { bulkEditCalls.push(body); return { data: {} }; },
+    delete: async () => ({ data: {} })
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.mergeEntity('tag', 7, 8, { dryRun: false, expectedDocumentIds: [20, 21] })
+  );
+
+  assert.strictEqual(result.deleted, true);
+  assert.strictEqual(bulkEditCalls.length, 1);
+});
+
+test('mergeEntity ohne expectedDocumentIds prueft nicht auf Abweichung (Standardfall)', async () => {
+  let getCallCount = 0;
+  const mockClient = {
+    get: async () => {
+      getCallCount++;
+      return getCallCount === 1
+        ? { data: { results: [{ id: 99 }], next: null } }
+        : { data: { results: [], next: null } };
+    },
+    post: async () => ({ data: {} }),
+    delete: async () => ({ data: {} })
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.mergeEntity('tag', 7, 8, { dryRun: false })
+  );
+
+  assert.strictEqual(result.deleted, true);
+});
+
+test('mergeEntity haengt mergeProgress an den Fehler, wenn bulk_edit fehlschlaegt', async () => {
+  const mockClient = {
+    get: async () => ({ data: { results: [{ id: 20 }], next: null } }),
+    post: async () => { throw new Error('Netzwerkfehler'); },
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  try {
+    await withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 7, 8, { dryRun: false }));
+    assert.fail('haette werfen muessen');
+  } catch (error) {
+    assert.strictEqual(error.message, 'Netzwerkfehler');
+    assert.deepStrictEqual(error.mergeProgress, { affectedCount: 1, chunksCompleted: 0, chunksTotal: 0 });
+  }
+});
+
+test('mergeEntity haengt mergeProgress an den Fehler, wenn nach dem Umhaengen noch Dokumente uebrig sind', async () => {
+  const mockClient = {
+    get: async () => ({ data: { results: [{ id: 30 }], next: null } }), // bleibt bei jedem Aufruf gleich
+    post: async () => ({ data: {} }),
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  try {
+    await withMockClient(mockClient, () => paperlessService.mergeEntity('document_type', 1, 2, { dryRun: false }));
+    assert.fail('haette werfen muessen');
+  } catch (error) {
+    assert.match(error.message, /Merge incomplete/);
+    assert.deepStrictEqual(error.mergeProgress, { affectedCount: 1, chunksCompleted: 1, chunksTotal: 1 });
+  }
 });
 
 test('mergeEntity wirft bei fromId=null und stellt keinen HTTP-Request', async () => {
