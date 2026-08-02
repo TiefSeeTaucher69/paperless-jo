@@ -67,6 +67,7 @@ class EntityResolver {
     }
 
     let best = null;
+    let bestTrigram = null;
     for (const entity of existingEntities) {
       const trigramSim = diceCoefficient(normalizedProposed, normalizeForType(entity.name, type));
       const embeddingSim = await this._embeddingSimilarityFor(type, proposedVector, entity);
@@ -75,25 +76,39 @@ class EntityResolver {
       if (!best || combined > best.combined) {
         best = { entity, trigramSim, embeddingSim, combined };
       }
+      if (!bestTrigram || trigramSim > bestTrigram.trigramSim) {
+        bestTrigram = { entity, trigramSim };
+      }
     }
 
     if (!best) {
       return { action: 'create' };
     }
 
-    // Negativ-Cache geht allen Auto-Stufen und dem Judge vor. findRejectedPair vergleicht
-    // normalisiert, damit Gross-/Kleinschreibung oder Whitespace-Varianten des
+    // Trigram-Treffer gehen unveraendert vor: reicht die reine Trigram-Aehnlichkeit
+    // irgendeines Kandidaten fuer sich genommen schon fuer Auto-Merge, entscheidet
+    // das wie vor Phase 4 - unabhaengig davon, ob ein anderer Kandidat per Embedding
+    // einen hoeheren kombinierten Score haette. Sonst koennte ein orthografisch
+    // fernes, aber semantisch nahes "false friend" einen bereits sicheren
+    // Trigram-Match verdraengen.
+    if (bestTrigram.trigramSim >= this.autoThreshold) {
+      const normalizedTrigramCandidate = normalizeForType(bestTrigram.entity.name, type);
+      const rejectedTrigram = this.store.findRejectedPair(type, normalizedProposed, normalizedTrigramCandidate);
+      if (rejectedTrigram) {
+        return { action: 'create' }; // Stufe 4b: Nutzerentscheidung uebersticht hohe Aehnlichkeit
+      }
+      this.store.insertAlias({
+        entityType: type, aliasNormalized: normalizedProposed,
+        canonicalName: bestTrigram.entity.name, canonicalId: bestTrigram.entity.id, source: 'auto'
+      });
+      return { action: 'map', id: bestTrigram.entity.id, canonicalName: bestTrigram.entity.name, via: 'similarity' };
+    }
+
+    // Negativ-Cache geht auch dem Embedding-Auto-Merge und dem Judge vor. findRejectedPair
+    // vergleicht normalisiert, damit Gross-/Kleinschreibung oder Whitespace-Varianten des
     // Paars denselben Cache-Treffer liefern (siehe entityStore.js).
     const normalizedCandidate = normalizeForType(best.entity.name, type);
     const rejected = this.store.findRejectedPair(type, normalizedProposed, normalizedCandidate);
-
-    if (!rejected && best.trigramSim >= this.autoThreshold) {
-      this.store.insertAlias({
-        entityType: type, aliasNormalized: normalizedProposed,
-        canonicalName: best.entity.name, canonicalId: best.entity.id, source: 'auto'
-      });
-      return { action: 'map', id: best.entity.id, canonicalName: best.entity.name, via: 'similarity' };
-    }
 
     if (!rejected && best.embeddingSim !== null && best.embeddingSim >= this.embedAutoThreshold) {
       this.store.insertAlias({
@@ -154,7 +169,8 @@ class EntityResolver {
     }
     try {
       const entityVector = await this.embeddingService.getOrComputeEmbedding(this.store, type, entity);
-      return this.embeddingService.cosineSimilarity(proposedVector, entityVector);
+      const similarity = this.embeddingService.cosineSimilarity(proposedVector, entityVector);
+      return Number.isFinite(similarity) ? similarity : null;
     } catch (error) {
       console.warn(`[WARNING] entityResolver: Embedding-Aehnlichkeit fuer "${entity.name}" (${type}) nicht berechenbar, wird ignoriert:`, error.message);
       return null;

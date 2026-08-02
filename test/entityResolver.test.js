@@ -294,3 +294,97 @@ test('recordCreatedAndQueued schreibt trigram_similarity und embedding_similarit
   assert.strictEqual(found.trigram_similarity, 0.42);
   assert.strictEqual(found.embedding_similarity, 0.81);
 });
+
+test('Kombiniertes Scoring verdraengt einen sicheren Trigram-Match nicht: Trigram-Auto gewinnt trotz hoeherem kombinierten Score eines anderen Kandidaten', async () => {
+  const store = new EntityStore(':memory:');
+  // Paar wie in "Stufe 4a": Trigram-Dice ~0.91, also ueber AUTO_THRESHOLD (0.90).
+  const embeddingService = fakeEmbeddingService({
+    'Verdienstbescheinigungen': [1, 0],
+    'Verdienstbescheinigung': [0, 1], // trigram-nahe (fast identisch), aber Embedding-fern (orthogonal)
+    'Voellig Anderes Ding': [1, 0] // trigram-fern, aber Embedding-identisch ("false friend")
+  });
+  const resolver = new EntityResolver({
+    store, judge: async () => { throw new Error('Judge sollte nicht aufgerufen werden'); },
+    embeddingService,
+    config: { autoThreshold: 0.90, judgeMin: 0.65, embeddingEnabled: true, embedAutoThreshold: 0.90, embedJudgeMin: 0.65 }
+  });
+
+  const result = await resolver.resolve('document_type', 'Verdienstbescheinigungen', [
+    { id: 1, name: 'Verdienstbescheinigung' },
+    { id: 2, name: 'Voellig Anderes Ding' }
+  ]);
+
+  assert.strictEqual(result.action, 'map');
+  assert.strictEqual(result.via, 'similarity');
+  assert.strictEqual(result.id, 1);
+});
+
+test('Fehlerverhalten: NaN-Aehnlichkeit vom Embedding-Kanal wird ignoriert statt Kandidatenauswahl zu vergiften', async () => {
+  const store = new EntityStore(':memory:');
+  const embeddingService = {
+    embed: async () => [1, 0],
+    getOrComputeEmbedding: async (_store, _type, entity) => entity.name === 'Kaputter Kandidat' ? [0, 0] : [1, 0],
+    cosineSimilarity: (a, b) => {
+      const na = Math.sqrt(a[0] ** 2 + a[1] ** 2);
+      const nb = Math.sqrt(b[0] ** 2 + b[1] ** 2);
+      if (na === 0 || nb === 0) return NaN; // absichtlich kaputte Fake-Implementierung fuer diesen Test
+      return (a[0] * b[0] + a[1] * b[1]) / (na * nb);
+    }
+  };
+  const resolver = new EntityResolver({
+    store, judge: async () => { throw new Error('Judge sollte nicht aufgerufen werden'); },
+    embeddingService,
+    config: { autoThreshold: 0.90, judgeMin: 0.65, embeddingEnabled: true, embedAutoThreshold: 0.90, embedJudgeMin: 0.65 }
+  });
+
+  const result = await resolver.resolve('document_type', 'Entgeltabrechnung', [
+    { id: 1, name: 'Kaputter Kandidat' },
+    { id: 2, name: 'Entgeltabrechnungen' }
+  ]);
+
+  assert.strictEqual(result.action, 'map');
+  assert.strictEqual(result.id, 2);
+});
+
+test('Negativ-Cache blockiert auch Embedding-Auto-Merge, nicht nur Trigram-Auto', async () => {
+  const store = new EntityStore(':memory:');
+  store.insertQueueEntry({
+    entityType: 'document_type', proposedName: 'Entgeltabrechnung', proposedId: 9,
+    candidateName: 'Verdienstbescheinigung', candidateId: 4,
+    similarity: 0.95, trigramSimilarity: 0.10, embeddingSimilarity: 0.95,
+    llmVerdict: 'different', llmReason: 'Nutzerentscheidung', status: 'rejected'
+  });
+
+  const embeddingService = fakeEmbeddingService({
+    'Entgeltabrechnung': [1, 0],
+    'Verdienstbescheinigung': [1, 0] // identisch -> Cosine = 1, waere ohne Negativ-Cache ein Auto-Merge
+  });
+  const resolver = new EntityResolver({
+    store, judge: async () => { throw new Error('Judge sollte nicht aufgerufen werden'); },
+    embeddingService,
+    config: { autoThreshold: 0.90, judgeMin: 0.65, embeddingEnabled: true, embedAutoThreshold: 0.90, embedJudgeMin: 0.65 }
+  });
+
+  const result = await resolver.resolve('document_type', 'Entgeltabrechnung', [{ id: 4, name: 'Verdienstbescheinigung' }]);
+  assert.strictEqual(result.action, 'create');
+});
+
+test('Judge different: entity_review_queue erhaelt trigram_similarity und embedding_similarity', async () => {
+  const store = new EntityStore(':memory:');
+  const embeddingService = fakeEmbeddingService({
+    'Entgeltabrechnung': [1, 0],
+    'Verdienstbescheinigung': [0.7, 0.714142842854285]
+  });
+  const judge = async () => ({ verdict: 'different', reason: 'tatsaechlich verschieden' });
+  const resolver = new EntityResolver({
+    store, judge, embeddingService,
+    config: { autoThreshold: 0.90, judgeMin: 0.65, embeddingEnabled: true, embedAutoThreshold: 0.90, embedJudgeMin: 0.65 }
+  });
+
+  await resolver.resolve('document_type', 'Entgeltabrechnung', [{ id: 4, name: 'Verdienstbescheinigung' }]);
+
+  const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE proposed_name = 'Entgeltabrechnung'`).get();
+  assert.ok(row.trigram_similarity < 0.3);
+  assert.ok(row.embedding_similarity > 0.6 && row.embedding_similarity < 0.8);
+  assert.strictEqual(row.status, 'rejected');
+});
