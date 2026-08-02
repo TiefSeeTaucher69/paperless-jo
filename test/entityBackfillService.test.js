@@ -77,6 +77,36 @@ test('run ueberspringt bereits als rejected bekannte Paare', async () => {
   }
 });
 
+test('run ueberspringt ein vom Live-Resolver in umgekehrter Richtung angelegtes Paar, statt ein Duplikat anzulegen', async () => {
+  const store = new EntityStore(':memory:');
+  try {
+    // Live-Resolver legt die Richtung nach Rolle fest (nicht nach ID): hier proposed=Stadtwerke
+    // Musterstadt (die kleinere id 1), candidate=Stadtwerke Beispielstadt (die groessere id 2) -
+    // bewusst entgegengesetzt zur ID-Konvention des Backfills (siehe unten).
+    store.insertQueueEntry({
+      entityType: 'correspondent',
+      proposedName: 'Stadtwerke Musterstadt', proposedId: 1,
+      candidateName: 'Stadtwerke Beispielstadt', candidateId: 2,
+      similarity: 0.9, llmVerdict: 'unsure', llmReason: null, status: 'open', documentId: null
+    });
+
+    const service = new EntityBackfillService({ store, judgeMin: 0.5 });
+    // Der Backfill legt die Richtung nach ID fest (kleinere ID = candidate): hier also
+    // candidate=Musterstadt (id 1), proposed=Beispielstadt (id 2) - genau vertauscht zur
+    // Live-Richtung oben -> ohne symmetrische Pruefung wuerde ein Duplikat entstehen.
+    const result = await service.run('correspondent', [
+      { id: 1, name: 'Stadtwerke Musterstadt' },
+      { id: 2, name: 'Stadtwerke Beispielstadt' }
+    ]);
+
+    assert.strictEqual(result.inserted, 0, 'der bereits vom Live-Resolver angelegte Eintrag sollte erkannt und uebersprungen werden');
+    const rows = store.db.prepare(`SELECT * FROM entity_review_queue WHERE entity_type = 'correspondent'`).all();
+    assert.strictEqual(rows.length, 1, 'es darf kein zweiter (Duplikat-)Eintrag entstehen');
+  } finally {
+    store.close();
+  }
+});
+
 test('run ueberschreibt den llm_verdict eines bereits offenen Queue-Eintrags nicht', async () => {
   const store = new EntityStore(':memory:');
   try {

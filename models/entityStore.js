@@ -209,12 +209,21 @@ class EntityStore {
     }
   }
 
+  // Symmetrisch wie findRejectedPair (AUDIT-012): der Backfill legt die Richtung nach ID fest,
+  // der Live-Resolver nach Rolle - ohne symmetrische Pruefung koennte ein Backfill-Lauf einen
+  // vom Live-Resolver bereits angelegten Eintrag in der Gegenrichtung erneut anlegen. Im
+  // Unterschied zu findRejectedPair wird hier NICHT nach status gefiltert - jeder Status
+  // (open/merged/rejected) soll das erneute Anlegen verhindern.
   findQueueEntryPair(entityType, proposedNormalized, candidateNormalized) {
     try {
       return this.db.prepare(`
         SELECT * FROM entity_review_queue
-        WHERE entity_type = ? AND proposed_normalized = ? AND candidate_normalized = ?
-      `).get(entityType, proposedNormalized, candidateNormalized) || null;
+        WHERE entity_type = ?
+          AND (
+            (proposed_normalized = ? AND candidate_normalized = ?)
+            OR (proposed_normalized = ? AND candidate_normalized = ?)
+          )
+      `).get(entityType, proposedNormalized, candidateNormalized, candidateNormalized, proposedNormalized) || null;
     } catch (error) {
       console.error('[ERROR] entityStore.findQueueEntryPair:', error.message);
       return null;
