@@ -183,3 +183,114 @@ test('countOpenQueueEntries zaehlt nur offene Eintraege', () => {
   store.insertQueueEntry({ entityType: 'tag', proposedName: 'Mahnung', proposedId: 3, candidateName: 'Mahnungen', candidateId: 4, similarity: 0.75, llmVerdict: null, llmReason: null, status: 'rejected', documentId: null });
   assert.strictEqual(store.countOpenQueueEntries(), 1);
 });
+
+test('getEmbedding liefert null, wenn nichts gespeichert ist', () => {
+  const store = freshStore();
+  assert.strictEqual(store.getEmbedding('tag', 1), null);
+});
+
+test('upsertEmbedding und getEmbedding roundtrip mit Float32-Praezision', () => {
+  const store = freshStore();
+  const ok = store.upsertEmbedding({ entityType: 'document_type', id: 4, name: 'Meldebescheinigung', model: 'bge-m3', vector: [0.1, 0.2, 0.3] });
+  assert.strictEqual(ok, true);
+
+  const found = store.getEmbedding('document_type', 4);
+  assert.strictEqual(found.entity_name, 'Meldebescheinigung');
+  assert.strictEqual(found.model, 'bge-m3');
+  assert.strictEqual(found.vector.length, 3);
+  [0.1, 0.2, 0.3].forEach((v, i) => assert.ok(Math.abs(found.vector[i] - v) < 1e-6));
+});
+
+test('UNIQUE(entity_type, entity_id): erneutes Upsert ueberschreibt statt zu duplizieren', () => {
+  const store = freshStore();
+  store.upsertEmbedding({ entityType: 'tag', id: 1, name: 'Rechnung', model: 'bge-m3', vector: [1, 0] });
+  store.upsertEmbedding({ entityType: 'tag', id: 1, name: 'Rechnungen', model: 'bge-m3', vector: [0, 1] });
+
+  const found = store.getEmbedding('tag', 1);
+  assert.strictEqual(found.entity_name, 'Rechnungen');
+  assert.deepStrictEqual(found.vector, [0, 1]);
+});
+
+test('deleteEmbedding entfernt den Eintrag', () => {
+  const store = freshStore();
+  store.upsertEmbedding({ entityType: 'tag', id: 1, name: 'Rechnung', model: 'bge-m3', vector: [1, 0] });
+  store.deleteEmbedding('tag', 1);
+  assert.strictEqual(store.getEmbedding('tag', 1), null);
+});
+
+test('Fehlerfall: geschlossene DB liefert Fallback statt zu werfen (Embeddings)', () => {
+  const store = freshStore();
+  store.close();
+  assert.doesNotThrow(() => store.getEmbedding('tag', 1));
+  assert.strictEqual(store.upsertEmbedding({ entityType: 'tag', id: 1, name: 'X', model: 'bge-m3', vector: [1, 0] }), false);
+  assert.doesNotThrow(() => store.deleteEmbedding('tag', 1));
+});
+
+test('entity_review_queue: trigram_similarity und embedding_similarity werden persistiert', () => {
+  const store = freshStore();
+  store.insertQueueEntry({
+    entityType: 'document_type', proposedName: 'Entgeltabrechnung', proposedId: 9,
+    candidateName: 'Verdienstbescheinigung', candidateId: 3,
+    similarity: 0.85, trigramSimilarity: 0.10, embeddingSimilarity: 0.85,
+    llmVerdict: 'same', llmReason: 'semantisch gleich', status: 'open'
+  });
+
+  const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE proposed_name = 'Entgeltabrechnung'`).get();
+  assert.strictEqual(row.trigram_similarity, 0.10);
+  assert.strictEqual(row.embedding_similarity, 0.85);
+});
+
+test('entity_review_queue: trigram_similarity/embedding_similarity bleiben null ohne Angabe (Rueckwaertskompatibilitaet)', () => {
+  const store = freshStore();
+  store.insertQueueEntry({
+    entityType: 'tag', proposedName: 'A', proposedId: 1,
+    candidateName: 'B', candidateId: 2, similarity: 0.7,
+    llmVerdict: 'unsure', llmReason: null, status: 'open'
+  });
+
+  const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE proposed_name = 'A'`).get();
+  assert.strictEqual(row.trigram_similarity, null);
+  assert.strictEqual(row.embedding_similarity, null);
+});
+
+test('Migration: eine bestehende entity_review_queue ohne die neuen Spalten wird beim Oeffnen ergaenzt, Daten bleiben erhalten', () => {
+  const os = require('os');
+  const path = require('path');
+  const fs = require('fs');
+  const Database = require('better-sqlite3');
+
+  const dbPath = path.join(os.tmpdir(), `entity-store-migration-test-${process.pid}-${Math.floor(Math.random() * 1e6)}.db`);
+  try {
+    const raw = new Database(dbPath);
+    raw.prepare(`
+      CREATE TABLE entity_review_queue (
+        id INTEGER PRIMARY KEY, entity_type TEXT NOT NULL, proposed_name TEXT NOT NULL,
+        proposed_normalized TEXT NOT NULL, proposed_id INTEGER, candidate_name TEXT NOT NULL,
+        candidate_normalized TEXT NOT NULL, candidate_id INTEGER NOT NULL, similarity REAL NOT NULL,
+        llm_verdict TEXT, llm_reason TEXT, status TEXT NOT NULL, document_id INTEGER,
+        created_at TEXT NOT NULL, resolved_at TEXT,
+        UNIQUE(entity_type, proposed_normalized, candidate_normalized)
+      )
+    `).run();
+    raw.prepare(`
+      INSERT INTO entity_review_queue
+        (entity_type, proposed_name, proposed_normalized, proposed_id, candidate_name, candidate_normalized, candidate_id, similarity, status, created_at)
+      VALUES ('tag', 'Alt', 'alt', 1, 'Bestand', 'bestand', 2, 0.8, 'open', '2026-01-01T00:00:00.000Z')
+    `).run();
+    raw.close();
+
+    const store = new EntityStore(dbPath);
+    try {
+      const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE proposed_name = 'Alt'`).get();
+      assert.strictEqual(row.similarity, 0.8, 'bestehende Daten bleiben erhalten');
+      assert.strictEqual(row.trigram_similarity, null);
+      assert.strictEqual(row.embedding_similarity, null);
+    } finally {
+      store.close();
+    }
+  } finally {
+    fs.rmSync(dbPath, { force: true });
+    fs.rmSync(`${dbPath}-wal`, { force: true });
+    fs.rmSync(`${dbPath}-shm`, { force: true });
+  }
+});

@@ -54,6 +54,32 @@ class EntityStore {
         UNIQUE(entity_type, proposed_normalized, candidate_normalized)
       )
     `).run();
+
+    this.db.prepare(`
+      CREATE TABLE IF NOT EXISTS entity_embeddings (
+        id INTEGER PRIMARY KEY,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        entity_name TEXT NOT NULL,
+        model TEXT NOT NULL,
+        vector BLOB NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(entity_type, entity_id)
+      )
+    `).run();
+
+    this._ensureColumn('entity_review_queue', 'trigram_similarity', 'REAL');
+    this._ensureColumn('entity_review_queue', 'embedding_similarity', 'REAL');
+  }
+
+  // Additive Spalten-Migration: CREATE TABLE IF NOT EXISTS legt bei einer bereits
+  // existierenden Alt-Datenbank keine neuen Spalten an - das muss ALTER TABLE
+  // uebernehmen, idempotent per PRAGMA table_info-Check.
+  _ensureColumn(table, column, definition) {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!columns.some(c => c.name === column)) {
+      this.db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+    }
   }
 
   findAlias(entityType, aliasNormalized) {
@@ -95,6 +121,55 @@ class EntityStore {
     }
   }
 
+  getEmbedding(entityType, entityId) {
+    try {
+      const row = this.db.prepare(
+        `SELECT entity_name, model, vector FROM entity_embeddings WHERE entity_type = ? AND entity_id = ?`
+      ).get(entityType, entityId);
+      if (!row) return null;
+      return { entity_name: row.entity_name, model: row.model, vector: this._bufferToVector(row.vector) };
+    } catch (error) {
+      console.error('[ERROR] entityStore.getEmbedding:', error.message);
+      return null;
+    }
+  }
+
+  upsertEmbedding({ entityType, id, name, model, vector }) {
+    try {
+      this.db.prepare(`
+        INSERT INTO entity_embeddings (entity_type, entity_id, entity_name, model, vector, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(entity_type, entity_id) DO UPDATE SET
+          entity_name = excluded.entity_name,
+          model = excluded.model,
+          vector = excluded.vector,
+          created_at = excluded.created_at
+      `).run(entityType, id, name, model, this._vectorToBuffer(vector), new Date().toISOString());
+      return true;
+    } catch (error) {
+      console.error('[ERROR] entityStore.upsertEmbedding:', error.message);
+      return false;
+    }
+  }
+
+  deleteEmbedding(entityType, entityId) {
+    try {
+      this.db.prepare(`DELETE FROM entity_embeddings WHERE entity_type = ? AND entity_id = ?`).run(entityType, entityId);
+      return true;
+    } catch (error) {
+      console.error('[ERROR] entityStore.deleteEmbedding:', error.message);
+      return false;
+    }
+  }
+
+  _vectorToBuffer(vector) {
+    return Buffer.from(Float32Array.from(vector).buffer);
+  }
+
+  _bufferToVector(buffer) {
+    return Array.from(new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4));
+  }
+
   // proposedNormalized/candidateNormalized MUESSEN bereits normalisiert sein (siehe
   // services/entityNormalizer.js#normalizeForType) - der Aufrufer normalisiert, damit
   // z.B. "meldebescheinigung" und "Meldebescheinigung" denselben Cache-Eintrag treffen.
@@ -122,7 +197,7 @@ class EntityStore {
     }
   }
 
-  insertQueueEntry({ entityType, proposedName, proposedId, candidateName, candidateId, similarity, llmVerdict, llmReason, status, documentId }) {
+  insertQueueEntry({ entityType, proposedName, proposedId, candidateName, candidateId, similarity, trigramSimilarity = null, embeddingSimilarity = null, llmVerdict, llmReason, status, documentId }) {
     try {
       const now = new Date().toISOString();
       // proposed_name/candidate_name bleiben roh (fuer Anzeige), proposed_normalized/
@@ -131,16 +206,19 @@ class EntityStore {
       const candidateNormalized = normalizeForType(candidateName, entityType);
       this.db.prepare(`
         INSERT INTO entity_review_queue
-          (entity_type, proposed_name, proposed_normalized, proposed_id, candidate_name, candidate_normalized, candidate_id, similarity, llm_verdict, llm_reason, status, document_id, created_at, resolved_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (entity_type, proposed_name, proposed_normalized, proposed_id, candidate_name, candidate_normalized, candidate_id, similarity, trigram_similarity, embedding_similarity, llm_verdict, llm_reason, status, document_id, created_at, resolved_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(entity_type, proposed_normalized, candidate_normalized) DO UPDATE SET
           proposed_id = excluded.proposed_id,
           status = excluded.status,
           llm_verdict = excluded.llm_verdict,
           llm_reason = excluded.llm_reason,
+          trigram_similarity = excluded.trigram_similarity,
+          embedding_similarity = excluded.embedding_similarity,
           resolved_at = CASE WHEN excluded.status != 'open' THEN excluded.created_at ELSE entity_review_queue.resolved_at END
       `).run(
         entityType, proposedName, proposedNormalized, proposedId ?? null, candidateName, candidateNormalized, candidateId, similarity,
+        trigramSimilarity, embeddingSimilarity,
         llmVerdict ?? null, llmReason ?? null, status, documentId ?? null,
         now, status !== 'open' ? now : null
       );
