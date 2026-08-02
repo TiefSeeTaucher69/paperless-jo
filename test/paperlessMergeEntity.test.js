@@ -211,7 +211,32 @@ test('mergeEntity haengt mergeProgress an den Fehler, wenn bulk_edit fehlschlaeg
     assert.fail('haette werfen muessen');
   } catch (error) {
     assert.strictEqual(error.message, 'Netzwerkfehler');
-    assert.deepStrictEqual(error.mergeProgress, { affectedCount: 1, chunksCompleted: 0, chunksTotal: 0 });
+    // chunksTotal ist schon vor der Schleife bekannt (aus documentIds.length) und wird jetzt ueber
+    // error.bulkProgress auch bei einem Fehler im allerersten Chunk korrekt mitgegeben (AUDIT-013 Fix) -
+    // frueher fiel dies mangels bulkProgress auf den Default {0,0} zurueck.
+    assert.deepStrictEqual(error.mergeProgress, { affectedCount: 1, chunksCompleted: 0, chunksTotal: 1 });
+  }
+});
+
+test('mergeEntity haengt echten Teilfortschritt an mergeProgress, wenn ein mittlerer Chunk fehlschlaegt', async () => {
+  const documentIds = Array.from({ length: 250 }, (_, i) => i + 1); // 3 Chunks: 100/100/50
+  let postCallCount = 0;
+  const mockClient = {
+    get: async () => ({ data: { results: documentIds.map(id => ({ id })), next: null } }),
+    post: async () => {
+      postCallCount++;
+      if (postCallCount === 2) throw new Error('Netzwerkfehler im zweiten Chunk');
+      return { data: {} };
+    },
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  try {
+    await withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 7, 8, { dryRun: false }));
+    assert.fail('haette werfen muessen');
+  } catch (error) {
+    assert.strictEqual(error.message, 'Netzwerkfehler im zweiten Chunk');
+    assert.deepStrictEqual(error.mergeProgress, { affectedCount: 250, chunksCompleted: 1, chunksTotal: 3 });
   }
 });
 
