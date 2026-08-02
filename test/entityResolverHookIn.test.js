@@ -585,8 +585,11 @@ test('processTags reicht options.documentId bis in die Review-Queue durch', asyn
 test('_getEntityResolver injiziert den Embedding-Service nur, wenn config.embedding.enabled=true', () => {
   const originalInstance = paperlessService._entityResolverInstance;
   const originalEmbeddingEnabled = config.embedding.enabled;
+  const originalDbPath = config.entityResolver.dbPath;
 
   try {
+    config.entityResolver.dbPath = ':memory:';
+
     paperlessService._entityResolverInstance = null;
     config.embedding.enabled = false;
     const resolverDisabled = paperlessService._getEntityResolver();
@@ -598,8 +601,12 @@ test('_getEntityResolver injiziert den Embedding-Service nur, wenn config.embedd
     assert.strictEqual(resolverEnabled.embeddingEnabled, true);
     assert.strictEqual(resolverEnabled.embedAutoThreshold, config.embedding.autoThreshold);
     assert.strictEqual(resolverEnabled.embedJudgeMin, config.embedding.judgeMin);
+
+    resolverDisabled.store.close();
+    resolverEnabled.store.close();
   } finally {
     config.embedding.enabled = originalEmbeddingEnabled;
+    config.entityResolver.dbPath = originalDbPath;
     paperlessService._entityResolverInstance = originalInstance;
   }
 });
