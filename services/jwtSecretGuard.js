@@ -24,7 +24,13 @@ async function ensureJwtSecret() {
       // Only persist if the app is already configured (data/.env exists with
       // real settings) — a brand-new install writes JWT_SECRET itself during
       // POST /setup and shouldn't get a data/.env file before that happens.
-      await setupService.saveConfig({ JWT_SECRET: newSecret });
+      // Persisting a random secret to an already-configured, already-validated
+      // data/.env doesn't need to re-validate Paperless/AI connectivity — doing
+      // so put live network calls on the boot path and, if either service was
+      // unreachable, made saveConfig throw here, silently discarding the new
+      // secret and forcing a fresh one (and thus invalidating every session)
+      // on every subsequent restart.
+      await setupService.saveConfig({ JWT_SECRET: newSecret }, { validate: false });
       console.warn('[SECURITY] JWT_SECRET was missing or set to the default placeholder; generated and persisted a new random secret. All existing sessions are now invalid.');
     }
   } catch (error) {

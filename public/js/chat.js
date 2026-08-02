@@ -46,6 +46,7 @@ async function sendMessage(message) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken(),
             },
             body: JSON.stringify({
                 documentId: currentDocumentId,

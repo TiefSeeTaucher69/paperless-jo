@@ -718,6 +718,7 @@
         &copy; 2025 Paperless-AI - RAG | Document search with AI
     </footer>
 
+    <script src="js/csrf.js"></script>
     <script>
         // DOM Elements
         const themeToggle = document.getElementById('theme-toggle');
@@ -826,7 +827,8 @@
                     const response = await fetch('/api/rag/index', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': getCsrfToken()
                         },
                         body: JSON.stringify({
                             force: true,
@@ -1064,7 +1066,8 @@
             fetch(endpoint, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCsrfToken()
                 },
                 body: JSON.stringify({
                     question: questionText,
