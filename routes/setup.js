@@ -17,7 +17,7 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
-const { authenticateJWT, isAuthenticated, getJwtSecret } = require('./auth.js');
+const { isAuthenticated, getJwtSecret } = require('./auth.js');
 const { csrfProtection } = require('../middleware/csrf');
 const customService = require('../services/customService.js');
 const config = require('../config/config.js');
@@ -135,6 +135,14 @@ require('dotenv').config({ path: '../data/.env' });
 // API endpoints that should not redirect
 const API_ENDPOINTS = ['/health'];
 // Routes that don't require authentication
+// NOTE: POST /login and POST /setup are also exempt from CSRF protection
+// (there's no session cookie yet to protect for either). This is accepted
+// residual risk, not an oversight: `sameSite: 'strict'` on the jwt cookie
+// (see the /login handler) already blocks the classic cross-site login-CSRF
+// vector in modern browsers, and POST /setup only matters during the narrow
+// unconfigured first-run window. Revisit if pre-auth CSRF protection becomes
+// a real requirement (e.g. issuing the CSRF cookie on GET /login and GET
+// /setup, enforcing it on their POSTs).
 let PUBLIC_ROUTES = [
   '/health',
   '/login',

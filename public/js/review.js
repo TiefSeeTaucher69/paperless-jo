@@ -118,7 +118,7 @@ class ReviewManager {
         try {
             const response = await fetch(`/api/review/${id}/merge`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
                 body: JSON.stringify({ dryRun: true })
             });
             if (!response.ok) throw new Error('Preview failed');
@@ -138,7 +138,7 @@ class ReviewManager {
         try {
             const response = await fetch(`/api/review/${this.pendingMergeId}/merge`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
                 body: JSON.stringify({ dryRun: false })
             });
             if (!response.ok) throw new Error('Merge failed');
@@ -153,7 +153,7 @@ class ReviewManager {
 
     async reject(id) {
         try {
-            const response = await fetch(`/api/review/${id}/reject`, { method: 'POST' });
+            const response = await fetch(`/api/review/${id}/reject`, { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() } });
             if (!response.ok) throw new Error('Reject failed');
 
             document.querySelector(`tr[data-queue-id="${id}"]`)?.remove();
@@ -168,7 +168,7 @@ class ReviewManager {
         button.disabled = true;
         button.textContent = 'Running...';
         try {
-            const response = await fetch(`/api/review/backfill/${entityType}`, { method: 'POST' });
+            const response = await fetch(`/api/review/backfill/${entityType}`, { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() } });
             if (!response.ok) throw new Error('Backfill scan failed');
             const result = await response.json();
             alert(`${result.inserted} new entries found.`);

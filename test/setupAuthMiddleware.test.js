@@ -4,6 +4,14 @@ const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const http = require('http');
+const jwt = require('jsonwebtoken');
+
+// Known secret so this test file can mint tokens that routes/setup.js's
+// isAuthenticated (via ./auth.js#getJwtSecret, which reads process.env.JWT_SECRET
+// at call time, not at require time) will accept.
+process.env.JWT_SECRET = 'setup-auth-middleware-test-secret';
+
+const setupService = require('../services/setupService.js');
 
 let server;
 let baseUrl;
@@ -30,17 +38,28 @@ after(() => {
   return new Promise((resolve) => server.close(resolve));
 });
 
-function request(method, urlPath, headers = {}) {
+function request(method, urlPath, { headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(baseUrl + urlPath);
+    const payload = body !== undefined ? JSON.stringify(body) : undefined;
+    const reqHeaders = { ...headers };
+    if (payload !== undefined) {
+      reqHeaders['content-type'] = 'application/json';
+      reqHeaders['content-length'] = Buffer.byteLength(payload);
+    }
     const req = http.request(
-      { method, hostname: u.hostname, port: u.port, path: u.pathname + u.search, headers },
+      { method, hostname: u.hostname, port: u.port, path: u.pathname + u.search, headers: reqHeaders },
       (res) => {
         res.resume();
-        res.on('end', () => resolve({ status: res.statusCode, location: res.headers.location }));
+        res.on('end', () => resolve({
+          status: res.statusCode,
+          location: res.headers.location,
+          setCookie: res.headers['set-cookie'] || []
+        }));
       }
     );
     req.on('error', reject);
+    if (payload !== undefined) req.write(payload);
     req.end();
   });
 }
@@ -62,7 +81,7 @@ const PROTECTED_ROUTES = [
 
 for (const [method, routePath] of PROTECTED_ROUTES) {
   test(`${method} ${routePath} redirects to /login without a token (AUDIT-001 regression)`, async () => {
-    const res = await request(method, routePath, { 'content-type': 'application/json' });
+    const res = await request(method, routePath, { headers: { 'content-type': 'application/json' } });
     assert.strictEqual(res.status, 302, `expected 302 redirect for ${method} ${routePath}, got ${res.status}`);
     assert.strictEqual(res.location, '/login');
   });
@@ -84,11 +103,49 @@ test('GET /login stays public (no auth redirect loop to itself)', async () => {
   assert.ok([200, 302].includes(res.status), `expected 200 or 302, got ${res.status}`);
 });
 
-test('an authenticated GET without a prior CSRF cookie gets one set (does not error)', async () => {
-  // This only proves the route pipeline still resolves cleanly for GETs;
-  // full authenticated-POST CSRF behavior is covered at the unit level in
-  // test/csrfMiddleware.test.js, since building a real logged-in session here
-  // would require a live Paperless/AI backend for setupService.isConfigured().
-  const res = await request('GET', '/health');
-  assert.strictEqual(res.status, 200);
+// Exercises the real isAuthenticated -> csrfProtection composition wired up in
+// routes/setup.js's router.use(), as opposed to test/csrfMiddleware.test.js
+// (which unit-tests csrfProtection alone against fake req/res objects) or the
+// now-removed test this replaces (which only ever hit the public /health
+// route and so never reached csrfProtection at all -- it proved nothing about
+// CSRF). If csrfProtection were ever removed from that middleware chain, the
+// 403 assertions below would fail (nextCalled would let the request through).
+test('isAuthenticated -> csrfProtection composition: cookie is set, POST without header is rejected, POST with matching header is not', async () => {
+  const originalIsConfigured = setupService.isConfigured;
+  setupService.isConfigured = async () => true;
+
+  try {
+    const token = jwt.sign({ id: 1, username: 'testuser' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    // GET with a valid JWT cookie and no existing CSRF cookie: isAuthenticated
+    // passes, csrfProtection (a safe method) sets a new csrfToken cookie, and
+    // the request reaches the real route handler. /debug is used because it
+    // has no live-backend dependency (unlike /dashboard), so this test isn't
+    // flaky against an unconfigured Paperless/AI provider.
+    const getRes = await request('GET', '/debug', { headers: { Cookie: `jwt=${token}` } });
+    const csrfSetCookie = getRes.setCookie.find(c => c.startsWith('csrfToken='));
+    assert.ok(csrfSetCookie, `expected a csrfToken cookie to be set, got Set-Cookie: ${JSON.stringify(getRes.setCookie)}`);
+    const csrfToken = csrfSetCookie.split(';')[0].split('=')[1];
+    assert.ok(csrfToken.length > 0);
+
+    // POST with the same JWT cookie but WITHOUT the CSRF header: rejected by
+    // csrfProtection specifically, before the route handler ever runs.
+    const postNoHeaderRes = await request('POST', '/api/reset-documents', {
+      headers: { Cookie: `jwt=${token}` },
+      body: {}
+    });
+    assert.strictEqual(postNoHeaderRes.status, 403);
+
+    // POST with the JWT cookie AND a matching X-CSRF-Token header: not
+    // rejected by CSRF. (It legitimately gets a 400 from the route handler
+    // itself, since body {} has no `ids` array -- that's proof the request
+    // made it past csrfProtection into real route logic, not a CSRF failure.)
+    const postWithHeaderRes = await request('POST', '/api/reset-documents', {
+      headers: { Cookie: `jwt=${token}; csrfToken=${csrfToken}`, 'X-CSRF-Token': csrfToken },
+      body: {}
+    });
+    assert.notStrictEqual(postWithHeaderRes.status, 403);
+  } finally {
+    setupService.isConfigured = originalIsConfigured;
+  }
 });

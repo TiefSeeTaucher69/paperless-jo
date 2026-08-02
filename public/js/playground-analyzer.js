@@ -609,6 +609,7 @@ class PlaygroundAnalyzer {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCsrfToken(),
                 },
                 body: JSON.stringify({
                     content: contentData.content,

@@ -14,13 +14,42 @@ class SetupService {
   async loadConfig() {
     try {
       const envContent = await fs.readFile(this.envPath, 'utf8');
+      const lines = envContent.split('\n');
       const config = {};
-      envContent.split('\n').forEach(line => {
-        const [key, value] = line.split('=');
-        if (key && value) {
-          config[key.trim()] = value.trim();
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const eqIndex = line.indexOf('=');
+        if (eqIndex === -1) continue;
+
+        const key = line.slice(0, eqIndex).trim();
+        let value = line.slice(eqIndex + 1);
+        if (!key) continue;
+
+        // saveConfig() writes SYSTEM_PROMPT as a backtick-delimited value that
+        // can span multiple physical lines (`${value}\n\``, where the \n is a
+        // real newline in the written file). Reconstruct it here by consuming
+        // lines until the lone closing backtick, then strip both backticks --
+        // otherwise every save/load round-trip accumulates an extra leading
+        // backtick (previously observed as a real corruption bug).
+        if (key === 'SYSTEM_PROMPT' && value.startsWith('`')) {
+          if (!(value.length > 1 && value.endsWith('`'))) {
+            const parts = [value];
+            while (i + 1 < lines.length && lines[i + 1] !== '`') {
+              i++;
+              parts.push(lines[i]);
+            }
+            if (i + 1 < lines.length && lines[i + 1] === '`') {
+              i++;
+            }
+            value = parts.join('\n');
+          }
+          value = value.replace(/^`/, '').replace(/`$/, '');
         }
-      });
+
+        config[key] = value.trim();
+      }
+
       return config;
     } catch (error) {
       console.error('Error loading config:', error.message);
@@ -206,7 +235,7 @@ class SetupService {
     return true;
   }
 
-  async saveConfig(updates) {
+  async saveConfig(updates, { validate = true } = {}) {
     try {
       // Read-modify-write against the real file instead of trusting the caller
       // to pass a complete config: a caller that only knows about a subset of
@@ -215,8 +244,13 @@ class SetupService {
       const existing = (await this.loadConfig()) || {};
       const config = { ...existing, ...updates };
 
-      // Validate the merged configuration before saving
-      await this.validateConfig(config);
+      // Validate the merged configuration before saving, unless the caller
+      // explicitly opts out (e.g. jwtSecretGuard persisting a random secret
+      // into an already-validated config shouldn't re-check live Paperless/AI
+      // connectivity on every server boot).
+      if (validate) {
+        await this.validateConfig(config);
+      }
 
       const JSON_STANDARD_PROMPT = `
         Return the result EXCLUSIVELY as a JSON object. The Tags and Title MUST be in the language that is used in the document.:

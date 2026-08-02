@@ -119,7 +119,12 @@ const documentFingerprintSimilarityThreshold = clampThreshold(
 
 // Cross-origin browser access is opt-in. Unset = same-origin only, which is
 // correct for the default self-hosted deployment; set a comma-separated list
-// to allow specific origins to call the API with credentials.
+// to let a specific origin's JavaScript read this API's responses. Note this
+// does NOT enable credentialed/cookie-based cross-origin calls -- server.js's
+// CORS options hardcode `credentials: false`, so an allow-listed origin still
+// cannot send the `jwt` session cookie cross-origin. This is still useful for,
+// e.g., a public read-only integration authenticating via the X-API-Key
+// header instead, which isn't subject to that restriction.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map(o => o.trim())
