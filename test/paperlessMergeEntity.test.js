@@ -142,6 +142,41 @@ test('mergeEntity mit dryRun=false wirft weiter, wenn das Loeschen nicht mit 404
   );
 });
 
+test('mergeEntity wirft bei fromId=null und stellt keinen HTTP-Request', async () => {
+  const mockClient = {
+    get: async () => { throw new Error('get haette nicht aufgerufen werden duerfen'); },
+    post: async () => { throw new Error('post haette nicht aufgerufen werden duerfen'); },
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', null, 6, { dryRun: true })),
+    /ungueltige IDs/
+  );
+});
+
+test('mergeEntity wirft bei fromId === toId', async () => {
+  const mockClient = {
+    get: async () => { throw new Error('get haette nicht aufgerufen werden duerfen'); }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 5, 5, { dryRun: true })),
+    /ungueltige IDs/
+  );
+});
+
+test('mergeEntity wirft bei nicht-positiven oder nicht-ganzzahligen IDs', async () => {
+  const mockClient = {
+    get: async () => { throw new Error('get haette nicht aufgerufen werden duerfen'); }
+  };
+
+  await assert.rejects(() => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', -1, 6, { dryRun: true })), /ungueltige IDs/);
+  await assert.rejects(() => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 5, 0, { dryRun: true })), /ungueltige IDs/);
+  await assert.rejects(() => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 5.5, 6, { dryRun: true })), /ungueltige IDs/);
+  await assert.rejects(() => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 5, undefined, { dryRun: true })), /ungueltige IDs/);
+});
+
 test('getOpenReviewQueueCount liefert die Anzahl offener Queue-Eintraege', () => {
   const original = paperlessService._entityResolverInstance;
   paperlessService._entityResolverInstance = { store: { countOpenQueueEntries: () => 3 } };
