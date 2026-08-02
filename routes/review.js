@@ -82,12 +82,13 @@ router.get('/api/review/:id/documents', authenticateJWT, async (req, res) => {
 router.post('/api/review/:id/merge', authenticateJWT, async (req, res) => {
   const id = Number(req.params.id);
   const dryRun = req.body?.dryRun !== false;
+  const documentIds = Array.isArray(req.body?.documentIds) ? req.body.documentIds : null;
 
   try {
     const { reviewQueueService } = getServices();
     const result = dryRun
       ? await reviewQueueService.previewMerge(id)
-      : await reviewQueueService.merge(id);
+      : await reviewQueueService.merge(id, { expectedDocumentIds: documentIds });
     res.json(result);
   } catch (error) {
     console.error(`[ERROR] Merge fuer Queue-Eintrag ${id} fehlgeschlagen:`, error.message);

@@ -16,6 +16,7 @@ class PaperlessService {
     this.lastCorrespondentRefresh = 0;
     this.lastDocumentTypeRefresh = 0;
     this.CACHE_LIFETIME = 3000; // 3 Sekunden
+    this.BULK_EDIT_CHUNK_SIZE = 100;
     this._entityResolverInstance = null;
   }
 
@@ -1397,40 +1398,88 @@ async getOrCreateDocumentType(name, options = {}) {
       document_type: { document_type: toId }
     };
 
-    await this.client.post('/documents/bulk_edit/', {
-      documents: documentIds,
-      method: methodMap[type],
-      parameters: parametersMap[type]
-    });
+    // Ungechunkt waere ein Tag mit mehreren tausend Dokumenten eine einzige sehr grosse
+    // Anfrage ohne Teilfortschritt (AUDIT-013). In Bloecken senden macht einen Abbruch
+    // eingrenzbar: chunksCompleted zeigt, wie weit der Merge kam.
+    const chunksTotal = Math.ceil(documentIds.length / this.BULK_EDIT_CHUNK_SIZE) || 0;
+    let chunksCompleted = 0;
+
+    for (let i = 0; i < documentIds.length; i += this.BULK_EDIT_CHUNK_SIZE) {
+      const chunk = documentIds.slice(i, i + this.BULK_EDIT_CHUNK_SIZE);
+      try {
+        await this.client.post('/documents/bulk_edit/', {
+          documents: chunk,
+          method: methodMap[type],
+          parameters: parametersMap[type]
+        });
+        chunksCompleted++;
+      } catch (error) {
+        // Ein Fehler mitten im Loop erreicht das normale return unten nie - ohne dieses
+        // Attribut wuerde der Aufrufer (mergeEntity) chunksCompleted=0 sehen, egal wie
+        // viele Chunks tatsaechlich schon durch waren (AUDIT-013 Review-Fund).
+        error.bulkProgress = { chunksCompleted, chunksTotal };
+        throw error;
+      }
+    }
+
+    return { chunksCompleted, chunksTotal };
   }
 
-  async mergeEntity(type, fromId, toId, { dryRun = true } = {}) {
+  async mergeEntity(type, fromId, toId, { dryRun = true, expectedDocumentIds = null } = {}) {
     this.initialize();
+    if (!Number.isInteger(fromId) || fromId <= 0 || !Number.isInteger(toId) || toId <= 0 || fromId === toId) {
+      throw new Error(`mergeEntity: ungueltige IDs (fromId=${fromId}, toId=${toId})`);
+    }
+
     const affected = await this._findDocumentsWithEntity(type, fromId);
 
     if (dryRun) {
       return { affectedCount: affected.length, documentIds: affected.map(d => d.id), deleted: false };
     }
 
+    // Der Bestaetigungsdialog zeigt den Stand von T1 (Preview), ausgefuehrt wird auf dem Stand
+    // von T2 (dieser Aufruf). Weicht die Dokumentmenge ab, ist die Entscheidungsgrundlage des
+    // Nutzers nicht mehr die, auf der gehandelt wuerde - abbrechen statt blind durchzufuehren
+    // (AUDIT-013).
+    if (Array.isArray(expectedDocumentIds)) {
+      const currentIds = affected.map(d => d.id).sort((a, b) => a - b);
+      const expectedIds = [...expectedDocumentIds].sort((a, b) => a - b);
+      const changed = currentIds.length !== expectedIds.length || currentIds.some((id, i) => id !== expectedIds[i]);
+      if (changed) {
+        const error = new Error(`Merge aborted: document set changed since preview (expected ${expectedIds.length}, now ${currentIds.length}) - please re-preview before merging`);
+        error.mergeProgress = { affectedCount: affected.length, chunksCompleted: 0, chunksTotal: 0 };
+        throw error;
+      }
+    }
+
+    let bulkResult = { chunksCompleted: 0, chunksTotal: 0 };
     if (affected.length > 0) {
-      await this._bulkReassignDocuments(type, affected.map(d => d.id), fromId, toId);
+      try {
+        bulkResult = await this._bulkReassignDocuments(type, affected.map(d => d.id), fromId, toId);
+      } catch (error) {
+        error.mergeProgress = { affectedCount: affected.length, ...(error.bulkProgress || bulkResult) };
+        throw error;
+      }
     }
 
     // Erst nach verifiziert leerem fromId loeschen - der einzige unumkehrbare Schritt.
     const remaining = await this._findDocumentsWithEntity(type, fromId);
     if (remaining.length > 0) {
-      throw new Error(`Merge incomplete: ${remaining.length} document(s) still reference fromId=${fromId}`);
+      const error = new Error(`Merge incomplete: ${remaining.length} document(s) still reference fromId=${fromId}`);
+      error.mergeProgress = { affectedCount: affected.length, ...bulkResult };
+      throw error;
     }
 
     try {
       await this.client.delete(`/${type}s/${fromId}/`);
     } catch (error) {
       if (error.response?.status !== 404) {
+        error.mergeProgress = { affectedCount: affected.length, ...bulkResult };
         throw error;
       }
       // fromId war bereits geloescht (z.B. durch einen frueheren Merge desselben Eintrags) - das ist kein Fehler.
     }
-    return { affectedCount: affected.length, documentIds: affected.map(d => d.id), deleted: true };
+    return { affectedCount: affected.length, documentIds: affected.map(d => d.id), deleted: true, ...bulkResult };
   }
 
   async getExampleDocumentsForEntity(type, id, limit = 3) {
