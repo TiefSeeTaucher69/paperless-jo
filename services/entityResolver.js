@@ -3,11 +3,15 @@ const { normalizeForType } = require('./entityNormalizer');
 const { diceCoefficient } = require('./entitySimilarity');
 
 class EntityResolver {
-  constructor({ store, judge, config = {} }) {
+  constructor({ store, judge, embeddingService = null, config = {} }) {
     this.store = store;
     this.judge = judge; // async (type, nameA, nameB) => { verdict, reason }
+    this.embeddingService = embeddingService; // { embed, cosineSimilarity, getOrComputeEmbedding }
     this.autoThreshold = config.autoThreshold ?? 0.90;
     this.judgeMin = config.judgeMin ?? 0.65;
+    this.embeddingEnabled = Boolean(config.embeddingEnabled) && Boolean(embeddingService);
+    this.embedAutoThreshold = config.embedAutoThreshold ?? 0.90;
+    this.embedJudgeMin = config.embedJudgeMin ?? 0.65;
   }
 
   async resolve(type, proposedName, existingEntities) {
@@ -46,12 +50,30 @@ class EntityResolver {
       }
     }
 
-    // Stufe 4: Ähnlichkeit gegen den besten Kandidaten
+    // Stufe 4: kombinierte Kandidatenauswahl. combinedScore = max(trigram, embedding)
+    // pro Bestandsentitaet waehlt den Kandidaten, unabhaengig davon, welcher Kanal ihn
+    // erkennt. Die Entscheidung darunter prueft dagegen den rohen Wert jedes Kanals
+    // gegen dessen EIGENEN Schwellwert - Cosine-Aehnlichkeit und Dice-Koeffizient liegen
+    // nicht auf derselben Skala, ein gemeinsamer Schwellwert auf dem Max-Wert waere
+    // statistisch nicht belastbar (siehe Design-Doc Phase 4).
+    let proposedVector = null;
+    if (this.embeddingEnabled) {
+      try {
+        proposedVector = await this.embeddingService.embed(proposedName);
+      } catch (error) {
+        console.warn(`[WARNING] entityResolver: Embedding fuer Vorschlag "${proposedName}" nicht berechenbar, faellt auf Trigram-only zurueck:`, error.message);
+        proposedVector = null;
+      }
+    }
+
     let best = null;
     for (const entity of existingEntities) {
-      const sim = diceCoefficient(normalizedProposed, normalizeForType(entity.name, type));
-      if (!best || sim > best.similarity) {
-        best = { entity, similarity: sim };
+      const trigramSim = diceCoefficient(normalizedProposed, normalizeForType(entity.name, type));
+      const embeddingSim = await this._embeddingSimilarityFor(type, proposedVector, entity);
+      const combined = Math.max(trigramSim, embeddingSim ?? -1);
+
+      if (!best || combined > best.combined) {
+        best = { entity, trigramSim, embeddingSim, combined };
       }
     }
 
@@ -59,16 +81,13 @@ class EntityResolver {
       return { action: 'create' };
     }
 
-    // Negativ-Cache geht sowohl 4a als auch 4c vor. findRejectedPair vergleicht
+    // Negativ-Cache geht allen Auto-Stufen und dem Judge vor. findRejectedPair vergleicht
     // normalisiert, damit Gross-/Kleinschreibung oder Whitespace-Varianten des
     // Paars denselben Cache-Treffer liefern (siehe entityStore.js).
     const normalizedCandidate = normalizeForType(best.entity.name, type);
     const rejected = this.store.findRejectedPair(type, normalizedProposed, normalizedCandidate);
 
-    if (best.similarity >= this.autoThreshold) {
-      if (rejected) {
-        return { action: 'create' }; // Stufe 4b: Nutzerentscheidung uebersticht hohe Aehnlichkeit
-      }
+    if (!rejected && best.trigramSim >= this.autoThreshold) {
       this.store.insertAlias({
         entityType: type, aliasNormalized: normalizedProposed,
         canonicalName: best.entity.name, canonicalId: best.entity.id, source: 'auto'
@@ -76,11 +95,22 @@ class EntityResolver {
       return { action: 'map', id: best.entity.id, canonicalName: best.entity.name, via: 'similarity' };
     }
 
+    if (!rejected && best.embeddingSim !== null && best.embeddingSim >= this.embedAutoThreshold) {
+      this.store.insertAlias({
+        entityType: type, aliasNormalized: normalizedProposed,
+        canonicalName: best.entity.name, canonicalId: best.entity.id, source: 'auto_embedding'
+      });
+      return { action: 'map', id: best.entity.id, canonicalName: best.entity.name, via: 'embedding_similarity' };
+    }
+
     if (rejected) {
       return { action: 'create' };
     }
 
-    if (best.similarity >= this.judgeMin) {
+    const reachesJudgeZone = best.trigramSim >= this.judgeMin
+      || (best.embeddingSim !== null && best.embeddingSim >= this.embedJudgeMin);
+
+    if (reachesJudgeZone) {
       const verdict = await this._askJudge(type, proposedName, best.entity.name);
 
       if (verdict.verdict === 'same') {
@@ -95,7 +125,8 @@ class EntityResolver {
         this.store.insertQueueEntry({
           entityType: type, proposedName, proposedId: null,
           candidateName: best.entity.name, candidateId: best.entity.id,
-          similarity: best.similarity, llmVerdict: 'different', llmReason: verdict.reason,
+          similarity: best.combined, trigramSimilarity: best.trigramSim, embeddingSimilarity: best.embeddingSim,
+          llmVerdict: 'different', llmReason: verdict.reason,
           status: 'rejected'
         });
         return { action: 'create' };
@@ -106,13 +137,28 @@ class EntityResolver {
       return {
         action: 'create_and_queue',
         candidate: { id: best.entity.id, name: best.entity.name },
-        similarity: best.similarity,
+        similarity: best.combined,
+        trigramSimilarity: best.trigramSim,
+        embeddingSimilarity: best.embeddingSim,
         verdict: verdict.verdict
       };
     }
 
-    // Stufe 4d
+    // Stufe 4d/5: unter beiden Judge-Schwellen
     return { action: 'create' };
+  }
+
+  async _embeddingSimilarityFor(type, proposedVector, entity) {
+    if (!proposedVector) {
+      return null;
+    }
+    try {
+      const entityVector = await this.embeddingService.getOrComputeEmbedding(this.store, type, entity);
+      return this.embeddingService.cosineSimilarity(proposedVector, entityVector);
+    } catch (error) {
+      console.warn(`[WARNING] entityResolver: Embedding-Aehnlichkeit fuer "${entity.name}" (${type}) nicht berechenbar, wird ignoriert:`, error.message);
+      return null;
+    }
   }
 
   async _askJudge(type, nameA, nameB) {
@@ -128,11 +174,12 @@ class EntityResolver {
     }
   }
 
-  recordCreatedAndQueued({ type, proposedName, proposedId, candidate, similarity, verdict, documentId }) {
+  recordCreatedAndQueued({ type, proposedName, proposedId, candidate, similarity, trigramSimilarity = null, embeddingSimilarity = null, verdict, documentId }) {
     this.store.insertQueueEntry({
       entityType: type, proposedName, proposedId,
       candidateName: candidate.name, candidateId: candidate.id,
-      similarity, llmVerdict: verdict, llmReason: null,
+      similarity, trigramSimilarity, embeddingSimilarity,
+      llmVerdict: verdict, llmReason: null,
       status: 'open', documentId
     });
   }

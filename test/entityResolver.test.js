@@ -181,3 +181,116 @@ test('recordCreatedAndQueued schreibt den Queue-Eintrag mit der echten proposed_
   assert.strictEqual(found.status, 'open');
   assert.strictEqual(found.document_id, 123);
 });
+
+function fakeEmbeddingService(vectors) {
+  return {
+    embed: async (text) => {
+      if (!(text in vectors)) throw new Error(`kein Test-Vektor fuer "${text}" hinterlegt`);
+      return vectors[text];
+    },
+    getOrComputeEmbedding: async (_store, _type, entity) => {
+      if (!(entity.name in vectors)) throw new Error(`kein Test-Vektor fuer "${entity.name}" hinterlegt`);
+      return vectors[entity.name];
+    },
+    cosineSimilarity: (a, b) => {
+      const dot = a.reduce((sum, v, i) => sum + v * b[i], 0);
+      const normA = Math.sqrt(a.reduce((sum, v) => sum + v * v, 0));
+      const normB = Math.sqrt(b.reduce((sum, v) => sum + v * v, 0));
+      return dot / (normA * normB);
+    }
+  };
+}
+
+test('Embedding-Auto: Embedding >= EMBED_AUTO_THRESHOLD, Trigram weit darunter -> map via embedding_similarity, Alias source=auto_embedding', async () => {
+  const store = new EntityStore(':memory:');
+  const embeddingService = fakeEmbeddingService({
+    'Entgeltabrechnung': [1, 0],
+    'Verdienstbescheinigung': [1, 0] // identisch -> Cosine = 1
+  });
+  const resolver = new EntityResolver({
+    store, judge: async () => { throw new Error('Judge sollte nicht aufgerufen werden'); },
+    embeddingService,
+    config: { autoThreshold: 0.90, judgeMin: 0.65, embeddingEnabled: true, embedAutoThreshold: 0.90, embedJudgeMin: 0.65 }
+  });
+
+  const result = await resolver.resolve('document_type', 'Entgeltabrechnung', [{ id: 4, name: 'Verdienstbescheinigung' }]);
+
+  assert.strictEqual(result.action, 'map');
+  assert.strictEqual(result.via, 'embedding_similarity');
+  const alias = store.findAlias('document_type', normalizeForType('Entgeltabrechnung', 'document_type'));
+  assert.strictEqual(alias.source, 'auto_embedding');
+});
+
+test('Embedding-Judge-Zone: Trigram unter JUDGE_MIN, Embedding im Judge-Fenster -> Judge wird gefragt', async () => {
+  const store = new EntityStore(':memory:');
+  const embeddingService = fakeEmbeddingService({
+    'Entgeltabrechnung': [1, 0],
+    'Verdienstbescheinigung': [0.7, 0.714142842854285] // Cosine ~0.7
+  });
+  const resolver = new EntityResolver({
+    store, judge: async () => ({ verdict: 'same', reason: 'semantisch gleich' }),
+    embeddingService,
+    config: { autoThreshold: 0.90, judgeMin: 0.65, embeddingEnabled: true, embedAutoThreshold: 0.90, embedJudgeMin: 0.65 }
+  });
+
+  const result = await resolver.resolve('document_type', 'Entgeltabrechnung', [{ id: 4, name: 'Verdienstbescheinigung' }]);
+
+  assert.strictEqual(result.action, 'map');
+  assert.strictEqual(result.via, 'llm');
+});
+
+test('Embedding deaktiviert trotz injiziertem Service -> kein Embedding-Call, Verhalten wie ohne Embeddings', async () => {
+  const store = new EntityStore(':memory:');
+  let calls = 0;
+  const embeddingService = {
+    embed: async () => { calls++; return [1, 0]; },
+    getOrComputeEmbedding: async () => { calls++; return [1, 0]; },
+    cosineSimilarity: () => 1
+  };
+  const resolver = new EntityResolver({
+    store, judge: async () => { throw new Error('Judge sollte nicht aufgerufen werden'); },
+    embeddingService,
+    config: { autoThreshold: 0.90, judgeMin: 0.65, embeddingEnabled: false }
+  });
+
+  const result = await resolver.resolve('document_type', 'Entgeltabrechnung', [{ id: 4, name: 'Verdienstbescheinigung' }]);
+
+  assert.strictEqual(result.action, 'create');
+  assert.strictEqual(calls, 0);
+});
+
+test('Fehlerverhalten: Embedding-Call wirft -> faellt auf Trigram-only zurueck, kein Absturz', async () => {
+  const store = new EntityStore(':memory:');
+  const embeddingService = {
+    embed: async () => { throw new Error('ECONNREFUSED'); },
+    getOrComputeEmbedding: async () => { throw new Error('sollte nicht erreicht werden'); },
+    cosineSimilarity: () => { throw new Error('sollte nicht erreicht werden'); }
+  };
+  const resolver = new EntityResolver({
+    store, judge: async () => { throw new Error('Judge sollte nicht aufgerufen werden'); },
+    embeddingService,
+    config: { autoThreshold: 0.90, judgeMin: 0.65, embeddingEnabled: true, embedAutoThreshold: 0.90, embedJudgeMin: 0.65 }
+  });
+
+  // Trigram-Aehnlichkeit dieser beiden Namen liegt unter judgeMin -> create, trotz kaputtem Embedding-Kanal
+  const result = await resolver.resolve('document_type', 'Entgeltabrechnung', [{ id: 4, name: 'Verdienstbescheinigung' }]);
+  assert.strictEqual(result.action, 'create');
+});
+
+test('recordCreatedAndQueued schreibt trigram_similarity und embedding_similarity mit', async () => {
+  const store = new EntityStore(':memory:');
+  const resolver = makeResolver({ store });
+
+  resolver.recordCreatedAndQueued({
+    type: 'document_type', proposedName: 'Verdienstbescheinigung', proposedId: 55,
+    candidate: { id: 4, name: 'Meldebescheinigung' }, similarity: 0.81,
+    trigramSimilarity: 0.42, embeddingSimilarity: 0.81,
+    verdict: 'unsure', documentId: 123
+  });
+
+  const found = store.db.prepare(
+    `SELECT * FROM entity_review_queue WHERE proposed_name = ? AND candidate_name = ?`
+  ).get('Verdienstbescheinigung', 'Meldebescheinigung');
+  assert.strictEqual(found.trigram_similarity, 0.42);
+  assert.strictEqual(found.embedding_similarity, 0.81);
+});
