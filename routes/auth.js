@@ -1,8 +1,11 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/config');
 
-// JWT secret key - should be moved to environment variables
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// Read at call-time, not module-load-time: server.js guarantees JWT_SECRET is
+// generated and persisted before the first request is served (see Task 3).
+function getJwtSecret() {
+  return process.env.JWT_SECRET || 'your-secret-key';
+}
 
 // JWT middleware to verify token
 const authenticateJWT = (req, res, next) => {
@@ -19,7 +22,7 @@ const authenticateJWT = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded;
     next();
   } catch (error) {
@@ -41,7 +44,7 @@ const isAuthenticated = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded;
     next();
   } catch (error) {
@@ -50,4 +53,4 @@ const isAuthenticated = (req, res, next) => {
   }
 };
 
-module.exports = { authenticateJWT, isAuthenticated };
+module.exports = { authenticateJWT, isAuthenticated, getJwtSecret };
