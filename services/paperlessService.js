@@ -1406,12 +1406,20 @@ async getOrCreateDocumentType(name, options = {}) {
 
     for (let i = 0; i < documentIds.length; i += this.BULK_EDIT_CHUNK_SIZE) {
       const chunk = documentIds.slice(i, i + this.BULK_EDIT_CHUNK_SIZE);
-      await this.client.post('/documents/bulk_edit/', {
-        documents: chunk,
-        method: methodMap[type],
-        parameters: parametersMap[type]
-      });
-      chunksCompleted++;
+      try {
+        await this.client.post('/documents/bulk_edit/', {
+          documents: chunk,
+          method: methodMap[type],
+          parameters: parametersMap[type]
+        });
+        chunksCompleted++;
+      } catch (error) {
+        // Ein Fehler mitten im Loop erreicht das normale return unten nie - ohne dieses
+        // Attribut wuerde der Aufrufer (mergeEntity) chunksCompleted=0 sehen, egal wie
+        // viele Chunks tatsaechlich schon durch waren (AUDIT-013 Review-Fund).
+        error.bulkProgress = { chunksCompleted, chunksTotal };
+        throw error;
+      }
     }
 
     return { chunksCompleted, chunksTotal };
@@ -1449,7 +1457,7 @@ async getOrCreateDocumentType(name, options = {}) {
       try {
         bulkResult = await this._bulkReassignDocuments(type, affected.map(d => d.id), fromId, toId);
       } catch (error) {
-        error.mergeProgress = { affectedCount: affected.length, ...bulkResult };
+        error.mergeProgress = { affectedCount: affected.length, ...(error.bulkProgress || bulkResult) };
         throw error;
       }
     }
