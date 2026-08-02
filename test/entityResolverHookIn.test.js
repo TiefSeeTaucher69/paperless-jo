@@ -581,3 +581,25 @@ test('processTags reicht options.documentId bis in die Review-Queue durch', asyn
     store.close();
   }
 });
+
+test('_getEntityResolver injiziert den Embedding-Service nur, wenn config.embedding.enabled=true', () => {
+  const originalInstance = paperlessService._entityResolverInstance;
+  const originalEmbeddingEnabled = config.embedding.enabled;
+
+  try {
+    paperlessService._entityResolverInstance = null;
+    config.embedding.enabled = false;
+    const resolverDisabled = paperlessService._getEntityResolver();
+    assert.strictEqual(resolverDisabled.embeddingEnabled, false);
+
+    paperlessService._entityResolverInstance = null;
+    config.embedding.enabled = true;
+    const resolverEnabled = paperlessService._getEntityResolver();
+    assert.strictEqual(resolverEnabled.embeddingEnabled, true);
+    assert.strictEqual(resolverEnabled.embedAutoThreshold, config.embedding.autoThreshold);
+    assert.strictEqual(resolverEnabled.embedJudgeMin, config.embedding.judgeMin);
+  } finally {
+    config.embedding.enabled = originalEmbeddingEnabled;
+    paperlessService._entityResolverInstance = originalInstance;
+  }
+});

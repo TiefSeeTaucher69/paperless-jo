@@ -160,14 +160,19 @@ class PaperlessService {
       const EntityStore = require('../models/entityStore');
       const EntityResolver = require('./entityResolver');
       const entityJudge = require('./entityJudge');
+      const entityEmbeddingService = require('./entityEmbeddingService');
 
       const store = new EntityStore(config.entityResolver.dbPath);
       this._entityResolverInstance = new EntityResolver({
         store,
         judge: (type, a, b) => entityJudge.judge(type, a, b),
+        embeddingService: config.embedding.enabled ? entityEmbeddingService : null,
         config: {
           autoThreshold: config.entityResolver.autoThreshold,
-          judgeMin: config.entityResolver.judgeMin
+          judgeMin: config.entityResolver.judgeMin,
+          embeddingEnabled: config.embedding.enabled,
+          embedAutoThreshold: config.embedding.autoThreshold,
+          embedJudgeMin: config.embedding.judgeMin
         }
       });
     }
@@ -201,7 +206,9 @@ class PaperlessService {
     try {
       this._getEntityResolver().recordCreatedAndQueued({
         type, proposedName, proposedId, documentId,
-        candidate: decision.candidate, similarity: decision.similarity, verdict: decision.verdict
+        candidate: decision.candidate, similarity: decision.similarity,
+        trigramSimilarity: decision.trigramSimilarity, embeddingSimilarity: decision.embeddingSimilarity,
+        verdict: decision.verdict
       });
     } catch (error) {
       console.warn(`[WARNING] Konnte Review-Queue-Eintrag fuer "${proposedName}" nicht schreiben:`, error.message);
