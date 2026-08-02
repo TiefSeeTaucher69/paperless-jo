@@ -52,42 +52,51 @@ function getDocumentFingerprintService() {
     documentFingerprintServiceInstance = new DocumentFingerprintService({
       store,
       embeddingService: entityEmbeddingService,
-      similarityThreshold: config.documentFingerprint.similarityThreshold
+      similarityThreshold: config.documentFingerprint.similarityThreshold,
+      model: config.embedding.model
     });
   }
   return documentFingerprintServiceInstance;
 }
 
-async function applyDocumentFingerprint(doc, updateData, content) {
-  if (!config.documentFingerprint.enabled || !updateData.correspondent) {
+async function applyDocumentFingerprint(doc, updateData, content, correspondentId) {
+  if (!config.documentFingerprint.enabled || !correspondentId) {
     return;
   }
-  const match = await getDocumentFingerprintService().findMatch(updateData.correspondent, content);
-  if (!match) {
-    return;
-  }
-  // Respektiert dieselben Aktivierungs-Schalter wie buildUpdateData selbst - ein per
-  // activateTagging='no'/activateDocumentType='no' abgeschaltetes Feld darf der
-  // Fingerprint nicht wieder anschalten.
-  if (config.limitFunctions?.activateTagging !== 'no') {
-    updateData.tags = match.tagIds;
-  }
-  if (config.limitFunctions?.activateDocumentType !== 'no' && match.documentTypeId) {
-    updateData.document_type = match.documentTypeId;
+  try {
+    const match = await getDocumentFingerprintService().findMatch(correspondentId, content);
+    if (!match) {
+      return;
+    }
+    // Respektiert dieselben Aktivierungs-Schalter wie buildUpdateData selbst - ein per
+    // activateTagging='no'/activateDocumentType='no' abgeschaltetes Feld darf der
+    // Fingerprint nicht wieder anschalten.
+    if (config.limitFunctions?.activateTagging !== 'no') {
+      updateData.tags = match.tagIds;
+    }
+    if (config.limitFunctions?.activateDocumentType !== 'no' && match.documentTypeId) {
+      updateData.document_type = match.documentTypeId;
+    }
+  } catch (error) {
+    console.warn('[WARNING] applyDocumentFingerprint: Fingerprint-Check fehlgeschlagen, Klassifikation laeuft ohne ihn weiter:', error.message);
   }
 }
 
-async function recordDocumentFingerprint(doc, updateData, content) {
-  if (!config.documentFingerprint.enabled || !updateData.correspondent) {
+async function recordDocumentFingerprint(doc, correspondentId, documentTypeId, tagIds, content) {
+  if (!config.documentFingerprint.enabled || !correspondentId) {
     return;
   }
-  await getDocumentFingerprintService().recordFingerprint({
-    documentId: doc.id,
-    correspondentId: updateData.correspondent,
-    documentTypeId: updateData.document_type ?? null,
-    tagIds: updateData.tags ?? [],
-    content
-  });
+  try {
+    await getDocumentFingerprintService().recordFingerprint({
+      documentId: doc.id,
+      correspondentId,
+      documentTypeId: documentTypeId ?? null,
+      tagIds: tagIds ?? [],
+      content
+    });
+  } catch (error) {
+    console.warn('[WARNING] recordDocumentFingerprint: Fingerprint konnte nicht gespeichert werden:', error.message);
+  }
 }
 
 
@@ -430,9 +439,17 @@ async function scanInitial() {
 
         const { analysis, originalData, content } = result;
         const updateData = await buildUpdateData(analysis, doc);
-        await applyDocumentFingerprint(doc, updateData, content);
+        // updateDocument() (innerhalb von saveDocumentChanges) verwirft updateData.correspondent
+        // ggf. zugunsten des bereits vorhandenen und merged updateData.tags mit den bestehenden
+        // Tags - beides mutiert updateData in place. Deshalb hier festhalten, was DIESER Lauf
+        // entschieden hat, damit Fingerprint-Check und -Record die richtige Identitaet und die
+        // richtigen Tags verwenden.
+        const fingerprintCorrespondentId = originalData.correspondent || updateData.correspondent;
+        await applyDocumentFingerprint(doc, updateData, content, fingerprintCorrespondentId);
+        const fingerprintTagIds = updateData.tags;
+        const fingerprintDocumentTypeId = updateData.document_type;
         await saveDocumentChanges(doc.id, updateData, analysis, originalData);
-        await recordDocumentFingerprint(doc, updateData, content);
+        await recordDocumentFingerprint(doc, fingerprintCorrespondentId, fingerprintDocumentTypeId, fingerprintTagIds, content);
       } catch (error) {
         console.error(`[ERROR] processing document ${doc.id}:`, error);
       }
@@ -474,9 +491,17 @@ async function scanDocuments() {
 
         const { analysis, originalData, content } = result;
         const updateData = await buildUpdateData(analysis, doc);
-        await applyDocumentFingerprint(doc, updateData, content);
+        // updateDocument() (innerhalb von saveDocumentChanges) verwirft updateData.correspondent
+        // ggf. zugunsten des bereits vorhandenen und merged updateData.tags mit den bestehenden
+        // Tags - beides mutiert updateData in place. Deshalb hier festhalten, was DIESER Lauf
+        // entschieden hat, damit Fingerprint-Check und -Record die richtige Identitaet und die
+        // richtigen Tags verwenden.
+        const fingerprintCorrespondentId = originalData.correspondent || updateData.correspondent;
+        await applyDocumentFingerprint(doc, updateData, content, fingerprintCorrespondentId);
+        const fingerprintTagIds = updateData.tags;
+        const fingerprintDocumentTypeId = updateData.document_type;
         await saveDocumentChanges(doc.id, updateData, analysis, originalData);
-        await recordDocumentFingerprint(doc, updateData, content);
+        await recordDocumentFingerprint(doc, fingerprintCorrespondentId, fingerprintDocumentTypeId, fingerprintTagIds, content);
       } catch (error) {
         console.error(`[ERROR] processing document ${doc.id}:`, error);
       }
