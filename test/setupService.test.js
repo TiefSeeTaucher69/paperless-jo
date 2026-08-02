@@ -92,6 +92,70 @@ test('SYSTEM_PROMPT survives multiple saveConfig/loadConfig round-trips without 
   assert.strictEqual(config.SYSTEM_PROMPT, 'You are a helpful assistant.\\nBe concise.');
 });
 
+test('loadConfig handles CRLF line endings without swallowing keys after SYSTEM_PROMPT', async () => {
+  const envPath = await tmpEnvPath();
+  const content = [
+    'PAPERLESS_API_URL=http://example.test/api',
+    'SYSTEM_PROMPT=`You are a helpful assistant.',
+    'Be concise.',
+    'Always answer.',
+    '`',
+    'JWT_SECRET=super-secret-value',
+    'ENTITY_RESOLVER_ENABLED=yes'
+  ].join('\r\n');
+  await fs.writeFile(envPath, content);
+
+  const service = new SetupService(envPath);
+  const config = await service.loadConfig();
+
+  assert.strictEqual(config.SYSTEM_PROMPT, 'You are a helpful assistant.\nBe concise.\nAlways answer.');
+  assert.strictEqual(config.JWT_SECRET, 'super-secret-value');
+  assert.strictEqual(config.ENTITY_RESOLVER_ENABLED, 'yes');
+});
+
+test('loadConfig does not swallow subsequent keys when a SYSTEM_PROMPT is missing its closing backtick', async () => {
+  const envPath = await tmpEnvPath();
+  const content = [
+    'PAPERLESS_API_URL=http://example.test/api',
+    'SYSTEM_PROMPT=`some prompt with no closing backtick',
+    'JWT_SECRET=super-secret-value',
+    'ENTITY_RESOLVER_ENABLED=yes'
+  ].join('\n');
+  await fs.writeFile(envPath, content);
+
+  const service = new SetupService(envPath);
+  const config = await service.loadConfig();
+
+  // The exact recovered SYSTEM_PROMPT value in this malformed-input case is
+  // less important than the guarantee that later keys are NOT lost.
+  assert.strictEqual(config.JWT_SECRET, 'super-secret-value');
+  assert.strictEqual(config.ENTITY_RESOLVER_ENABLED, 'yes');
+});
+
+test('loadConfig reconstructs a real multi-physical-line SYSTEM_PROMPT (LF) across 3 save/load cycles', async () => {
+  const envPath = await tmpEnvPath();
+  const service = new SetupService(envPath);
+  service.validateConfig = async () => true;
+
+  const multilinePrompt = 'You are a helpful assistant.\nBe concise.\nAlways answer.';
+
+  await service.saveConfig({
+    PAPERLESS_API_URL: 'http://example.test/api',
+    SYSTEM_PROMPT: multilinePrompt
+  });
+
+  let config = await service.loadConfig();
+  assert.strictEqual(config.SYSTEM_PROMPT, multilinePrompt);
+
+  await service.saveConfig({ SYSTEM_PROMPT: config.SYSTEM_PROMPT });
+  config = await service.loadConfig();
+  assert.strictEqual(config.SYSTEM_PROMPT, multilinePrompt);
+
+  await service.saveConfig({ SYSTEM_PROMPT: config.SYSTEM_PROMPT });
+  config = await service.loadConfig();
+  assert.strictEqual(config.SYSTEM_PROMPT, multilinePrompt);
+});
+
 test('saveConfig(updates, { validate: false }) skips validation and still writes the file', async () => {
   const envPath = await tmpEnvPath();
   // A fake PAPERLESS_API_URL that would fail real validateConfig() (no live
