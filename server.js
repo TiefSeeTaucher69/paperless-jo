@@ -37,6 +37,59 @@ const txtLogger = new Logger({
 const app = express();
 let runningTask = false;
 
+let documentFingerprintServiceInstance = null;
+
+// Lazy statt Modul-Top-Level: verhindert, dass jeder Server-Boot data/entities.db
+// oeffnet, auch wenn DOCUMENT_FINGERPRINT_ENABLED=no (dieselbe Begruendung wie
+// paperlessService.js#_getEntityResolver und routes/review.js#getServices).
+function getDocumentFingerprintService() {
+  if (!documentFingerprintServiceInstance) {
+    const DocumentFingerprintStore = require('./models/documentFingerprintStore');
+    const DocumentFingerprintService = require('./services/documentFingerprintService');
+    const entityEmbeddingService = require('./services/entityEmbeddingService');
+
+    const store = new DocumentFingerprintStore(config.entityResolver.dbPath);
+    documentFingerprintServiceInstance = new DocumentFingerprintService({
+      store,
+      embeddingService: entityEmbeddingService,
+      similarityThreshold: config.documentFingerprint.similarityThreshold
+    });
+  }
+  return documentFingerprintServiceInstance;
+}
+
+async function applyDocumentFingerprint(doc, updateData, content) {
+  if (!config.documentFingerprint.enabled || !updateData.correspondent) {
+    return;
+  }
+  const match = await getDocumentFingerprintService().findMatch(updateData.correspondent, content);
+  if (!match) {
+    return;
+  }
+  // Respektiert dieselben Aktivierungs-Schalter wie buildUpdateData selbst - ein per
+  // activateTagging='no'/activateDocumentType='no' abgeschaltetes Feld darf der
+  // Fingerprint nicht wieder anschalten.
+  if (config.limitFunctions?.activateTagging !== 'no') {
+    updateData.tags = match.tagIds;
+  }
+  if (config.limitFunctions?.activateDocumentType !== 'no' && match.documentTypeId) {
+    updateData.document_type = match.documentTypeId;
+  }
+}
+
+async function recordDocumentFingerprint(doc, updateData, content) {
+  if (!config.documentFingerprint.enabled || !updateData.correspondent) {
+    return;
+  }
+  await getDocumentFingerprintService().recordFingerprint({
+    documentId: doc.id,
+    correspondentId: updateData.correspondent,
+    documentTypeId: updateData.document_type ?? null,
+    tagIds: updateData.tags ?? [],
+    content
+  });
+}
+
 
 const corsOptions = {
   origin: true,
@@ -218,7 +271,7 @@ async function processDocument(doc, existingTags, existingCorrespondentList, exi
     throw new Error(`[ERROR] Document analysis failed: ${analysis.error}`);
   }
   await documentModel.setProcessingStatus(doc.id, doc.title, 'complete');
-  return { analysis, originalData };
+  return { analysis, originalData, content };
 }
 
 async function buildUpdateData(analysis, doc) {
@@ -375,9 +428,11 @@ async function scanInitial() {
         const result = await processDocument(doc, existingTagNames, existingCorrespondentList, existingDocumentTypesList, ownUserId);
         if (!result) continue;
 
-        const { analysis, originalData } = result;
+        const { analysis, originalData, content } = result;
         const updateData = await buildUpdateData(analysis, doc);
+        await applyDocumentFingerprint(doc, updateData, content);
         await saveDocumentChanges(doc.id, updateData, analysis, originalData);
+        await recordDocumentFingerprint(doc, updateData, content);
       } catch (error) {
         console.error(`[ERROR] processing document ${doc.id}:`, error);
       }
@@ -417,9 +472,11 @@ async function scanDocuments() {
         const result = await processDocument(doc, existingTagNames, existingCorrespondentList, existingDocumentTypesList, ownUserId);
         if (!result) continue;
 
-        const { analysis, originalData } = result;
+        const { analysis, originalData, content } = result;
         const updateData = await buildUpdateData(analysis, doc);
+        await applyDocumentFingerprint(doc, updateData, content);
         await saveDocumentChanges(doc.id, updateData, analysis, originalData);
+        await recordDocumentFingerprint(doc, updateData, content);
       } catch (error) {
         console.error(`[ERROR] processing document ${doc.id}:`, error);
       }
