@@ -206,9 +206,16 @@ class SetupService {
     return true;
   }
 
-  async saveConfig(config) {
+  async saveConfig(updates) {
     try {
-      // Validate the new configuration before saving
+      // Read-modify-write against the real file instead of trusting the caller
+      // to pass a complete config: a caller that only knows about a subset of
+      // keys (e.g. the Settings form) must never be able to erase the rest
+      // (JWT_SECRET, feature-flag env vars added after the form was written).
+      const existing = (await this.loadConfig()) || {};
+      const config = { ...existing, ...updates };
+
+      // Validate the merged configuration before saving
       await this.validateConfig(config);
 
       const JSON_STANDARD_PROMPT = `

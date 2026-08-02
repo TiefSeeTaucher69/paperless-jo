@@ -4085,52 +4085,11 @@ router.post('/settings', express.json(), async (req, res) => {
       : '';
 
 
-    const currentConfig = {
-      PAPERLESS_API_URL: process.env.PAPERLESS_API_URL || '',
-      PAPERLESS_API_TOKEN: process.env.PAPERLESS_API_TOKEN || '',
-      PAPERLESS_USERNAME: process.env.PAPERLESS_USERNAME || '',
-      AI_PROVIDER: process.env.AI_PROVIDER || '',
-      OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-      OPENAI_MODEL: process.env.OPENAI_MODEL || '',
-      OLLAMA_API_URL: process.env.OLLAMA_API_URL || '',
-      OLLAMA_MODEL: process.env.OLLAMA_MODEL || '',
-      SCAN_INTERVAL: process.env.SCAN_INTERVAL || '*/30 * * * *',
-      SYSTEM_PROMPT: process.env.SYSTEM_PROMPT || '',
-      PROCESS_PREDEFINED_DOCUMENTS: process.env.PROCESS_PREDEFINED_DOCUMENTS || 'no',
-      TOKEN_LIMIT: process.env.TOKEN_LIMIT || 128000,
-      RESPONSE_TOKENS: process.env.RESPONSE_TOKENS || 1000,
-      TAGS: process.env.TAGS || '',
-      ADD_AI_PROCESSED_TAG: process.env.ADD_AI_PROCESSED_TAG || 'no',
-      AI_PROCESSED_TAG_NAME: process.env.AI_PROCESSED_TAG_NAME || 'ai-processed',
-      USE_PROMPT_TAGS: process.env.USE_PROMPT_TAGS || 'no',
-      PROMPT_TAGS: process.env.PROMPT_TAGS || '',
-      USE_EXISTING_DATA: process.env.USE_EXISTING_DATA || 'no',
-      API_KEY: process.env.API_KEY || '',
-      CUSTOM_API_KEY: process.env.CUSTOM_API_KEY || '',
-      CUSTOM_BASE_URL: process.env.CUSTOM_BASE_URL || '',
-      CUSTOM_MODEL: process.env.CUSTOM_MODEL || '',
-      ACTIVATE_TAGGING: process.env.ACTIVATE_TAGGING || 'yes',
-      ACTIVATE_CORRESPONDENTS: process.env.ACTIVATE_CORRESPONDENTS || 'yes',
-      ACTIVATE_DOCUMENT_TYPE: process.env.ACTIVATE_DOCUMENT_TYPE || 'yes',
-      ACTIVATE_TITLE: process.env.ACTIVATE_TITLE || 'yes',
-      ACTIVATE_CUSTOM_FIELDS: process.env.ACTIVATE_CUSTOM_FIELDS || 'yes',
-      CUSTOM_FIELDS: process.env.CUSTOM_FIELDS || '{"custom_fields":[]}',  // Added default
-      DISABLE_AUTOMATIC_PROCESSING: process.env.DISABLE_AUTOMATIC_PROCESSING || 'no',
-      AZURE_ENDPOINT: process.env.AZURE_ENDPOINT|| '',
-      AZURE_API_KEY: process.env.AZURE_API_KEY || '',
-      AZURE_DEPLOYMENT_NAME: process.env.AZURE_DEPLOYMENT_NAME || '',
-      AZURE_API_VERSION: process.env.AZURE_API_VERSION || '',
-      RESTRICT_TO_EXISTING_TAGS: process.env.RESTRICT_TO_EXISTING_TAGS || 'no',
-      RESTRICT_TO_EXISTING_CORRESPONDENTS: process.env.RESTRICT_TO_EXISTING_CORRESPONDENTS || 'no',
-      RESTRICT_TO_EXISTING_DOCUMENT_TYPES: process.env.RESTRICT_TO_EXISTING_DOCUMENT_TYPES || 'no',
-      EXTERNAL_API_ENABLED: process.env.EXTERNAL_API_ENABLED || 'no',
-      EXTERNAL_API_URL: process.env.EXTERNAL_API_URL || '',
-      EXTERNAL_API_METHOD: process.env.EXTERNAL_API_METHOD || 'GET',
-      EXTERNAL_API_HEADERS: process.env.EXTERNAL_API_HEADERS || '{}',
-      EXTERNAL_API_BODY: process.env.EXTERNAL_API_BODY || '{}',
-      EXTERNAL_API_TIMEOUT: process.env.EXTERNAL_API_TIMEOUT || '5000',
-      EXTERNAL_API_TRANSFORM: process.env.EXTERNAL_API_TRANSFORM || ''
-    };
+    // Full current file contents, not a fixed whitelist — saveConfig() also
+    // merges internally (belt-and-suspenders, see services/setupService.js),
+    // but loading the real file here keeps the "did the Paperless URL/token
+    // change" comparison below correct for every key, not just 42 of them.
+    const currentConfig = (await setupService.loadConfig()) || {};
 
     // Process custom fields
     let processedCustomFields = [];
@@ -4289,12 +4248,7 @@ router.post('/settings', express.json(), async (req, res) => {
       updatedConfig.API_KEY = apiToken;
     }
 
-    const mergedConfig = {
-      ...currentConfig,
-      ...updatedConfig
-    };
-
-    await setupService.saveConfig(mergedConfig);
+    await setupService.saveConfig(updatedConfig);
     try {
       for (const field of processedCustomFields) {
         await paperlessService.createCustomFieldSafely(field.value, field.data_type, field.currency);
