@@ -31,7 +31,7 @@ darüber fällt anhand der Tuning-Messung aus Phase 2, nicht vorab.
 | 2 | EntityResolver, Alias-Speicher, Schwellwert-Tuning | — | erledigt |
 | 3 | Review-UI, Merge, Altbestands-Durchlauf | Phase 2 | erledigt |
 | 4 | Embeddings-Ähnlichkeitskanal | Phase 2, Messung Task 11 | erledigt |
-| 5 | Fingerprint für wiederkehrende Dokumente | Phase 1–4 | nur skizziert |
+| 5 | Fingerprint für wiederkehrende Dokumente | Phase 1–4 | erledigt |
 
 Phase 1 und 2 sind unabhängig voneinander wirksam. Jede Phase bekommt einen
 eigenen Implementierungsplan und wird einzeln abgenommen.
@@ -327,12 +327,44 @@ bge-m3` auf der Ollama-Instanz und ein Lauf von `scripts/tune-thresholds.js`
 nötig, damit `EMBED_AUTO_THRESHOLD`/`EMBED_JUDGE_MIN` gemessen statt geraten
 sind — genau so, wie schon die Schwellwerte aus Phase 2 hergeleitet wurden.
 
-## Phase 5 — Fingerprint (skizziert)
+## Phase 5 — Fingerprint (2026-08-02)
 
-Fingerprint aus Korrespondent und Dokumentstruktur erkennt wiederkehrende
-Dokumente; bei Treffer wird die frühere Klassifikation als starker Vorschlag
-übernommen. Wird erst entworfen, wenn Phase 1 bis 4 laufen und gemessen ist,
-wie viel Inkonsistenz dann überhaupt noch bleibt.
+**Gating-Messung nachgeholt, bevor entworfen wurde** (wie in der ursprünglichen
+Skizze gefordert): `ENTITY_RESOLVER_ENABLED`/`EMBEDDING_SIMILARITY_ENABLED`
+aktiviert, `bge-m3` gepullt, `EMBED_AUTO_THRESHOLD`/`EMBED_JUDGE_MIN` über
+`scripts/tune-thresholds.js` gemessen. Ergebnis: `dry-run-eval.js --repeat 2`
+über dieselben 10 Dokumente wie die Phase-1-Baseline zeigt weiterhin 4 von 10
+Dokumenten instabil trotz `temperature=0`/`seed=42` — der EntityResolver wirkt
+nur im Schreibpfad und ändert diese Zahl nicht. Derselbe Lauf deckte zwei
+Nebenbefunde auf, die vorab behoben wurden: `USE_EXISTING_DATA=no` stand in
+der echten `data/.env` seit dem Umgebungscheck vom 1. August unverändert
+(Bestandslisten fehlten dem Modell live), und der Embedding-Kanal erzeugte bei
+Tags überwiegend Rauschen statt echter Duplikate — behoben durch das neue
+`EMBEDDING_EXCLUDED_TYPES=tag`.
+
+Implementiert per `superpowers:subagent-driven-development`: 4 Tasks
+task-weise per TDD, je mit eigenem Task-Review, plus ein finaler
+Whole-Branch-Review und eine Fix-Welle für 7 dabei gefundene
+Integrationsprobleme (u.a. dass `paperlessService.updateDocument` sein
+`updates`-Argument in-place mutiert — der ursprüngliche Code hätte dadurch
+Fingerprints mit falschem oder gar keinem Korrespondenten gespeichert).
+Vollständiger Implementierungsplan:
+[docs/superpowers/plans/2026-08-02-phase5-fingerprint.md](../superpowers/plans/2026-08-02-phase5-fingerprint.md),
+Design-Entwurf:
+[docs/superpowers/specs/2026-08-02-phase5-fingerprint-design.md](../superpowers/specs/2026-08-02-phase5-fingerprint-design.md).
+
+Erkennt wiederkehrende Dokumente desselben Korrespondenten über
+Inhalts-Ähnlichkeit (Embedding, dieselbe `bge-m3`-Infrastruktur wie Phase 4)
+und übernimmt bei Treffer nur Tags und Dokumentart aus der früheren, bereits
+bestätigten Klassifikation — Titel und Datum bleiben die frisch extrahierten
+Werte, weil sie sich bei echten wiederkehrenden Dokumenten legitim
+unterscheiden (anderer Monat, anderer Betrag). Läuft additiv neben dem
+bestehenden Resolver und ist per Default abgeschaltet
+(`DOCUMENT_FINGERPRINT_ENABLED=no`) — bestehendes Verhalten bleibt ohne
+Konfigurationsänderung exakt gleich. Vor der Aktivierung ist ein eigener
+Tuning-Lauf nötig, damit `FINGERPRINT_SIMILARITY_THRESHOLD` (aktuell ein
+ungemessener Platzhalter, `0.90`) gegen gelabelte Dokumentpaare gemessen statt
+geschätzt ist — genau wie schon bei den Schwellwerten aus Phase 2 und 4.
 
 ## Offene Risiken
 
