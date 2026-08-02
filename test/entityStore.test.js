@@ -107,6 +107,32 @@ test('offene Queue-Eintraege werden von findRejectedPair NICHT gefunden', () => 
   );
 });
 
+test('findRejectedPair findet eine Ablehnung auch in umgekehrter Richtung (Backfill- vs. Live-Reihenfolge)', () => {
+  const store = freshStore();
+  const normalizedA = normalizeForType('Stadtwerke Musterstadt', 'correspondent');
+  const normalizedB = normalizeForType('Stadtwerke Beispielstadt', 'correspondent');
+
+  // Backfill legt die Richtung nach ID fest (kleinere ID = candidate): hier proposed=B, candidate=A.
+  store.insertQueueEntry({
+    entityType: 'correspondent', proposedName: 'Stadtwerke Beispielstadt', proposedId: 2,
+    candidateName: 'Stadtwerke Musterstadt', candidateId: 1, similarity: 0.9,
+    llmVerdict: 'different', llmReason: 'test', status: 'rejected'
+  });
+
+  // Der Live-Resolver fragt spaeter in der Gegenrichtung: proposed=A, candidate=B.
+  const found = store.findRejectedPair('correspondent', normalizedA, normalizedB);
+  assert.ok(found, 'Negativ-Cache sollte auch die umgekehrte Richtung treffen');
+  assert.strictEqual(found.status, 'rejected');
+});
+
+test('findRejectedPair liefert weiterhin null, wenn weder Richtung abgelehnt wurde', () => {
+  const store = freshStore();
+  const normalizedA = normalizeForType('Amazon', 'correspondent');
+  const normalizedB = normalizeForType('Ebay', 'correspondent');
+
+  assert.strictEqual(store.findRejectedPair('correspondent', normalizedA, normalizedB), null);
+});
+
 test('Fehlerfall: geschlossene DB liefert Fallback statt zu werfen', () => {
   const store = freshStore();
   store.close();
