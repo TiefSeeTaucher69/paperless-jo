@@ -170,6 +170,10 @@ class EntityStore {
     return Array.from(new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4));
   }
 
+  // Symmetrisch: der Altbestands-Scan legt die Richtung nach ID fest (kleinere ID = candidate,
+  // entityBackfillService.js), der Live-Resolver dagegen nach Rolle (LLM-Vorschlag = proposed).
+  // Ohne symmetrische Pruefung wuerde eine Ablehnung des einen Scans die andere Richtung nicht
+  // sperren - siehe AUDIT-012.
   // proposedNormalized/candidateNormalized MUESSEN bereits normalisiert sein (siehe
   // services/entityNormalizer.js#normalizeForType) - der Aufrufer normalisiert, damit
   // z.B. "meldebescheinigung" und "Meldebescheinigung" denselben Cache-Eintrag treffen.
@@ -177,8 +181,12 @@ class EntityStore {
     try {
       return this.db.prepare(`
         SELECT * FROM entity_review_queue
-        WHERE entity_type = ? AND proposed_normalized = ? AND candidate_normalized = ? AND status = 'rejected'
-      `).get(entityType, proposedNormalized, candidateNormalized) || null;
+        WHERE entity_type = ? AND status = 'rejected'
+          AND (
+            (proposed_normalized = ? AND candidate_normalized = ?)
+            OR (proposed_normalized = ? AND candidate_normalized = ?)
+          )
+      `).get(entityType, proposedNormalized, candidateNormalized, candidateNormalized, proposedNormalized) || null;
     } catch (error) {
       console.error('[ERROR] entityStore.findRejectedPair:', error.message);
       return null;
