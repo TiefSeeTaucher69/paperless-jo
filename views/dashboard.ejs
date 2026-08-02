@@ -554,7 +554,8 @@
                 const response = await fetch('/api/scan/now', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken()
                     }
                 });
                 
@@ -687,6 +688,7 @@
             getStarsCount();
         });
     </script>
+    <script src="js/csrf.js"></script>
     <script src="js/dashboard.js"></script>
 </body>
 </html>

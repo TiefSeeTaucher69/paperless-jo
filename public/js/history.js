@@ -263,7 +263,7 @@ class HistoryManager {
         try {
             const response = await fetch('/api/reset-documents', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
                 body: JSON.stringify({ ids })
             });
 
@@ -284,7 +284,7 @@ class HistoryManager {
         try {
             const response = await fetch('/api/reset-all-documents', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() }
             });
 
             if (!response.ok) {
