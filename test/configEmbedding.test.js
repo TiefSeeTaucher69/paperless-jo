@@ -6,7 +6,8 @@ test('embedding-Block hat sichere Defaults', () => {
     enabled: process.env.EMBEDDING_SIMILARITY_ENABLED,
     model: process.env.EMBEDDING_MODEL,
     autoThreshold: process.env.EMBED_AUTO_THRESHOLD,
-    judgeMin: process.env.EMBED_JUDGE_MIN
+    judgeMin: process.env.EMBED_JUDGE_MIN,
+    excludedTypes: process.env.EMBEDDING_EXCLUDED_TYPES
   };
 
   try {
@@ -14,6 +15,7 @@ test('embedding-Block hat sichere Defaults', () => {
     process.env.EMBEDDING_MODEL = '';
     process.env.EMBED_AUTO_THRESHOLD = '';
     process.env.EMBED_JUDGE_MIN = '';
+    process.env.EMBEDDING_EXCLUDED_TYPES = '';
     delete require.cache[require.resolve('../config/config')];
     const config = require('../config/config');
 
@@ -28,7 +30,8 @@ test('embedding-Block hat sichere Defaults', () => {
       EMBEDDING_SIMILARITY_ENABLED: savedEnv.enabled,
       EMBEDDING_MODEL: savedEnv.model,
       EMBED_AUTO_THRESHOLD: savedEnv.autoThreshold,
-      EMBED_JUDGE_MIN: savedEnv.judgeMin
+      EMBED_JUDGE_MIN: savedEnv.judgeMin,
+      EMBEDDING_EXCLUDED_TYPES: savedEnv.excludedTypes
     })) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
