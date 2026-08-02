@@ -77,7 +77,7 @@ class EntityResolver {
         best = { entity, trigramSim, embeddingSim, combined };
       }
       if (!bestTrigram || trigramSim > bestTrigram.trigramSim) {
-        bestTrigram = { entity, trigramSim };
+        bestTrigram = { entity, trigramSim, embeddingSim };
       }
     }
 
@@ -108,9 +108,9 @@ class EntityResolver {
     // vergleicht normalisiert, damit Gross-/Kleinschreibung oder Whitespace-Varianten des
     // Paars denselben Cache-Treffer liefern (siehe entityStore.js).
     const normalizedCandidate = normalizeForType(best.entity.name, type);
-    const rejected = this.store.findRejectedPair(type, normalizedProposed, normalizedCandidate);
+    const bestRejected = this.store.findRejectedPair(type, normalizedProposed, normalizedCandidate);
 
-    if (!rejected && best.embeddingSim !== null && best.embeddingSim >= this.embedAutoThreshold) {
+    if (!bestRejected && best.embeddingSim !== null && best.embeddingSim >= this.embedAutoThreshold) {
       this.store.insertAlias({
         entityType: type, aliasNormalized: normalizedProposed,
         canonicalName: best.entity.name, canonicalId: best.entity.id, source: 'auto_embedding'
@@ -118,49 +118,67 @@ class EntityResolver {
       return { action: 'map', id: best.entity.id, canonicalName: best.entity.name, via: 'embedding_similarity' };
     }
 
-    if (rejected) {
+    // Dieselbe Vorrangregel wie beim Auto-Merge, nur eine Stufe tiefer: qualifiziert sich
+    // bestTrigram schon per reiner Trigram-Aehnlichkeit fuer die Judge-Zone, wird der Judge
+    // zu genau diesem Kandidaten gefragt. Sonst koennte ein orthografisch fernes, aber
+    // semantisch nahes "false friend" mit hoeherem kombinierten Score dem Kandidaten den
+    // Judge-Call wegnehmen, den Phase 3 (vor Embeddings) vorgelegt haette.
+    // Jeder Kandidat wird gegen seinen EIGENEN Negativ-Cache-Eintrag geprueft - beide
+    // koennen verschiedene Entitaeten sein, eine Ablehnung des einen Paars darf die
+    // Bewertung des anderen nicht blockieren.
+    let judgeCandidate = null;
+    if (bestTrigram.trigramSim >= this.judgeMin) {
+      // Gleiche Entitaet wie best (Normalfall)? Dann den obigen Cache-Lookup wiederverwenden.
+      const trigramRejected = bestTrigram.entity.id === best.entity.id
+        ? bestRejected
+        : this.store.findRejectedPair(type, normalizedProposed, normalizeForType(bestTrigram.entity.name, type));
+      if (!trigramRejected) {
+        judgeCandidate = bestTrigram;
+      }
+    }
+    if (!judgeCandidate && !bestRejected && best.embeddingSim !== null && best.embeddingSim >= this.embedJudgeMin) {
+      judgeCandidate = best;
+    }
+
+    if (!judgeCandidate) {
+      // Stufe 4b/4d/5: Negativ-Cache-Treffer oder unter beiden Judge-Schwellen
       return { action: 'create' };
     }
 
-    const reachesJudgeZone = best.trigramSim >= this.judgeMin
-      || (best.embeddingSim !== null && best.embeddingSim >= this.embedJudgeMin);
+    const candidateEntity = judgeCandidate.entity;
+    const candidateCombined = Math.max(judgeCandidate.trigramSim, judgeCandidate.embeddingSim ?? -1);
+    const verdict = await this._askJudge(type, proposedName, candidateEntity.name);
 
-    if (reachesJudgeZone) {
-      const verdict = await this._askJudge(type, proposedName, best.entity.name);
-
-      if (verdict.verdict === 'same') {
-        this.store.insertAlias({
-          entityType: type, aliasNormalized: normalizedProposed,
-          canonicalName: best.entity.name, canonicalId: best.entity.id, source: 'llm'
-        });
-        return { action: 'map', id: best.entity.id, canonicalName: best.entity.name, via: 'llm' };
-      }
-
-      if (verdict.verdict === 'different') {
-        this.store.insertQueueEntry({
-          entityType: type, proposedName, proposedId: null,
-          candidateName: best.entity.name, candidateId: best.entity.id,
-          similarity: best.combined, trigramSimilarity: best.trigramSim, embeddingSimilarity: best.embeddingSim,
-          llmVerdict: 'different', llmReason: verdict.reason,
-          status: 'rejected'
-        });
-        return { action: 'create' };
-      }
-
-      // 'unsure': proposed_id ist hier noch unbekannt, der Resolver legt nichts an.
-      // Der Aufrufer ruft nach dem tatsaechlichen Anlegen recordCreatedAndQueued auf.
-      return {
-        action: 'create_and_queue',
-        candidate: { id: best.entity.id, name: best.entity.name },
-        similarity: best.combined,
-        trigramSimilarity: best.trigramSim,
-        embeddingSimilarity: best.embeddingSim,
-        verdict: verdict.verdict
-      };
+    if (verdict.verdict === 'same') {
+      this.store.insertAlias({
+        entityType: type, aliasNormalized: normalizedProposed,
+        canonicalName: candidateEntity.name, canonicalId: candidateEntity.id, source: 'llm'
+      });
+      return { action: 'map', id: candidateEntity.id, canonicalName: candidateEntity.name, via: 'llm' };
     }
 
-    // Stufe 4d/5: unter beiden Judge-Schwellen
-    return { action: 'create' };
+    if (verdict.verdict === 'different') {
+      this.store.insertQueueEntry({
+        entityType: type, proposedName, proposedId: null,
+        candidateName: candidateEntity.name, candidateId: candidateEntity.id,
+        similarity: candidateCombined,
+        trigramSimilarity: judgeCandidate.trigramSim, embeddingSimilarity: judgeCandidate.embeddingSim,
+        llmVerdict: 'different', llmReason: verdict.reason,
+        status: 'rejected'
+      });
+      return { action: 'create' };
+    }
+
+    // 'unsure': proposed_id ist hier noch unbekannt, der Resolver legt nichts an.
+    // Der Aufrufer ruft nach dem tatsaechlichen Anlegen recordCreatedAndQueued auf.
+    return {
+      action: 'create_and_queue',
+      candidate: { id: candidateEntity.id, name: candidateEntity.name },
+      similarity: candidateCombined,
+      trigramSimilarity: judgeCandidate.trigramSim,
+      embeddingSimilarity: judgeCandidate.embeddingSim,
+      verdict: verdict.verdict
+    };
   }
 
   async _embeddingSimilarityFor(type, proposedVector, entity) {
