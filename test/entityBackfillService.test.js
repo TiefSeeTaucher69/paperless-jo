@@ -3,12 +3,27 @@ const assert = require('node:assert');
 const EntityBackfillService = require('../services/entityBackfillService');
 const EntityStore = require('../models/entityStore');
 
-test('run findet ein aehnliches Paar oberhalb judgeMin und schreibt einen Queue-Eintrag, aeltere id wird kanonisch', () => {
+function fakeEmbeddingService(vectors) {
+  return {
+    getOrComputeEmbedding: async (_store, _type, entity) => {
+      if (!(entity.name in vectors)) throw new Error(`kein Test-Vektor fuer "${entity.name}" hinterlegt`);
+      return vectors[entity.name];
+    },
+    cosineSimilarity: (a, b) => {
+      const dot = a.reduce((sum, v, i) => sum + v * b[i], 0);
+      const normA = Math.sqrt(a.reduce((sum, v) => sum + v * v, 0));
+      const normB = Math.sqrt(b.reduce((sum, v) => sum + v * v, 0));
+      return dot / (normA * normB);
+    }
+  };
+}
+
+test('run findet ein aehnliches Paar oberhalb judgeMin und schreibt einen Queue-Eintrag, aeltere id wird kanonisch', async () => {
   const store = new EntityStore(':memory:');
   try {
     const service = new EntityBackfillService({ store, judgeMin: 0.6 });
 
-    const result = service.run('document_type', [
+    const result = await service.run('document_type', [
       { id: 5, name: 'Meldebescheinigung' },
       { id: 12, name: 'Meldebeschreibung' }
     ]);
@@ -24,12 +39,12 @@ test('run findet ein aehnliches Paar oberhalb judgeMin und schreibt einen Queue-
   }
 });
 
-test('run ueberspringt Paare unterhalb judgeMin', () => {
+test('run ueberspringt Paare unterhalb judgeMin', async () => {
   const store = new EntityStore(':memory:');
   try {
     const service = new EntityBackfillService({ store, judgeMin: 0.6 });
 
-    const result = service.run('document_type', [
+    const result = await service.run('document_type', [
       { id: 1, name: 'Entgeltabrechnung' },
       { id: 2, name: 'Verdienstbescheinigung' }
     ]);
@@ -40,10 +55,9 @@ test('run ueberspringt Paare unterhalb judgeMin', () => {
   }
 });
 
-test('run ueberspringt bereits als rejected bekannte Paare', () => {
+test('run ueberspringt bereits als rejected bekannte Paare', async () => {
   const store = new EntityStore(':memory:');
   try {
-    const { normalizeForType } = require('../services/entityNormalizer');
     store.insertQueueEntry({
       entityType: 'tag',
       proposedName: 'Mahnung', proposedId: 2,
@@ -52,7 +66,7 @@ test('run ueberspringt bereits als rejected bekannte Paare', () => {
     });
 
     const service = new EntityBackfillService({ store, judgeMin: 0.5 });
-    const result = service.run('tag', [
+    const result = await service.run('tag', [
       { id: 1, name: 'Mahnungen' },
       { id: 2, name: 'Mahnung' }
     ]);
@@ -63,7 +77,7 @@ test('run ueberspringt bereits als rejected bekannte Paare', () => {
   }
 });
 
-test('run ueberschreibt den llm_verdict eines bereits offenen Queue-Eintrags nicht', () => {
+test('run ueberschreibt den llm_verdict eines bereits offenen Queue-Eintrags nicht', async () => {
   const store = new EntityStore(':memory:');
   try {
     store.insertQueueEntry({
@@ -74,7 +88,7 @@ test('run ueberschreibt den llm_verdict eines bereits offenen Queue-Eintrags nic
     });
 
     const service = new EntityBackfillService({ store, judgeMin: 0.5 });
-    const result = service.run('tag', [
+    const result = await service.run('tag', [
       { id: 1, name: 'Mahnungen' },
       { id: 2, name: 'Mahnung' }
     ]);
@@ -88,18 +102,92 @@ test('run ueberschreibt den llm_verdict eines bereits offenen Queue-Eintrags nic
   }
 });
 
-test('run vergleicht jedes Paar nur einmal bei mehr als zwei Eintraegen', () => {
+test('run vergleicht jedes Paar nur einmal bei mehr als zwei Eintraegen', async () => {
   const store = new EntityStore(':memory:');
   try {
     const service = new EntityBackfillService({ store, judgeMin: 0.99 }); // nur exakte Duplikate treffen
 
-    const result = service.run('tag', [
+    const result = await service.run('tag', [
       { id: 1, name: 'Rechnung' },
       { id: 2, name: 'Rechnung' },
       { id: 3, name: 'Voellig Anders' }
     ]);
 
     assert.strictEqual(result.inserted, 1);
+  } finally {
+    store.close();
+  }
+});
+
+test('run findet mit aktiviertem Embedding-Kanal ein Paar, das Trigram allein verpassen wuerde', async () => {
+  const store = new EntityStore(':memory:');
+  try {
+    const embeddingService = fakeEmbeddingService({
+      'Entgeltabrechnung': [1, 0],
+      'Verdienstbescheinigung': [1, 0] // identisch -> Cosine = 1
+    });
+    const service = new EntityBackfillService({
+      store, judgeMin: 0.99, embeddingService, embeddingEnabled: true, embedJudgeMin: 0.90
+    });
+
+    const result = await service.run('document_type', [
+      { id: 1, name: 'Entgeltabrechnung' },
+      { id: 2, name: 'Verdienstbescheinigung' }
+    ]);
+
+    assert.strictEqual(result.inserted, 1);
+    const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE entity_type = 'document_type'`).get();
+    assert.ok(row.embedding_similarity > 0.9);
+    assert.ok(row.trigram_similarity < 0.3);
+  } finally {
+    store.close();
+  }
+});
+
+test('run bleibt bei deaktiviertem Embedding-Kanal trigram-only, kein Embedding-Call', async () => {
+  const store = new EntityStore(':memory:');
+  let calls = 0;
+  try {
+    const embeddingService = {
+      getOrComputeEmbedding: async () => { calls++; return [1, 0]; },
+      cosineSimilarity: () => 1
+    };
+    const service = new EntityBackfillService({ store, judgeMin: 0.99, embeddingService, embeddingEnabled: false });
+
+    const result = await service.run('document_type', [
+      { id: 1, name: 'Entgeltabrechnung' },
+      { id: 2, name: 'Verdienstbescheinigung' }
+    ]);
+
+    assert.strictEqual(result.inserted, 0);
+    assert.strictEqual(calls, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('run ignoriert einen einzelnen fehlgeschlagenen Embedding-Call, statt abzubrechen', async () => {
+  const store = new EntityStore(':memory:');
+  try {
+    const embeddingService = {
+      getOrComputeEmbedding: async (_store, _type, entity) => {
+        if (entity.name === 'Verdienstbescheinigung') throw new Error('ECONNREFUSED');
+        return [1, 0];
+      },
+      cosineSimilarity: () => 1
+    };
+    const service = new EntityBackfillService({
+      store, judgeMin: 0.99, embeddingService, embeddingEnabled: true, embedJudgeMin: 0.90
+    });
+
+    const result = await service.run('document_type', [
+      { id: 1, name: 'Entgeltabrechnung' },
+      { id: 2, name: 'Verdienstbescheinigung' }
+    ]);
+
+    // Ein Vektor fehlt (Fehler beim Prefetch) -> embeddingSim fuer dieses Paar bleibt null,
+    // trigram allein (weit unter judgeMin 0.99) entscheidet -> kein Absturz, kein Insert.
+    assert.strictEqual(result.inserted, 0);
   } finally {
     store.close();
   }
