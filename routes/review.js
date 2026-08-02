@@ -39,6 +39,38 @@ router.get('/review', isAuthenticated, (req, res) => {
   res.render('review', { queue, version: config.PAPERLESS_AI_VERSION || ' ' });
 });
 
+router.get('/api/review/:id/documents', authenticateJWT, async (req, res) => {
+  const id = Number(req.params.id);
+
+  try {
+    const { store } = getServices();
+    const entry = store.getQueueEntryById(id);
+    if (!entry) {
+      return res.status(404).json({ message: `No queue entry with id=${id}` });
+    }
+
+    const baseURL = (process.env.PAPERLESS_API_URL || '').replace(/\/api$/, '');
+    const withLinks = (docs) => docs.map(doc => ({ ...doc, link: `${baseURL}/documents/${doc.id}/` }));
+    // proposed_id ist nullable (Schema), candidate_id nicht - siehe models/entityStore.js.
+    const fetchDocs = (entityId) => entityId
+      ? paperlessService.getExampleDocumentsForEntity(entry.entity_type, entityId, 3)
+      : Promise.resolve([]);
+
+    const [proposedDocs, candidateDocs] = await Promise.all([
+      fetchDocs(entry.proposed_id),
+      fetchDocs(entry.candidate_id)
+    ]);
+
+    res.json({
+      proposed: { name: entry.proposed_name, documents: withLinks(proposedDocs) },
+      candidate: { name: entry.candidate_name, documents: withLinks(candidateDocs) }
+    });
+  } catch (error) {
+    console.error(`[ERROR] Example documents for queue entry ${id} failed:`, error.message);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.post('/api/review/:id/merge', authenticateJWT, async (req, res) => {
   const id = Number(req.params.id);
   const dryRun = req.body?.dryRun !== false;
@@ -73,7 +105,7 @@ router.post('/api/review/backfill/:entityType', authenticateJWT, async (req, res
   const lister = ENTITY_LISTERS[entityType];
 
   if (!lister) {
-    return res.status(400).json({ message: `Unbekannter Entity-Typ "${entityType}"` });
+    return res.status(400).json({ message: `Unknown entity type "${entityType}"` });
   }
 
   try {

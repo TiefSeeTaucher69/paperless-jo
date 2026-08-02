@@ -63,7 +63,7 @@ test('merge wirft, wenn die id nicht existiert, und schreibt keinen Alias', asyn
   const store = fakeStore();
   const service = new ReviewQueueService({ store, paperlessService: { mergeEntity: async () => { throw new Error('haette nicht aufgerufen werden duerfen'); } } });
 
-  await assert.rejects(() => service.merge(999), /Kein Queue-Eintrag/);
+  await assert.rejects(() => service.merge(999), /No queue entry/);
 });
 
 test('reject setzt status=rejected und ruft mergeEntity nicht auf', () => {

@@ -68,7 +68,7 @@ test('mergeEntity mit dryRun=false wirft und loescht nicht, wenn Dokumente uebri
 
   await assert.rejects(
     () => withMockClient(mockClient, () => paperlessService.mergeEntity('document_type', 1, 2, { dryRun: false })),
-    /Merge unvollstaendig/
+    /Merge incomplete/
   );
 });
 
@@ -151,4 +151,45 @@ test('getOpenReviewQueueCount liefert die Anzahl offener Queue-Eintraege', () =>
   } finally {
     paperlessService._entityResolverInstance = original;
   }
+});
+
+test('getExampleDocumentsForEntity fragt eine begrenzte Anzahl Dokumente mit Titel ab', async () => {
+  const calls = [];
+  const mockClient = {
+    get: async (url, config) => {
+      calls.push({ url, config });
+      return { data: { results: [{ id: 1, title: 'Rechnung Januar' }, { id: 2, title: 'Rechnung Februar' }] } };
+    }
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.getExampleDocumentsForEntity('tag', 42, 3)
+  );
+
+  assert.deepStrictEqual(result, [{ id: 1, title: 'Rechnung Januar' }, { id: 2, title: 'Rechnung Februar' }]);
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].url, '/documents/');
+  assert.deepStrictEqual(calls[0].config.params, { tags__id: 42, page: 1, page_size: 3, fields: 'id,title' });
+});
+
+test('getExampleDocumentsForEntity nutzt das richtige Filterfeld je Typ', async () => {
+  const capturedParams = [];
+  const mockClient = {
+    get: async (url, config) => { capturedParams.push(config.params); return { data: { results: [] } }; }
+  };
+
+  await withMockClient(mockClient, async () => {
+    await paperlessService.getExampleDocumentsForEntity('correspondent', 1, 3);
+    await paperlessService.getExampleDocumentsForEntity('document_type', 2, 3);
+  });
+
+  assert.ok('correspondent__id' in capturedParams[0]);
+  assert.ok('document_type__id' in capturedParams[1]);
+});
+
+test('getExampleDocumentsForEntity wirft bei unbekanntem Typ', async () => {
+  await assert.rejects(
+    () => paperlessService.getExampleDocumentsForEntity('unknown', 1, 3),
+    /unknown type/
+  );
 });

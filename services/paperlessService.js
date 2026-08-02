@@ -1411,7 +1411,7 @@ async getOrCreateDocumentType(name, options = {}) {
     // Erst nach verifiziert leerem fromId loeschen - der einzige unumkehrbare Schritt.
     const remaining = await this._findDocumentsWithEntity(type, fromId);
     if (remaining.length > 0) {
-      throw new Error(`Merge unvollstaendig: ${remaining.length} Dokument(e) zeigen noch auf fromId=${fromId}`);
+      throw new Error(`Merge incomplete: ${remaining.length} document(s) still reference fromId=${fromId}`);
     }
 
     try {
@@ -1423,6 +1423,24 @@ async getOrCreateDocumentType(name, options = {}) {
       // fromId war bereits geloescht (z.B. durch einen frueheren Merge desselben Eintrags) - das ist kein Fehler.
     }
     return { affectedCount: affected.length, documentIds: affected.map(d => d.id), deleted: true };
+  }
+
+  async getExampleDocumentsForEntity(type, id, limit = 3) {
+    this.initialize();
+    const filterFieldMap = {
+      tag: 'tags__id',
+      correspondent: 'correspondent__id',
+      document_type: 'document_type__id'
+    };
+    const filterField = filterFieldMap[type];
+    if (!filterField) {
+      throw new Error(`getExampleDocumentsForEntity: unknown type "${type}"`);
+    }
+
+    const response = await this.client.get('/documents/', {
+      params: { [filterField]: id, page: 1, page_size: limit, fields: 'id,title' }
+    });
+    return response.data.results.map(doc => ({ id: doc.id, title: doc.title }));
   }
 
   async getTagTextFromId(tagId) {
