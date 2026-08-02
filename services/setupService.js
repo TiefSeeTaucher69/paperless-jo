@@ -5,6 +5,36 @@ const { OpenAI } = require('openai');
 const config = require('../config/config');
 const AzureOpenAI = require('openai').AzureOpenAI;
 
+const THRESHOLD_PAIRS = [
+  { auto: 'ENTITY_RESOLVER_AUTO_THRESHOLD', judge: 'ENTITY_RESOLVER_JUDGE_MIN' },
+  { auto: 'EMBED_AUTO_THRESHOLD', judge: 'EMBED_JUDGE_MIN' }
+];
+
+// Mirrors the [0,1] clamp-and-warn logic in config/config.js, but as a hard
+// save-time error: a value typed into the Settings UI should fail loudly
+// immediately, not silently get clamped after the next restart.
+function parseThresholdOrThrow(config, key) {
+  const raw = config[key];
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    return null; // unset -- the code default in config/config.js applies
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`${key} must be a number between 0 and 1 (got "${raw}")`);
+  }
+  return value;
+}
+
+function validateEntitySimilarityThresholds(config) {
+  for (const { auto, judge } of THRESHOLD_PAIRS) {
+    const autoValue = parseThresholdOrThrow(config, auto);
+    const judgeValue = parseThresholdOrThrow(config, judge);
+    if (autoValue !== null && judgeValue !== null && judgeValue > autoValue) {
+      throw new Error(`${judge} must not be greater than ${auto} (the LLM-judge stage would be unreachable)`);
+    }
+  }
+}
+
 class SetupService {
   constructor(envPath = path.join(process.cwd(), 'data', '.env')) {
     this.envPath = envPath;
@@ -194,6 +224,8 @@ class SetupService {
   }
 
   async validateConfig(config) {
+    validateEntitySimilarityThresholds(config);
+
     // Validate Paperless config
     const paperlessApiUrl = config.PAPERLESS_API_URL.replace(/\/api/g, '');
     const paperlessValid = await this.validatePaperlessConfig(

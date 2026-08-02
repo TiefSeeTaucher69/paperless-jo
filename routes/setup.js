@@ -21,6 +21,7 @@ const { isAuthenticated, getJwtSecret } = require('./auth.js');
 const { csrfProtection } = require('../middleware/csrf');
 const customService = require('../services/customService.js');
 const config = require('../config/config.js');
+const { mapEntitySimilarityFields } = require('./settingsFormMapping');
 require('dotenv').config({ path: '../data/.env' });
 
 /**
@@ -2773,7 +2774,14 @@ router.get('/settings', async (req, res) => {
     EXTERNAL_API_HEADERS: process.env.EXTERNAL_API_HEADERS || '{}',
     EXTERNAL_API_BODY: process.env.EXTERNAL_API_BODY || '{}',
     EXTERNAL_API_TIMEOUT: process.env.EXTERNAL_API_TIMEOUT || '5000',
-    EXTERNAL_API_TRANSFORM: process.env.EXTERNAL_API_TRANSFORM || ''
+    EXTERNAL_API_TRANSFORM: process.env.EXTERNAL_API_TRANSFORM || '',
+    ENTITY_RESOLVER_ENABLED: process.env.ENTITY_RESOLVER_ENABLED || 'no',
+    ENTITY_RESOLVER_AUTO_THRESHOLD: process.env.ENTITY_RESOLVER_AUTO_THRESHOLD || '0.90',
+    ENTITY_RESOLVER_JUDGE_MIN: process.env.ENTITY_RESOLVER_JUDGE_MIN || '0.65',
+    EMBEDDING_SIMILARITY_ENABLED: process.env.EMBEDDING_SIMILARITY_ENABLED || 'no',
+    EMBED_AUTO_THRESHOLD: process.env.EMBED_AUTO_THRESHOLD || '0.90',
+    EMBED_JUDGE_MIN: process.env.EMBED_JUDGE_MIN || '0.65',
+    DOCUMENT_FINGERPRINT_ENABLED: process.env.DOCUMENT_FINGERPRINT_ENABLED || 'no'
   };
   
   if (isConfigured) {
@@ -4258,6 +4266,8 @@ router.post('/settings', express.json(), async (req, res) => {
       apiToken = require('crypto').randomBytes(64).toString('hex');
       updatedConfig.API_KEY = apiToken;
     }
+
+    Object.assign(updatedConfig, mapEntitySimilarityFields(req.body));
 
     await setupService.saveConfig(updatedConfig);
     try {
