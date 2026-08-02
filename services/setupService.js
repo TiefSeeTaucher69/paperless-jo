@@ -34,12 +34,25 @@ class SetupService {
         // backtick (previously observed as a real corruption bug).
         if (key === 'SYSTEM_PROMPT' && value.startsWith('`')) {
           if (!(value.length > 1 && value.endsWith('`'))) {
-            const parts = [value];
-            while (i + 1 < lines.length && lines[i + 1] !== '`') {
+            // Strip a trailing \r left over from a CRLF-saved file -- split('\n')
+            // doesn't remove it, and it would otherwise get embedded mid-value.
+            const parts = [value.replace(/\r$/, '')];
+            // Stop at the lone closing backtick (compared trimmed, so a
+            // trailing \r from a CRLF-saved file doesn't defeat the match),
+            // or at the start of what is clearly the next KEY=value line --
+            // this bounds the loop even when a hand-edited file is missing
+            // its closing backtick, instead of running to end-of-file and
+            // swallowing every subsequent key (e.g. JWT_SECRET).
+            const isNextKeyLine = (l) => /^[A-Z_][A-Z0-9_]*=/.test(l);
+            while (
+              i + 1 < lines.length &&
+              lines[i + 1].trim() !== '`' &&
+              !isNextKeyLine(lines[i + 1])
+            ) {
               i++;
-              parts.push(lines[i]);
+              parts.push(lines[i].replace(/\r$/, ''));
             }
-            if (i + 1 < lines.length && lines[i + 1] === '`') {
+            if (i + 1 < lines.length && lines[i + 1].trim() === '`') {
               i++;
             }
             value = parts.join('\n');
