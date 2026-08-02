@@ -18,6 +18,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const { authenticateJWT, isAuthenticated, getJwtSecret } = require('./auth.js');
+const { csrfProtection } = require('../middleware/csrf');
 const customService = require('../services/customService.js');
 const config = require('../config/config.js');
 require('dotenv').config({ path: '../data/.env' });
@@ -150,21 +151,23 @@ router.use((req, res, next) => {
     return next();
   }
 
-  isAuthenticated(req, res, async () => {
-    try {
-      const isConfigured = await setupService.isConfigured();
+  isAuthenticated(req, res, () => {
+    csrfProtection(req, res, async () => {
+      try {
+        const isConfigured = await setupService.isConfigured();
 
-      if (!isConfigured && (!process.env.PAPERLESS_AI_INITIAL_SETUP || process.env.PAPERLESS_AI_INITIAL_SETUP === 'no') && !req.path.startsWith('/setup')) {
-        return res.redirect('/setup');
-      } else if (!isConfigured && process.env.PAPERLESS_AI_INITIAL_SETUP === 'yes' && !req.path.startsWith('/settings')) {
-        return res.redirect('/settings');
+        if (!isConfigured && (!process.env.PAPERLESS_AI_INITIAL_SETUP || process.env.PAPERLESS_AI_INITIAL_SETUP === 'no') && !req.path.startsWith('/setup')) {
+          return res.redirect('/setup');
+        } else if (!isConfigured && process.env.PAPERLESS_AI_INITIAL_SETUP === 'yes' && !req.path.startsWith('/settings')) {
+          return res.redirect('/settings');
+        }
+      } catch (error) {
+        console.error('Error checking setup configuration:', error);
+        return res.status(500).send('Internal Server Error');
       }
-    } catch (error) {
-      console.error('Error checking setup configuration:', error);
-      return res.status(500).send('Internal Server Error');
-    }
 
-    next();
+      next();
+    });
   });
 });
 
