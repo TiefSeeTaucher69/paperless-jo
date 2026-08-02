@@ -322,10 +322,10 @@ router.post('/login', async (req, res) => {
       );
       res.cookie('jwt', token, {
         httpOnly: true,
-        secure: false,  
-        sameSite: 'lax', 
+        secure: process.env.COOKIE_SECURE === 'yes',
+        sameSite: 'strict',
         path: '/',
-        maxAge: 24 * 60 * 60 * 1000 
+        maxAge: 24 * 60 * 60 * 1000
       });
 
       return res.redirect('/dashboard');
