@@ -88,6 +88,19 @@ if (entityResolverJudgeMin > entityResolverAutoThreshold) {
   console.warn(`[WARNING] ENTITY_RESOLVER_JUDGE_MIN (${entityResolverJudgeMin}) > ENTITY_RESOLVER_AUTO_THRESHOLD (${entityResolverAutoThreshold}): Stufe 4c (LLM-Judge) ist damit unerreichbar`);
 }
 
+const embeddingAutoThreshold = clampThreshold(
+  parseEnvNumber(process.env.EMBED_AUTO_THRESHOLD, 0.90),
+  'EMBED_AUTO_THRESHOLD'
+);
+const embeddingJudgeMin = clampThreshold(
+  parseEnvNumber(process.env.EMBED_JUDGE_MIN, 0.65),
+  'EMBED_JUDGE_MIN'
+);
+
+if (embeddingJudgeMin > embeddingAutoThreshold) {
+  console.warn(`[WARNING] EMBED_JUDGE_MIN (${embeddingJudgeMin}) > EMBED_AUTO_THRESHOLD (${embeddingAutoThreshold}): die Embedding-Judge-Stufe ist damit unerreichbar`);
+}
+
 console.log('Loaded environment variables:', {
   PAPERLESS_API_URL: maskUrl(process.env.PAPERLESS_API_URL),
   PAPERLESS_API_TOKEN: '******',
@@ -136,6 +149,13 @@ module.exports = {
     autoThreshold: entityResolverAutoThreshold,
     judgeMin: entityResolverJudgeMin,
     dbPath: process.env.ENTITY_RESOLVER_DB_PATH || path.join(process.cwd(), 'data', 'entities.db')
+  },
+  embedding: {
+    enabled: parseEnvBoolean(process.env.EMBEDDING_SIMILARITY_ENABLED, 'no') === 'yes',
+    apiUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
+    model: process.env.EMBEDDING_MODEL || 'bge-m3',
+    autoThreshold: embeddingAutoThreshold,
+    judgeMin: embeddingJudgeMin
   },
   custom: {
     apiUrl: process.env.CUSTOM_BASE_URL || '',
