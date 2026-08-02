@@ -68,6 +68,22 @@ class EntityStore {
       )
     `).run();
 
+    this.db.prepare(`
+      CREATE TABLE IF NOT EXISTS entity_merge_log (
+        id INTEGER PRIMARY KEY,
+        queue_entry_id INTEGER,
+        entity_type TEXT NOT NULL,
+        from_id INTEGER,
+        to_id INTEGER NOT NULL,
+        affected_count INTEGER NOT NULL,
+        chunks_completed INTEGER NOT NULL,
+        chunks_total INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        error_message TEXT,
+        created_at TEXT NOT NULL
+      )
+    `).run();
+
     this._ensureColumn('entity_review_queue', 'trigram_similarity', 'REAL');
     this._ensureColumn('entity_review_queue', 'embedding_similarity', 'REAL');
   }
@@ -276,6 +292,34 @@ class EntityStore {
     } catch (error) {
       console.error('[ERROR] entityStore.countOpenQueueEntries:', error.message);
       return 0;
+    }
+  }
+
+  // Persistiert jeden echten Merge-Versuch (erfolgreich oder fehlgeschlagen) unabhaengig vom
+  // Queue-Status - der Queue-Eintrag allein sagt nicht, wie viele Chunks liefen oder woran ein
+  // fehlgeschlagener Merge scheiterte (AUDIT-013).
+  insertMergeLog({ queueEntryId = null, entityType, fromId = null, toId, affectedCount, chunksCompleted = 0, chunksTotal = 0, status, errorMessage = null }) {
+    try {
+      this.db.prepare(`
+        INSERT INTO entity_merge_log
+          (queue_entry_id, entity_type, from_id, to_id, affected_count, chunks_completed, chunks_total, status, error_message, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(queueEntryId, entityType, fromId, toId, affectedCount, chunksCompleted, chunksTotal, status, errorMessage, new Date().toISOString());
+      return true;
+    } catch (error) {
+      console.error('[ERROR] entityStore.insertMergeLog:', error.message);
+      return false;
+    }
+  }
+
+  listMergeLogForQueueEntry(queueEntryId) {
+    try {
+      return this.db.prepare(`
+        SELECT * FROM entity_merge_log WHERE queue_entry_id = ? ORDER BY created_at ASC
+      `).all(queueEntryId);
+    } catch (error) {
+      console.error('[ERROR] entityStore.listMergeLogForQueueEntry:', error.message);
+      return [];
     }
   }
 

@@ -320,3 +320,38 @@ test('Migration: eine bestehende entity_review_queue ohne die neuen Spalten wird
     fs.rmSync(`${dbPath}-shm`, { force: true });
   }
 });
+
+test('insertMergeLog schreibt einen Eintrag, listMergeLogForQueueEntry liefert ihn zurueck', () => {
+  const store = freshStore();
+  const ok = store.insertMergeLog({
+    queueEntryId: 1, entityType: 'correspondent', fromId: 10, toId: 20,
+    affectedCount: 5, chunksCompleted: 1, chunksTotal: 1, status: 'completed', errorMessage: null
+  });
+  assert.strictEqual(ok, true);
+
+  const rows = store.listMergeLogForQueueEntry(1);
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(rows[0].status, 'completed');
+  assert.strictEqual(rows[0].affected_count, 5);
+  assert.strictEqual(rows[0].from_id, 10);
+  assert.strictEqual(rows[0].to_id, 20);
+});
+
+test('insertMergeLog speichert fehlgeschlagene Merges mit Fehlermeldung und Teilfortschritt', () => {
+  const store = freshStore();
+  store.insertMergeLog({
+    queueEntryId: 2, entityType: 'tag', fromId: 30, toId: 40,
+    affectedCount: 120, chunksCompleted: 1, chunksTotal: 2, status: 'failed', errorMessage: 'Netzwerkfehler'
+  });
+
+  const rows = store.listMergeLogForQueueEntry(2);
+  assert.strictEqual(rows[0].status, 'failed');
+  assert.strictEqual(rows[0].chunks_completed, 1);
+  assert.strictEqual(rows[0].chunks_total, 2);
+  assert.strictEqual(rows[0].error_message, 'Netzwerkfehler');
+});
+
+test('listMergeLogForQueueEntry liefert leeres Array ohne Eintraege', () => {
+  const store = freshStore();
+  assert.deepStrictEqual(store.listMergeLogForQueueEntry(999), []);
+});
