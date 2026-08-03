@@ -3,6 +3,13 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
+// AUDIT-020: unbegrenzte Kandidatensuche skaliert linear mit der Anzahl Fingerprints eines
+// Korrespondenten - bei bge-m3 (1024 Dimensionen, 4 KB/Vektor) waeren das bei 2000 Dokumenten
+// 8 MB Rohdaten und 2 Mio. Multiplikationen PRO neu verarbeitetem Dokument. Begrenzt auf die
+// zuletzt gespeicherten N - aeltere, seltener wiederkehrende Vorlagen sind fuer den
+// Aehnlichkeitsvergleich ohnehin die am wenigsten relevanten Kandidaten.
+const MAX_CANDIDATES_PER_CORRESPONDENT = 300;
+
 class DocumentFingerprintStore {
   constructor(dbPath) {
     const resolvedPath = dbPath || path.join(process.cwd(), 'data', 'entities.db');
@@ -59,8 +66,10 @@ class DocumentFingerprintStore {
   findCandidates(correspondentId) {
     try {
       const rows = this.db.prepare(
-        `SELECT * FROM document_fingerprints WHERE correspondent_id = ? AND source != 'inherited'`
-      ).all(correspondentId);
+        `SELECT * FROM document_fingerprints
+         WHERE correspondent_id = ? AND source != 'inherited'
+         ORDER BY id DESC LIMIT ?`
+      ).all(correspondentId, MAX_CANDIDATES_PER_CORRESPONDENT);
       return rows.map(row => ({
         documentId: row.document_id,
         correspondentId: row.correspondent_id,
@@ -126,12 +135,37 @@ class DocumentFingerprintStore {
     }
   }
 
+  // AUDIT-020: die Tabelle waechst monoton, ohne Aufraeumpfad fuer Dokumente, die in
+  // Paperless geloescht wurden. Wird einmal pro Scan-Zyklus mit den gerade abgerufenen,
+  // tatsaechlich noch existierenden Dokument-IDs aufgerufen (server.js#scanDocuments) -
+  // kostet dadurch keinen zusaetzlichen Paperless-API-Aufruf.
+  pruneOrphaned(validDocumentIds) {
+    try {
+      const rows = this.db.prepare(`SELECT document_id FROM document_fingerprints`).all();
+      const validSet = new Set(validDocumentIds);
+      const orphanIds = rows.map(r => r.document_id).filter(id => !validSet.has(id));
+      if (orphanIds.length === 0) {
+        return 0;
+      }
+      const placeholders = orphanIds.map(() => '?').join(',');
+      this.db.prepare(`DELETE FROM document_fingerprints WHERE document_id IN (${placeholders})`).run(...orphanIds);
+      return orphanIds.length;
+    } catch (error) {
+      console.error('[ERROR] documentFingerprintStore.pruneOrphaned:', error.message);
+      return 0;
+    }
+  }
+
   _vectorToBuffer(vector) {
     return Buffer.from(Float32Array.from(vector).buffer);
   }
 
   _bufferToVector(buffer) {
-    return Array.from(new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4));
+    // AUDIT-020: Array.from() materialisierte bisher bei jedem Kandidaten ein neues natives
+    // JS-Array (kopiert alle Zahlen einzeln) - eine Float32Array-View auf den bestehenden
+    // Buffer reicht, cosineSimilarity() (entityEmbeddingService.js) indiziert nur ueber
+    // Zahlen und length, beide Typen unterstuetzen das identisch.
+    return new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4);
   }
 
   close() {

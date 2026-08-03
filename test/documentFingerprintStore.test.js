@@ -16,7 +16,7 @@ test('upsertFingerprint speichert, findCandidates liefert ihn fuer denselben Kor
     assert.strictEqual(candidates[0].correspondentId, 5);
     assert.strictEqual(candidates[0].documentTypeId, 3);
     assert.deepStrictEqual(candidates[0].tagIds, [1, 2]);
-    assert.deepStrictEqual(candidates[0].embedding, [1, 0, 0]);
+    assert.deepStrictEqual(Array.from(candidates[0].embedding), [1, 0, 0]); // AUDIT-020: jetzt ein Float32Array, kein Array
     assert.strictEqual(candidates[0].model, 'bge-m3');
   } finally {
     store.close();
@@ -56,7 +56,7 @@ test('upsertFingerprint bei gleicher document_id ersetzt statt zu duplizieren', 
     assert.strictEqual(candidates.length, 1);
     assert.strictEqual(candidates[0].documentTypeId, 2);
     assert.deepStrictEqual(candidates[0].tagIds, [9]);
-    assert.deepStrictEqual(candidates[0].embedding, [0, 1]);
+    assert.deepStrictEqual(Array.from(candidates[0].embedding), [0, 1]); // AUDIT-020: jetzt ein Float32Array, kein Array
     assert.strictEqual(candidates[0].model, 'bge-m3'); // ON CONFLICT ersetzt auch model, nicht nur die uebrigen Spalten
   } finally {
     store.close();
@@ -166,6 +166,60 @@ test('invalidateForMerge laesst Zeilen unberuehrt, deren tag_ids die fromId nur 
     store.invalidateForMerge('tag', 1, 99);
 
     assert.deepStrictEqual(store.findCandidates(5)[0].tagIds, [12]);
+  } finally {
+    store.close();
+  }
+});
+
+test('findCandidates begrenzt auf die zuletzt gespeicherten Fingerprints je Korrespondent (AUDIT-020)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    for (let i = 1; i <= 305; i++) {
+      store.upsertFingerprint({ documentId: i, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    }
+    const candidates = store.findCandidates(5);
+    assert.strictEqual(candidates.length, 300);
+    // Die neuesten (hoechste document_id/insert-Reihenfolge) bleiben erhalten, nicht die aeltesten.
+    assert.ok(candidates.some(c => c.documentId === 305));
+    assert.ok(!candidates.some(c => c.documentId === 1));
+  } finally {
+    store.close();
+  }
+});
+
+test('findCandidates liefert das embedding als Float32Array (AUDIT-020)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0.5], model: 'bge-m3' });
+    const candidates = store.findCandidates(5);
+    assert.ok(candidates[0].embedding instanceof Float32Array);
+  } finally {
+    store.close();
+  }
+});
+
+test('pruneOrphaned entfernt Fingerprints fuer nicht mehr existierende Dokumente (AUDIT-020)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    store.upsertFingerprint({ documentId: 2, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+
+    const removed = store.pruneOrphaned([1]); // Dokument 2 existiert nicht mehr
+
+    assert.strictEqual(removed, 1);
+    assert.strictEqual(store.findCandidates(5).length, 1);
+    assert.strictEqual(store.findCandidates(5)[0].documentId, 1);
+  } finally {
+    store.close();
+  }
+});
+
+test('pruneOrphaned entfernt nichts, wenn alle Dokumente noch existieren', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    const removed = store.pruneOrphaned([1]);
+    assert.strictEqual(removed, 0);
   } finally {
     store.close();
   }

@@ -75,6 +75,20 @@ class DocumentProcessingPipeline {
     }
   }
 
+  pruneOrphanedFingerprints(validDocumentIds) {
+    if (!this.documentFingerprintService) {
+      return;
+    }
+    try {
+      const removed = this.documentFingerprintService.store.pruneOrphaned(validDocumentIds);
+      if (removed > 0) {
+        console.log(`[INFO] documentProcessingPipeline.pruneOrphanedFingerprints: ${removed} verwaiste Fingerprint(s) entfernt.`);
+      }
+    } catch (error) {
+      console.warn('[WARNING] documentProcessingPipeline.pruneOrphanedFingerprints:', error.message);
+    }
+  }
+
   // AUDIT-004: der PATCH nach Paperless muss zuerst und fuer sich stehen. updateDocument()
   // wirft jetzt statt still null zurueckzugeben (services/paperlessService.js) - schlaegt er
   // fehl, duerfen addProcessedDocument/addOpenAIMetrics/addToHistory nicht laufen, sonst gilt
