@@ -188,7 +188,9 @@ class OpenAIService {
             content: truncatedContent
           }
         ],
-        ...(model !== 'o3-mini' && { temperature: 0.3 }),
+        // AUDIT-008: providerneutrale Deterministik-Policy statt hartkodiertem 0.3 - o3-mini
+        // unterstuetzt weder temperature noch seed, deshalb bleibt der bestehende Guard.
+        ...(model !== 'o3-mini' && { temperature: config.sampling.temperature, seed: config.sampling.seed }),
       });
 
       if (!response?.choices?.[0]?.message?.content) {
@@ -312,7 +314,9 @@ class OpenAIService {
             content: truncatedContent
           }
         ],
-        ...(model !== 'o3-mini' && { temperature: 0.3 }),
+        // AUDIT-008: providerneutrale Deterministik-Policy statt hartkodiertem 0.3 - o3-mini
+        // unterstuetzt weder temperature noch seed, deshalb bleibt der bestehende Guard.
+        ...(model !== 'o3-mini' && { temperature: config.sampling.temperature, seed: config.sampling.seed }),
       });
 
       // Handle response

@@ -75,6 +75,16 @@ const clampThreshold = (value, label) => {
   return value;
 };
 
+// AUDIT-008: Ollama-Aufrufe bekommen ueber config.ollama.temperature/seed eine
+// deterministische Sampling-Policy (Default temperature=0, seed=42) - OpenAI, Azure und
+// Custom hatten stattdessen hartkodiert temperature=0.3 und gar keinen seed, obwohl die
+// OpenAI-Chat-Completions-API seed unterstuetzt. Klassifikation ist eine Etikettieraufgabe,
+// keine kreative - dieselbe Policy soll providerneutral gelten. Dieselben
+// OLLAMA_TEMPERATURE/OLLAMA_SEED-Variablen werden wiederverwendet statt neuer, redundanter
+// Env-Var-Namen fuer denselben Zweck einzufuehren.
+const samplingTemperature = parseEnvNumber(process.env.OLLAMA_TEMPERATURE, 0);
+const samplingSeed = parseEnvNumber(process.env.OLLAMA_SEED, 42);
+
 const entityResolverAutoThreshold = clampThreshold(
   parseEnvNumber(process.env.ENTITY_RESOLVER_AUTO_THRESHOLD, 0.90),
   'ENTITY_RESOLVER_AUTO_THRESHOLD'
@@ -168,10 +178,17 @@ module.exports = {
     model: process.env.OLLAMA_MODEL || 'llama3.2',
     // Deterministic defaults: classification is a labelling task, not a
     // creative one. Same document must yield the same answer.
-    temperature: parseEnvNumber(process.env.OLLAMA_TEMPERATURE, 0),
-    seed: parseEnvNumber(process.env.OLLAMA_SEED, 42),
+    temperature: samplingTemperature,
+    seed: samplingSeed,
     numPredict: parseEnvNumber(process.env.OLLAMA_NUM_PREDICT, 512),
     numCtxMax: parseEnvNumber(process.env.OLLAMA_NUM_CTX_MAX, 8192)
+  },
+  // AUDIT-008: providerneutraler Spiegel von ollama.temperature/seed - siehe Kommentar oben
+  // bei samplingTemperature/samplingSeed. openaiService.js/azureService.js/customService.js
+  // lesen diesen Block statt eines hartkodierten temperature-Werts.
+  sampling: {
+    temperature: samplingTemperature,
+    seed: samplingSeed
   },
   entityResolver: {
     enabled: parseEnvBoolean(process.env.ENTITY_RESOLVER_ENABLED, 'no') === 'yes',
