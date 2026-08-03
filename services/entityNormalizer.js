@@ -27,19 +27,49 @@ const LEGAL_FORM_TOKENS = new Set([
   'ltd', 'inc', 'bv', 'sa'
 ]);
 
+// AUDIT-016: diese vier sind auch gebraeuchliche deutsche Woerter/Abkuerzungen
+// ("AG" = Amtsgericht, "SE"/"CO"/"SA" als Namens- bzw. Wortbestandteile) - sie werden
+// deshalb nur entfernt, wenn sie am Ende des Namens stehen UND danach noch etwas
+// Substanzielles (>= 3 Zeichen, selbst kein Rechtsform-Token) uebrig bleibt.
+const AMBIGUOUS_SHORT_TOKENS = new Set(['se', 'sa', 'co', 'ag']);
+
 function _stripLegalForm(normalized) {
   const tokens = normalized.split(' ').filter(Boolean);
-  const withoutBigram = [];
+  let end = tokens.length;
 
-  for (let i = 0; i < tokens.length; i++) {
-    if (tokens[i] === 'e' && tokens[i + 1] === 'v') {
-      i++; // "e v" als Rechtsform-Bigramm ueberspringen
+  // AUDIT-016: vorher wurden Rechtsform-Tokens an JEDER Position im Namen entfernt
+  // ("AG Nuernberg" -> "nuernberg", "Co-Working Nord" -> "working nord") - das konnte
+  // zwei unabhaengige Korrespondenten nach der Normalisierung identisch machen und sie
+  // in Stufe 3 der Resolver-Kaskade ohne Judge und ohne Review-Queue automatisch
+  // zusammenlegen. Jetzt wird nur noch ein zusammenhaengender Rechtsform-Block am ENDE
+  // des Namens entfernt - echte Rechtsformen stehen dort ("Stadtwerke Musterstadt GmbH"),
+  // die Kollisionsfaelle aus dem Audit stehen am Anfang oder mittendrin.
+  while (end > 0) {
+    // "e v" (z.B. aus "e.V.") als Bigramm am Ende
+    if (end >= 2 && tokens[end - 2] === 'e' && tokens[end - 1] === 'v') {
+      end -= 2;
       continue;
     }
-    withoutBigram.push(tokens[i]);
+
+    const last = tokens[end - 1];
+    if (!LEGAL_FORM_TOKENS.has(last)) {
+      break;
+    }
+
+    if (AMBIGUOUS_SHORT_TOKENS.has(last)) {
+      const remaining = tokens.slice(0, end - 1);
+      const hasSubstantialRemainder = remaining.some(
+        t => t.length >= 3 && !LEGAL_FORM_TOKENS.has(t)
+      );
+      if (!hasSubstantialRemainder) {
+        break;
+      }
+    }
+
+    end -= 1;
   }
 
-  const filtered = withoutBigram.filter(t => !LEGAL_FORM_TOKENS.has(t));
+  const filtered = tokens.slice(0, end);
 
   // Ein Korrespondent, der ausschliesslich aus Rechtsform-Tokens besteht,
   // faellt auf die ungestrippte Form zurueck statt auf Leerstring zu kollabieren.
