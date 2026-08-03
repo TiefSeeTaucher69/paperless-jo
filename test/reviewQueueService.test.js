@@ -15,6 +15,11 @@ function fakeStore(overrides = {}) {
     },
     insertAlias: () => true,
     insertMergeLog: () => true,
+    completeMerge: ({ queueEntryId }) => {
+      if (!entries.has(queueEntryId)) return false;
+      entries.get(queueEntryId).status = 'merged';
+      return true;
+    },
     ...overrides
   };
 }
@@ -43,20 +48,25 @@ test('previewMerge ruft mergeEntity mit dryRun=true auf und aendert nichts am Ei
   assert.strictEqual(store.entries.get(1).status, 'open');
 });
 
-test('merge fuehrt echten Merge aus, schreibt Alias mit source=user und setzt status=merged', async () => {
+test('merge fuehrt echten Merge aus, ruft completeMerge mit Alias source=user und queueEntryId auf', async () => {
   const store = fakeStore();
   store.entries.set(1, { id: 1, status: 'open', entity_type: 'correspondent', proposed_id: 10, candidate_id: 20, proposed_normalized: 'stadtwerke', candidate_name: 'Stadtwerke GmbH' });
-  const aliasCalls = [];
-  store.insertAlias = (args) => { aliasCalls.push(args); return true; };
+  const completeMergeCalls = [];
+  store.completeMerge = (args) => {
+    completeMergeCalls.push(args);
+    store.entries.get(args.queueEntryId).status = 'merged';
+    return true;
+  };
   const paperlessService = { mergeEntity: async () => ({ affectedCount: 3, documentIds: [1, 2, 3], deleted: true }) };
   const service = new ReviewQueueService({ store, paperlessService });
 
   const result = await service.merge(1);
 
   assert.strictEqual(result.deleted, true);
-  assert.deepStrictEqual(aliasCalls, [{
+  assert.deepStrictEqual(completeMergeCalls[0].alias, {
     entityType: 'correspondent', aliasNormalized: 'stadtwerke', canonicalName: 'Stadtwerke GmbH', canonicalId: 20, source: 'user'
-  }]);
+  });
+  assert.strictEqual(completeMergeCalls[0].queueEntryId, 1);
   assert.strictEqual(store.entries.get(1).status, 'merged');
 });
 
@@ -78,20 +88,41 @@ test('reject setzt status=rejected und ruft mergeEntity nicht auf', () => {
   assert.strictEqual(store.entries.get(1).status, 'rejected');
 });
 
-test('merge persistiert einen erfolgreichen Merge-Log-Eintrag', async () => {
+test('merge persistiert einen erfolgreichen Merge-Log-Eintrag ueber completeMerge', async () => {
   const store = fakeStore();
   store.entries.set(1, { id: 1, status: 'open', entity_type: 'correspondent', proposed_id: 10, candidate_id: 20, proposed_normalized: 'stadtwerke', candidate_name: 'Stadtwerke GmbH' });
-  const mergeLogCalls = [];
-  store.insertMergeLog = (args) => { mergeLogCalls.push(args); return true; };
+  const completeMergeCalls = [];
+  store.completeMerge = (args) => { completeMergeCalls.push(args); store.entries.get(args.queueEntryId).status = 'merged'; return true; };
   const paperlessService = { mergeEntity: async () => ({ affectedCount: 3, documentIds: [1, 2, 3], deleted: true, chunksCompleted: 1, chunksTotal: 1 }) };
   const service = new ReviewQueueService({ store, paperlessService });
 
   await service.merge(1);
 
-  assert.strictEqual(mergeLogCalls.length, 1);
-  assert.strictEqual(mergeLogCalls[0].status, 'completed');
-  assert.strictEqual(mergeLogCalls[0].affectedCount, 3);
-  assert.strictEqual(mergeLogCalls[0].queueEntryId, 1);
+  assert.strictEqual(completeMergeCalls.length, 1);
+  assert.strictEqual(completeMergeCalls[0].mergeLog.status, 'completed');
+  assert.strictEqual(completeMergeCalls[0].mergeLog.affectedCount, 3);
+  assert.strictEqual(completeMergeCalls[0].queueEntryId, 1);
+});
+
+test('merge loggt einen Fehler, wenn completeMerge fehlschlaegt, gibt aber das Paperless-Ergebnis zurueck (AUDIT-015)', async () => {
+  const store = fakeStore();
+  store.entries.set(1, { id: 1, status: 'open', entity_type: 'correspondent', proposed_id: 10, candidate_id: 20, proposed_normalized: 'stadtwerke', candidate_name: 'Stadtwerke GmbH' });
+  store.completeMerge = () => false;
+  const paperlessService = { mergeEntity: async () => ({ affectedCount: 3, documentIds: [1, 2, 3], deleted: true, chunksCompleted: 1, chunksTotal: 1 }) };
+  const service = new ReviewQueueService({ store, paperlessService });
+
+  const originalError = console.error;
+  const errorCalls = [];
+  console.error = (...args) => errorCalls.push(args.join(' '));
+  let result;
+  try {
+    result = await service.merge(1);
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.strictEqual(result.deleted, true);
+  assert.ok(errorCalls.some(msg => msg.includes('Queue-Eintrag 1')), 'erwartete eine console.error-Meldung mit dem Queue-Eintrag');
 });
 
 test('merge persistiert einen fehlgeschlagenen Merge-Log-Eintrag, wirft weiter und aendert weder Alias noch Status', async () => {
