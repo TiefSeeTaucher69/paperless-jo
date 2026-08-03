@@ -1644,9 +1644,11 @@ async getOrCreateDocumentType(name, options = {}) {
       console.log(`[SUCCESS] Updated document ${documentId} with:`, updateData);
       return await this.getDocument(documentId);
     } catch (error) {
-      console.log(error);
+      // AUDIT-004: vorher wurde hier null zurueckgegeben und der Fehler verschluckt -
+      // saveDocumentChanges() wertete das Ergebnis nicht aus und markierte das Dokument
+      // trotzdem als verarbeitet, obwohl der PATCH nach Paperless nie ankam.
       console.error(`[ERROR] updating document ${documentId}:`, error.message);
-      return null;
+      throw error;
     }
   }
 }
