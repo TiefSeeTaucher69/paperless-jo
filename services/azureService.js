@@ -179,7 +179,9 @@ class AzureOpenAIService {
             content: truncatedContent
           }
         ],
-        temperature: 0.3,
+        // AUDIT-008: providerneutrale Deterministik-Policy statt hartkodiertem 0.3.
+        temperature: config.sampling.temperature,
+        seed: config.sampling.seed,
       });
 
       if (!response?.choices?.[0]?.message?.content) {
@@ -303,7 +305,9 @@ class AzureOpenAIService {
             content: truncatedContent
           }
         ],
-        temperature: 0.3,
+        // AUDIT-008: providerneutrale Deterministik-Policy statt hartkodiertem 0.3.
+        temperature: config.sampling.temperature,
+        seed: config.sampling.seed,
       });
 
       // Handle response
