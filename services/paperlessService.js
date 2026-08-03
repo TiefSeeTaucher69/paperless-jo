@@ -1107,7 +1107,11 @@ async searchForExistingCorrespondent(correspondent) {
   try {
       const response = await this.client.get('/correspondents/', {
           params: {
-              name__icontains: correspondent
+              // AUDIT-017: exakter statt Teilstring-Match, wie bei findExistingTag - ein
+              // echter Treffer jenseits der ersten Ergebnisseite (Paperless-Default 25 pro
+              // Seite) wurde bei einer Teilstring-Suche sonst uebersehen und fuehrte zu
+              // einem unnoetigen Duplikat.
+              name__iexact: correspondent
           }
       });
 
@@ -1223,7 +1227,8 @@ async searchForExistingDocumentType(documentType) {
   try {
       const response = await this.client.get('/document_types/', {
           params: {
-              name__icontains: documentType
+              // AUDIT-017: siehe Begruendung in searchForExistingCorrespondent oben.
+              name__iexact: documentType
           }
       });
 
