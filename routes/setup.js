@@ -1643,7 +1643,7 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
 
   // Only process tags if tagging is activated
   if (config.limitFunctions?.activateTagging !== 'no') {
-    if (fingerprintMatch) {
+    if (fingerprintMatch && fingerprintMatch.tagIds.length > 0) {
       // AUDIT-010: a fingerprint hit reuses the matched document's tags outright - running
       // processTags here would create new tag entities in Paperless that are immediately
       // discarded, leaving them orphaned and never attached to any document.
