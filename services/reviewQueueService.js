@@ -57,6 +57,16 @@ class ReviewQueueService {
       // ueber die UI wuerde jetzt fehlschlagen. Laut loggen statt den Fehler zu verschlucken,
       // aber dem Aufrufer trotzdem das erfolgreiche Paperless-Ergebnis zurueckgeben (AUDIT-015).
       console.error(`[ERROR] reviewQueueService.merge: Merge fuer Queue-Eintrag ${id} in Paperless erfolgreich, aber Alias/Queue-Status/Merge-Log konnten nicht gespeichert werden - Eintrag bleibt inkonsistent, manuelle Pruefung von entity_aliases/entity_review_queue noetig`);
+      // completeMerge rollt bei einem Fehlschlag auch den Merge-Log-Eintrag zurueck (eine
+      // Transaktion) - ohne diesen eigenstaendigen Fallback ginge der einzige Nachweis eines
+      // erfolgreichen, aber lokal nicht persistierten Merges verloren. Bewusst ausserhalb der
+      // Transaktion, damit ein erneuter Fehler hier zumindest sichtbar wuerde statt den Verlust
+      // ein zweites Mal stillschweigend zu wiederholen.
+      this.store.insertMergeLog({
+        queueEntryId: id, entityType: entry.entity_type, fromId: entry.proposed_id, toId: entry.candidate_id,
+        affectedCount: result.affectedCount, chunksCompleted: result.chunksCompleted ?? 0, chunksTotal: result.chunksTotal ?? 0,
+        status: 'completed', errorMessage: 'Alias/Queue-Status nicht persistiert (completeMerge fehlgeschlagen)'
+      });
     }
 
     return result;
