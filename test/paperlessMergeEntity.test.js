@@ -375,3 +375,32 @@ test('_bulkReassignDocuments schickt bei <=100 Dokumenten genau einen bulk_edit-
   assert.strictEqual(bulkEditCalls.length, 1);
   assert.deepStrictEqual(result, { chunksCompleted: 1, chunksTotal: 1 });
 });
+
+test('updateDocument wirft weiter, wenn der PATCH fehlschlaegt, statt still null zurueckzugeben (AUDIT-004)', async () => {
+  const mockClient = {
+    get: async () => ({ data: { id: 42, tags: [], correspondent: null } }),
+    patch: async () => { throw new Error('Netzwerkfehler beim PATCH'); }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () => paperlessService.updateDocument(42, { title: 'Neuer Titel' })),
+    /Netzwerkfehler beim PATCH/
+  );
+});
+
+test('updateDocument liefert weiterhin das aktualisierte Dokument bei Erfolg', async () => {
+  const patchCalls = [];
+  const mockClient = {
+    get: async (url) => {
+      if (url === '/documents/42/') return { data: { id: 42, tags: [1], correspondent: null } };
+      throw new Error(`unerwarteter GET: ${url}`);
+    },
+    patch: async (url, body) => { patchCalls.push({ url, body }); return { data: {} }; }
+  };
+
+  const result = await withMockClient(mockClient, () => paperlessService.updateDocument(42, { title: 'Neuer Titel' }));
+
+  assert.strictEqual(patchCalls.length, 1);
+  assert.strictEqual(patchCalls[0].url, '/documents/42/');
+  assert.strictEqual(result.id, 42);
+});
