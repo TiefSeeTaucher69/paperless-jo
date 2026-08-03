@@ -438,3 +438,63 @@ test('Judge-Zone verdraengt einen judge-wuerdigen Trigram-Kandidaten nicht: bevo
   assert.strictEqual(result.action, 'map');
   assert.strictEqual(result.id, 1);
 });
+
+test('AUDIT-015: schlaegt insertAlias in Stufe 3 (normalisierter Treffer) fehl, wird das geloggt, die Zuordnung bleibt aber bestehen', async () => {
+  const store = new EntityStore(':memory:');
+  store.insertAlias = () => false;
+  const resolver = makeResolver({ store });
+
+  const errorCalls = [];
+  const originalError = console.error;
+  console.error = (...args) => errorCalls.push(args.join(' '));
+  let result;
+  try {
+    result = await resolver.resolve('correspondent', 'Müller Straße GmbH', [{ id: 3, name: 'Mueller Strasse' }]);
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.strictEqual(result.action, 'map');
+  assert.strictEqual(result.id, 3);
+  assert.ok(errorCalls.some(msg => msg.includes('entityResolver') && msg.includes('mueller strasse')));
+});
+
+test('AUDIT-015: schlaegt insertQueueEntry bei Judge-Verdict "different" fehl, wird das geloggt (Negativ-Cache fehlt dann)', async () => {
+  const store = new EntityStore(':memory:');
+  store.insertQueueEntry = () => false;
+  const judge = async () => ({ verdict: 'different', reason: 'unterschiedliche Dokumentarten' });
+  const resolver = new EntityResolver({ store, judge, config: { autoThreshold: 0.99, judgeMin: 0.1 } });
+
+  const errorCalls = [];
+  const originalError = console.error;
+  console.error = (...args) => errorCalls.push(args.join(' '));
+  let result;
+  try {
+    result = await resolver.resolve('document_type', 'Verdienstbescheinigung', [{ id: 4, name: 'Meldebescheinigung' }]);
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.strictEqual(result.action, 'create');
+  assert.ok(errorCalls.some(msg => msg.includes('entityResolver') && msg.includes('Negativ-Cache')));
+});
+
+test('AUDIT-015: schlaegt insertQueueEntry in recordCreatedAndQueued fehl, wird das geloggt', () => {
+  const store = new EntityStore(':memory:');
+  store.insertQueueEntry = () => false;
+  const resolver = makeResolver({ store });
+
+  const errorCalls = [];
+  const originalError = console.error;
+  console.error = (...args) => errorCalls.push(args.join(' '));
+  try {
+    resolver.recordCreatedAndQueued({
+      type: 'tag', proposedName: 'Neuer Tag', proposedId: 55,
+      candidate: { id: 1, name: 'Aehnlicher Tag' }, similarity: 0.7, verdict: 'unsure', documentId: 123
+    });
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.ok(errorCalls.some(msg => msg.includes('entityResolver') && msg.includes('Neuer Tag')));
+});
