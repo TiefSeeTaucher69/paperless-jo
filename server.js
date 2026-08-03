@@ -199,7 +199,10 @@ async function processDocument(doc, existingTags, existingCorrespondentList, exi
     paperlessService.getDocument(doc.id)
   ]);
 
-  if (!content || !content.length >= 10) {
+  // AUDIT-022: die alte Bedingung `!content.length >= 10` wertete als `boolean >= 10`, also
+  // immer false - die beabsichtigte Mindestlaenge von 10 Zeichen wurde nie geprueft, nur
+  // komplett leerer Inhalt abgefangen.
+  if (!content || content.length < 10) {
     console.log(`[DEBUG] Document ${doc.id} has no content, skipping analysis`);
     return null;
   }
