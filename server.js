@@ -446,6 +446,17 @@ async function scanDocuments() {
         console.error(`[ERROR] processing document ${doc.id}:`, error);
       }
     }
+
+    // AUDIT-020: einmal pro Scan-Zyklus aufraeumen statt gar nicht - documents ist hier
+    // bereits die vollstaendige, gerade abgerufene Liste, kostet also keinen zusaetzlichen
+    // Paperless-API-Aufruf.
+    if (config.documentFingerprint.enabled) {
+      try {
+        getDocumentProcessingPipeline().pruneOrphanedFingerprints(documents.map(d => d.id));
+      } catch (error) {
+        console.error('[ERROR] pruning orphaned fingerprints:', error);
+      }
+    }
   } catch (error) {
     console.error('[ERROR]  during document scan:', error);
   } finally {
