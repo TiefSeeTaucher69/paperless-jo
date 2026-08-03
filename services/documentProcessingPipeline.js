@@ -14,30 +14,39 @@ class DocumentProcessingPipeline {
     this.config = config;
   }
 
-  async applyDocumentFingerprint(doc, updateData, content, correspondentId) {
+  // AUDIT-006/AUDIT-010: ersetzt applyDocumentFingerprint. Wird jetzt VOR buildUpdateData
+  // aufgerufen (aus server.js/routes/setup.js), damit ein Treffer die Tag-/Dokumenttyp-
+  // Neuanlage verhindern kann, statt sie nur nachtraeglich zu ueberschreiben - die neu
+  // angelegten Entitaeten blieben sonst als Waisen in Paperless zurueck (AUDIT-010). Die
+  // Kandidaten-IDs werden gegen den aktuellen Paperless-Bestand geprueft (AUDIT-006) - eine
+  // zwischenzeitlich geloeschte/gemergte ID wird verworfen statt ungeprueft in den PATCH zu
+  // wandern (der sonst mit HTTP 400 fehlschlaegt und das gesamte Update verwirft).
+  async findFingerprintMatch(correspondentId, content) {
     if (!this.config.documentFingerprint.enabled || !correspondentId || !this.documentFingerprintService) {
-      return;
+      return null;
     }
     try {
       const match = await this.documentFingerprintService.findMatch(correspondentId, content);
       if (!match) {
-        return;
+        return null;
       }
-      // Respektiert dieselben Aktivierungs-Schalter wie buildUpdateData selbst - ein per
-      // activateTagging='no'/activateDocumentType='no' abgeschaltetes Feld darf der
-      // Fingerprint nicht wieder anschalten.
-      if (this.config.limitFunctions?.activateTagging !== 'no') {
-        updateData.tags = match.tagIds;
+      const validTagIds = [];
+      for (const tagId of match.tagIds) {
+        if (await this.paperlessService.hasTagId(tagId)) {
+          validTagIds.push(tagId);
+        }
       }
-      if (this.config.limitFunctions?.activateDocumentType !== 'no' && match.documentTypeId) {
-        updateData.document_type = match.documentTypeId;
-      }
+      const documentTypeId = (match.documentTypeId && await this.paperlessService.hasDocumentTypeId(match.documentTypeId))
+        ? match.documentTypeId
+        : null;
+      return { tagIds: validTagIds, documentTypeId };
     } catch (error) {
-      console.warn('[WARNING] documentProcessingPipeline.applyDocumentFingerprint: Fingerprint-Check fehlgeschlagen, Klassifikation laeuft ohne ihn weiter:', error.message);
+      console.warn('[WARNING] documentProcessingPipeline.findFingerprintMatch: Fingerprint-Check fehlgeschlagen, Klassifikation laeuft ohne ihn weiter:', error.message);
+      return null;
     }
   }
 
-  async recordDocumentFingerprint(doc, correspondentId, documentTypeId, tagIds, content) {
+  async recordDocumentFingerprint(doc, correspondentId, documentTypeId, tagIds, content, source = 'llm') {
     if (!this.config.documentFingerprint.enabled || !correspondentId || !this.documentFingerprintService) {
       return;
     }
@@ -47,7 +56,8 @@ class DocumentProcessingPipeline {
         correspondentId,
         documentTypeId: documentTypeId ?? null,
         tagIds: tagIds ?? [],
-        content
+        content,
+        source
       });
     } catch (error) {
       console.warn('[WARNING] documentProcessingPipeline.recordDocumentFingerprint: Fingerprint konnte nicht gespeichert werden:', error.message);
@@ -82,15 +92,21 @@ class DocumentProcessingPipeline {
   // recordDocumentFingerprint laeuft nur, wenn saveDocumentChanges nicht wirft - sonst wuerde
   // ein Dokument, dessen PATCH fehlgeschlagen ist, trotzdem einen Fingerprint bekommen, der beim
   // naechsten aehnlichen Dokument Tags anwendet, die nie in Paperless ankamen (AUDIT-004).
-  async processAndSave({ doc, updateData, analysis, originalData, content, correspondentId }) {
-    await this.applyDocumentFingerprint(doc, updateData, content, correspondentId);
+  async processAndSave({ doc, updateData, analysis, originalData, content, correspondentId, usedFingerprint = false }) {
     const updatedDoc = await this.saveDocumentChanges(doc.id, updateData, analysis, originalData);
     // AUDIT-011: updatedDoc.tags/document_type sind die tatsaechlich in Paperless geschriebenen
     // Werte (updateDocument() vereinigt updateData.tags mit den bereits vorhandenen Tags des
     // Dokuments) - das vorher hier verwendete updateData.tags/document_type war nur die "neue"
     // Teilmenge dieses Laufs, wodurch ein spaeterer Fingerprint-Treffer eine unvollstaendige
     // Tag-Liste geerbt haette.
-    await this.recordDocumentFingerprint(doc, correspondentId, updatedDoc.document_type, updatedDoc.tags, content);
+    // AUDIT-003: usedFingerprint kommt vom Aufrufer (buildUpdateData in server.js/
+    // routes/setup.js hat findFingerprintMatch bereits VOR der Tag-/Dokumenttyp-Erzeugung
+    // aufgerufen, siehe AUDIT-010) - eine geerbte Klassifikation wird als 'inherited'
+    // gespeichert und darf selbst nicht mehr als Kandidat fuer ein drittes Dokument dienen.
+    await this.recordDocumentFingerprint(
+      doc, correspondentId, updatedDoc.document_type, updatedDoc.tags, content,
+      usedFingerprint ? 'inherited' : 'llm'
+    );
   }
 }
 

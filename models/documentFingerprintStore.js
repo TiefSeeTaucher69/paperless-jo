@@ -38,6 +38,12 @@ class DocumentFingerprintStore {
     `).run();
 
     this._ensureColumn('document_fingerprints', 'model', 'TEXT');
+    // AUDIT-003: 'llm' = direkt aus einer eigenen KI-Klassifikation, 'inherited' = von einem
+    // Fingerprint-Treffer uebernommen. inherited-Eintraege duerfen selbst nicht mehr als
+    // Kandidat fuer ein drittes Dokument dienen (siehe findCandidates) - das bricht die
+    // zirkulaere Vererbungskette eines einzelnen Fehltreffers, die sich sonst unbegrenzt durch
+    // eine ganze Dokumentserie fortpflanzt.
+    this._ensureColumn('document_fingerprints', 'source', "TEXT NOT NULL DEFAULT 'llm'");
   }
 
   // Additive Spalten-Migration: CREATE TABLE IF NOT EXISTS legt bei einer bereits
@@ -53,7 +59,7 @@ class DocumentFingerprintStore {
   findCandidates(correspondentId) {
     try {
       const rows = this.db.prepare(
-        `SELECT * FROM document_fingerprints WHERE correspondent_id = ?`
+        `SELECT * FROM document_fingerprints WHERE correspondent_id = ? AND source != 'inherited'`
       ).all(correspondentId);
       return rows.map(row => ({
         documentId: row.document_id,
@@ -61,7 +67,8 @@ class DocumentFingerprintStore {
         documentTypeId: row.document_type_id,
         tagIds: JSON.parse(row.tag_ids),
         embedding: this._bufferToVector(row.content_embedding),
-        model: row.model
+        model: row.model,
+        source: row.source
       }));
     } catch (error) {
       console.error('[ERROR] documentFingerprintStore.findCandidates:', error.message);
@@ -69,21 +76,22 @@ class DocumentFingerprintStore {
     }
   }
 
-  upsertFingerprint({ documentId, correspondentId, documentTypeId, tagIds, embedding, model }) {
+  upsertFingerprint({ documentId, correspondentId, documentTypeId, tagIds, embedding, model, source = 'llm' }) {
     try {
       this.db.prepare(`
-        INSERT INTO document_fingerprints (document_id, correspondent_id, document_type_id, tag_ids, content_embedding, model, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO document_fingerprints (document_id, correspondent_id, document_type_id, tag_ids, content_embedding, model, source, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(document_id) DO UPDATE SET
           correspondent_id = excluded.correspondent_id,
           document_type_id = excluded.document_type_id,
           tag_ids = excluded.tag_ids,
           content_embedding = excluded.content_embedding,
           model = excluded.model,
+          source = excluded.source,
           created_at = excluded.created_at
       `).run(
         documentId, correspondentId, documentTypeId ?? null,
-        JSON.stringify(tagIds), this._vectorToBuffer(embedding), model ?? null, new Date().toISOString()
+        JSON.stringify(tagIds), this._vectorToBuffer(embedding), model ?? null, source, new Date().toISOString()
       );
       return true;
     } catch (error) {
