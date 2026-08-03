@@ -100,6 +100,32 @@ class DocumentFingerprintStore {
     }
   }
 
+  // AUDIT-006: ein Fingerprint zeigt sonst weiterhin auf eine per Merge geloeschte
+  // Korrespondenten-/Tag-/Dokumenttyp-ID. Wird nur nach einem ECHTEN (nicht dryRun-) Merge
+  // aufgerufen, siehe services/paperlessService.js#mergeEntity.
+  invalidateForMerge(type, fromId, toId) {
+    try {
+      if (type === 'correspondent') {
+        this.db.prepare(`UPDATE document_fingerprints SET correspondent_id = ? WHERE correspondent_id = ?`).run(toId, fromId);
+      } else if (type === 'document_type') {
+        this.db.prepare(`UPDATE document_fingerprints SET document_type_id = ? WHERE document_type_id = ?`).run(toId, fromId);
+      } else if (type === 'tag') {
+        // LIKE ist nur ein Vorfilter (kann false positives wie "12" bei fromId=1 treffen) -
+        // die exakte Pruefung passiert danach in JS ueber das geparste Array.
+        const rows = this.db.prepare(`SELECT id, tag_ids FROM document_fingerprints WHERE tag_ids LIKE ?`).all(`%${fromId}%`);
+        const update = this.db.prepare(`UPDATE document_fingerprints SET tag_ids = ? WHERE id = ?`);
+        for (const row of rows) {
+          const tagIds = JSON.parse(row.tag_ids);
+          if (!tagIds.includes(fromId)) continue;
+          const merged = [...new Set(tagIds.map(id => (id === fromId ? toId : id)))];
+          update.run(JSON.stringify(merged), row.id);
+        }
+      }
+    } catch (error) {
+      console.error('[ERROR] documentFingerprintStore.invalidateForMerge:', error.message);
+    }
+  }
+
   _vectorToBuffer(vector) {
     return Buffer.from(Float32Array.from(vector).buffer);
   }

@@ -291,6 +291,54 @@ test('mergeEntity wirft bei nicht-positiven oder nicht-ganzzahligen IDs', async 
   await assert.rejects(() => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 5, undefined, { dryRun: true })), /ungueltige IDs/);
 });
 
+test('mergeEntity ruft nach einem echten Merge die Fingerprint-Invalidierung auf (AUDIT-006)', async () => {
+  let getCallCount = 0;
+  const mockClient = {
+    get: async () => {
+      getCallCount++;
+      return getCallCount === 1
+        ? { data: { results: [{ id: 70 }], next: null } }
+        : { data: { results: [], next: null } };
+    },
+    post: async () => ({ data: {} }),
+    delete: async () => ({ data: {} })
+  };
+
+  const documentProcessingPipeline = require('../services/documentProcessingPipeline');
+  const invalidateCalls = [];
+  const originalGetInstance = documentProcessingPipeline.getInstance;
+  documentProcessingPipeline.getInstance = () => ({
+    invalidateFingerprintsForMerge: (...args) => invalidateCalls.push(args)
+  });
+
+  try {
+    await withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 15, 16, { dryRun: false }));
+    assert.deepStrictEqual(invalidateCalls, [['tag', 15, 16]]);
+  } finally {
+    documentProcessingPipeline.getInstance = originalGetInstance;
+  }
+});
+
+test('mergeEntity ruft die Fingerprint-Invalidierung bei dryRun=true NICHT auf', async () => {
+  const mockClient = {
+    get: async () => ({ data: { results: [{ id: 71 }], next: null } })
+  };
+
+  const documentProcessingPipeline = require('../services/documentProcessingPipeline');
+  const invalidateCalls = [];
+  const originalGetInstance = documentProcessingPipeline.getInstance;
+  documentProcessingPipeline.getInstance = () => ({
+    invalidateFingerprintsForMerge: (...args) => invalidateCalls.push(args)
+  });
+
+  try {
+    await withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 15, 16, { dryRun: true }));
+    assert.strictEqual(invalidateCalls.length, 0);
+  } finally {
+    documentProcessingPipeline.getInstance = originalGetInstance;
+  }
+});
+
 test('getOpenReviewQueueCount liefert die Anzahl offener Queue-Eintraege', () => {
   const original = paperlessService._entityResolverInstance;
   paperlessService._entityResolverInstance = { store: { countOpenQueueEntries: () => 3 } };

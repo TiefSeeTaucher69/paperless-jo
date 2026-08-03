@@ -64,6 +64,17 @@ class DocumentProcessingPipeline {
     }
   }
 
+  invalidateFingerprintsForMerge(type, fromId, toId) {
+    if (!this.documentFingerprintService) {
+      return;
+    }
+    try {
+      this.documentFingerprintService.store.invalidateForMerge(type, fromId, toId);
+    } catch (error) {
+      console.warn('[WARNING] documentProcessingPipeline.invalidateFingerprintsForMerge:', error.message);
+    }
+  }
+
   // AUDIT-004: der PATCH nach Paperless muss zuerst und fuer sich stehen. updateDocument()
   // wirft jetzt statt still null zurueckzugeben (services/paperlessService.js) - schlaegt er
   // fehl, duerfen addProcessedDocument/addOpenAIMetrics/addToHistory nicht laufen, sonst gilt
