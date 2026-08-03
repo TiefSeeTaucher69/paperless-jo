@@ -63,7 +63,7 @@ class DocumentProcessingPipeline {
     const { tags: originalTags, correspondent: originalCorrespondent, title: originalTitle } = originalData;
 
     await this.documentModel.saveOriginalData(docId, originalTags, originalCorrespondent, originalTitle);
-    await this.paperlessService.updateDocument(docId, updateData);
+    const updatedDoc = await this.paperlessService.updateDocument(docId, updateData);
 
     await Promise.all([
       this.documentModel.addProcessedDocument(docId, updateData.title),
@@ -75,6 +75,8 @@ class DocumentProcessingPipeline {
       ),
       this.documentModel.addToHistory(docId, updateData.tags, updateData.title, analysis.document.correspondent)
     ]);
+
+    return updatedDoc;
   }
 
   // recordDocumentFingerprint laeuft nur, wenn saveDocumentChanges nicht wirft - sonst wuerde
@@ -82,10 +84,13 @@ class DocumentProcessingPipeline {
   // naechsten aehnlichen Dokument Tags anwendet, die nie in Paperless ankamen (AUDIT-004).
   async processAndSave({ doc, updateData, analysis, originalData, content, correspondentId }) {
     await this.applyDocumentFingerprint(doc, updateData, content, correspondentId);
-    const tagIds = updateData.tags;
-    const documentTypeId = updateData.document_type;
-    await this.saveDocumentChanges(doc.id, updateData, analysis, originalData);
-    await this.recordDocumentFingerprint(doc, correspondentId, documentTypeId, tagIds, content);
+    const updatedDoc = await this.saveDocumentChanges(doc.id, updateData, analysis, originalData);
+    // AUDIT-011: updatedDoc.tags/document_type sind die tatsaechlich in Paperless geschriebenen
+    // Werte (updateDocument() vereinigt updateData.tags mit den bereits vorhandenen Tags des
+    // Dokuments) - das vorher hier verwendete updateData.tags/document_type war nur die "neue"
+    // Teilmenge dieses Laufs, wodurch ein spaeterer Fingerprint-Treffer eine unvollstaendige
+    // Tag-Liste geerbt haette.
+    await this.recordDocumentFingerprint(doc, correspondentId, updatedDoc.document_type, updatedDoc.tags, content);
   }
 }
 
