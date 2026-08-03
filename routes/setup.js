@@ -1677,18 +1677,18 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
   updateData.created = analysis.document.document_date || doc.created;
 
   // Only process document type if document type classification is activated
-  if (fingerprintMatch) {
-    if (config.limitFunctions?.activateDocumentType !== 'no' && fingerprintMatch.documentTypeId) {
+  if (config.limitFunctions?.activateDocumentType !== 'no') {
+    if (fingerprintMatch && fingerprintMatch.documentTypeId) {
       updateData.document_type = fingerprintMatch.documentTypeId;
-    }
-  } else if (config.limitFunctions?.activateDocumentType !== 'no' && analysis.document.document_type) {
-    try {
-      const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type, options);
-      if (documentType) {
-        updateData.document_type = documentType.id;
+    } else if (analysis.document.document_type) {
+      try {
+        const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type, options);
+        if (documentType) {
+          updateData.document_type = documentType.id;
+        }
+      } catch (error) {
+        console.error(`[ERROR] Error processing document type:`, error);
       }
-    } catch (error) {
-      console.error(`[ERROR] Error processing document type:`, error);
     }
   }
 

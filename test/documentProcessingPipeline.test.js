@@ -141,6 +141,26 @@ test('processAndSave setzt source=inherited, wenn der Aufrufer einen angewendete
   assert.strictEqual(recordCalls[0].source, 'inherited');
 });
 
+test('processAndSave behandelt ein undefined updatedDoc von paperlessService.updateDocument robust (Review-Fix)', async () => {
+  const recordCalls = [];
+  const pipeline = makePipeline({
+    paperlessService: { updateDocument: async () => undefined },
+    documentFingerprintService: { findMatch: async () => null, recordFingerprint: async (args) => { recordCalls.push(args); } },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
+  });
+
+  await assert.doesNotReject(() => pipeline.processAndSave({
+    doc: { id: 7 }, updateData: { tags: [1], document_type: 3 },
+    analysis: { metrics: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, document: {} },
+    originalData: { tags: [], correspondent: null, title: 'Old' },
+    content: 'text', correspondentId: 99
+  }));
+
+  assert.strictEqual(recordCalls.length, 1);
+  assert.deepStrictEqual(recordCalls[0].tagIds, [1]); // faellt auf updateData.tags zurueck
+  assert.strictEqual(recordCalls[0].documentTypeId, null);
+});
+
 test('findFingerprintMatch liefert null, wenn documentFingerprint.enabled=false, selbst mit korrespondentId', async () => {
   const findMatchCalls = [];
   const pipeline = makePipeline({
@@ -208,6 +228,18 @@ test('findFingerprintMatch verwirft eine Dokumenttyp-ID, die in Paperless nicht 
   const result = await pipeline.findFingerprintMatch(42, 'text');
 
   assert.strictEqual(result.documentTypeId, null);
+});
+
+test('findFingerprintMatch liefert null, wenn nach der ID-Validierung nichts Gueltiges mehr uebrig ist (Review-Fix)', async () => {
+  const pipeline = makePipeline({
+    paperlessService: { hasTagId: async () => false, hasDocumentTypeId: async () => false },
+    documentFingerprintService: { findMatch: async () => ({ tagIds: [55], documentTypeId: 66 }), recordFingerprint: async () => {} },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.strictEqual(result, null);
 });
 
 test('findFingerprintMatch faengt Fehler ab und liefert null, statt zu werfen', async () => {

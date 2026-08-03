@@ -39,6 +39,13 @@ class DocumentProcessingPipeline {
       const documentTypeId = (match.documentTypeId && await this.paperlessService.hasDocumentTypeId(match.documentTypeId))
         ? match.documentTypeId
         : null;
+      // Review-Fix: eine Validierung, die ALLES verworfen hat (alle Tag-IDs geloescht/gemergt,
+      // keine gueltige Dokumentart), ist kein verwertbarer Treffer - der Aufrufer wuerde ihn
+      // sonst trotzdem als Treffer werten und die LLM-Klassifikation verwerfen, ohne etwas
+      // Brauchbares an ihrer Stelle zu setzen.
+      if (validTagIds.length === 0 && documentTypeId === null) {
+        return null;
+      }
       return { tagIds: validTagIds, documentTypeId };
     } catch (error) {
       console.warn('[WARNING] documentProcessingPipeline.findFingerprintMatch: Fingerprint-Check fehlgeschlagen, Klassifikation laeuft ohne ihn weiter:', error.message);
@@ -129,7 +136,7 @@ class DocumentProcessingPipeline {
     // aufgerufen, siehe AUDIT-010) - eine geerbte Klassifikation wird als 'inherited'
     // gespeichert und darf selbst nicht mehr als Kandidat fuer ein drittes Dokument dienen.
     await this.recordDocumentFingerprint(
-      doc, correspondentId, updatedDoc.document_type, updatedDoc.tags, content,
+      doc, correspondentId, updatedDoc?.document_type ?? null, updatedDoc?.tags ?? updateData.tags, content,
       usedFingerprint ? 'inherited' : 'llm'
     );
   }

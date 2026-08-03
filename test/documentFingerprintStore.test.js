@@ -224,3 +224,50 @@ test('pruneOrphaned entfernt nichts, wenn alle Dokumente noch existieren', () =>
     store.close();
   }
 });
+
+test('pruneOrphaned verweigert die Loeschung, wenn mehr als die Haelfte der Tabelle betroffen waere (Sicherheitsnetz gegen unvollstaendige Dokumentlisten, Review-Fix)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    for (let i = 1; i <= 20; i++) {
+      store.upsertFingerprint({ documentId: i, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    }
+    // Nur 5 von 20 Dokumenten als "noch existierend" gemeldet - 15 (75%) wuerden als verwaist
+    // geloescht. Das ueberschreitet die 50%-Schwelle und wird verweigert.
+    const removed = store.pruneOrphaned([1, 2, 3, 4, 5]);
+    assert.strictEqual(removed, 0);
+    assert.strictEqual(store.findCandidates(5).length, 20); // nichts geloescht
+  } finally {
+    store.close();
+  }
+});
+
+test('pruneOrphaned loescht normal, wenn unter der Sicherheitsschwelle', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    for (let i = 1; i <= 20; i++) {
+      store.upsertFingerprint({ documentId: i, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    }
+    // Nur 2 von 20 (10%) verwaist - unter der 50%-Schwelle, wird normal geloescht.
+    const validIds = Array.from({ length: 18 }, (_, i) => i + 1); // 1..18 gueltig, 19+20 verwaist
+    const removed = store.pruneOrphaned(validIds);
+    assert.strictEqual(removed, 2);
+  } finally {
+    store.close();
+  }
+});
+
+test('findCandidates ordnet nach created_at, nicht nach Einfuegereihenfolge - ein erneut gespeichertes altes Dokument gilt wieder als aktuell (Review-Fix)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    store.upsertFingerprint({ documentId: 2, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    // Dokument 1 hat die niedrigere id, aber (per direktem SQL, um Timing-Flakiness im Test zu
+    // vermeiden) den neueren created_at-Zeitstempel - z.B. weil es erneut verarbeitet wurde.
+    store.db.prepare('UPDATE document_fingerprints SET created_at = ? WHERE document_id = ?').run('2030-01-01T00:00:00.000Z', 1);
+
+    const candidates = store.findCandidates(5);
+    assert.strictEqual(candidates[0].documentId, 1);
+  } finally {
+    store.close();
+  }
+});
