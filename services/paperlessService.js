@@ -630,7 +630,12 @@ class PaperlessService {
           params: {
             fields: 'id,name',
             count: true,
-            page: page
+            page: page,
+            // AUDIT-019: ohne explizite Sortierung nutzt Paperless einen unspezifizierten
+            // Default; die Bestandsliste kann dadurch zwischen zwei Laeufen ihre
+            // Reihenfolge aendern, was den Klassifikations-Prompt aendert und die
+            // Ergebnisse dadurch nicht-deterministisch macht.
+            ordering: 'name'
           }
         });
   
@@ -675,7 +680,9 @@ class PaperlessService {
           params: {
             fields: 'id,name',
             count: true,
-            page: page
+            page: page,
+            // AUDIT-019: siehe Begruendung in listCorrespondentsNames oben.
+            ordering: 'name'
           }
         });
   
