@@ -49,3 +49,39 @@ test('reines Rechtsform-Token kollabiert nicht auf Leerstring', () => {
 test('document_type und tag bleiben unveraendert zu normalize', () => {
   assert.strictEqual(normalizeForType('Rechnung AG', 'document_type'), normalizeForType('Rechnung AG', 'tag'));
 });
+
+test('Rechtsform-Token am Namensanfang wird nicht entfernt (AUDIT-016)', () => {
+  assert.strictEqual(normalizeForType('AG Nürnberg', 'correspondent'), 'ag nuernberg');
+  assert.notStrictEqual(
+    normalizeForType('AG Nürnberg', 'correspondent'),
+    normalizeForType('Nürnberg', 'correspondent')
+  );
+});
+
+test('SE als Namensbestandteil am Anfang bleibt erhalten (AUDIT-016)', () => {
+  assert.strictEqual(normalizeForType('SE Bank', 'correspondent'), 'se bank');
+  assert.notStrictEqual(
+    normalizeForType('SE Bank', 'correspondent'),
+    normalizeForType('Bank', 'correspondent')
+  );
+});
+
+test('Co- als Wortbestandteil am Anfang bleibt erhalten (AUDIT-016)', () => {
+  assert.strictEqual(normalizeForType('Co-Working Nord', 'correspondent'), 'co working nord');
+  assert.notStrictEqual(
+    normalizeForType('Co-Working Nord', 'correspondent'),
+    normalizeForType('Working Nord', 'correspondent')
+  );
+});
+
+test('kurzes ambiges Rechtsform-Token am Ende bleibt, wenn der Rest zu kurz ist (AUDIT-016)', () => {
+  assert.strictEqual(normalizeForType('X SE', 'correspondent'), 'x se');
+});
+
+test('kurzes ambiges Rechtsform-Token am Ende wird entfernt, wenn genug Rest bleibt (AUDIT-016)', () => {
+  assert.strictEqual(normalizeForType('ADAC SE', 'correspondent'), 'adac');
+});
+
+test('unambiges Rechtsform-Token am Ende wird weiterhin immer entfernt', () => {
+  assert.strictEqual(normalizeForType('X GmbH', 'correspondent'), 'x');
+});
