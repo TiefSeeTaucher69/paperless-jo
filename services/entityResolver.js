@@ -43,10 +43,12 @@ class EntityResolver {
     // Stufe 3: normalisierter Treffer
     for (const entity of existingEntities) {
       if (normalizeForType(entity.name, type) === normalizedProposed) {
-        this.store.insertAlias({
+        if (!this.store.insertAlias({
           entityType: type, aliasNormalized: normalizedProposed,
           canonicalName: entity.name, canonicalId: entity.id, source: 'auto'
-        });
+        })) {
+          console.error(`[ERROR] entityResolver: Alias "${normalizedProposed}" -> "${entity.name}" (${type}) konnte nicht gespeichert werden - Zuordnung wird fuer dieses Dokument angewendet, aber nicht gelernt; der naechste Lauf wiederholt Trigram/Judge fuer diesen Namen`);
+        }
         return { action: 'map', id: entity.id, canonicalName: entity.name, via: 'normalized' };
       }
     }
@@ -100,10 +102,12 @@ class EntityResolver {
       if (rejectedTrigram) {
         return { action: 'create' }; // Stufe 4b: Nutzerentscheidung uebersticht hohe Aehnlichkeit
       }
-      this.store.insertAlias({
+      if (!this.store.insertAlias({
         entityType: type, aliasNormalized: normalizedProposed,
         canonicalName: bestTrigram.entity.name, canonicalId: bestTrigram.entity.id, source: 'auto'
-      });
+      })) {
+        console.error(`[ERROR] entityResolver: Alias "${normalizedProposed}" -> "${bestTrigram.entity.name}" (${type}) konnte nicht gespeichert werden - Zuordnung wird fuer dieses Dokument angewendet, aber nicht gelernt; der naechste Lauf wiederholt Trigram/Judge fuer diesen Namen`);
+      }
       return { action: 'map', id: bestTrigram.entity.id, canonicalName: bestTrigram.entity.name, via: 'similarity' };
     }
 
@@ -114,10 +118,12 @@ class EntityResolver {
     const bestRejected = this.store.findRejectedPair(type, normalizedProposed, normalizedCandidate);
 
     if (!bestRejected && best.embeddingSim !== null && best.embeddingSim >= this.embedAutoThreshold) {
-      this.store.insertAlias({
+      if (!this.store.insertAlias({
         entityType: type, aliasNormalized: normalizedProposed,
         canonicalName: best.entity.name, canonicalId: best.entity.id, source: 'auto_embedding'
-      });
+      })) {
+        console.error(`[ERROR] entityResolver: Alias "${normalizedProposed}" -> "${best.entity.name}" (${type}) konnte nicht gespeichert werden - Zuordnung wird fuer dieses Dokument angewendet, aber nicht gelernt; der naechste Lauf wiederholt Trigram/Judge fuer diesen Namen`);
+      }
       return { action: 'map', id: best.entity.id, canonicalName: best.entity.name, via: 'embedding_similarity' };
     }
 
@@ -153,22 +159,26 @@ class EntityResolver {
     const verdict = await this._askJudge(type, proposedName, candidateEntity.name);
 
     if (verdict.verdict === 'same') {
-      this.store.insertAlias({
+      if (!this.store.insertAlias({
         entityType: type, aliasNormalized: normalizedProposed,
         canonicalName: candidateEntity.name, canonicalId: candidateEntity.id, source: 'llm'
-      });
+      })) {
+        console.error(`[ERROR] entityResolver: Alias "${normalizedProposed}" -> "${candidateEntity.name}" (${type}) konnte nicht gespeichert werden - Zuordnung wird fuer dieses Dokument angewendet, aber nicht gelernt; der naechste Lauf ruft erneut den Judge auf`);
+      }
       return { action: 'map', id: candidateEntity.id, canonicalName: candidateEntity.name, via: 'llm' };
     }
 
     if (verdict.verdict === 'different') {
-      this.store.insertQueueEntry({
+      if (!this.store.insertQueueEntry({
         entityType: type, proposedName, proposedId: null,
         candidateName: candidateEntity.name, candidateId: candidateEntity.id,
         similarity: candidateCombined,
         trigramSimilarity: judgeCandidate.trigramSim, embeddingSimilarity: judgeCandidate.embeddingSim,
         llmVerdict: 'different', llmReason: verdict.reason,
         status: 'rejected'
-      });
+      })) {
+        console.error(`[ERROR] entityResolver: Ablehnung von "${proposedName}" vs. "${candidateEntity.name}" (${type}) konnte nicht in den Negativ-Cache geschrieben werden - ein spaeterer Lauf mit hoher Trigram-Aehnlichkeit koennte dieses Paar faelschlich automatisch zusammenfuehren`);
+      }
       return { action: 'create' };
     }
 
@@ -212,13 +222,15 @@ class EntityResolver {
   }
 
   recordCreatedAndQueued({ type, proposedName, proposedId, candidate, similarity, trigramSimilarity = null, embeddingSimilarity = null, verdict, documentId }) {
-    this.store.insertQueueEntry({
+    if (!this.store.insertQueueEntry({
       entityType: type, proposedName, proposedId,
       candidateName: candidate.name, candidateId: candidate.id,
       similarity, trigramSimilarity, embeddingSimilarity,
       llmVerdict: verdict, llmReason: null,
       status: 'open', documentId
-    });
+    })) {
+      console.error(`[ERROR] entityResolver: Neu angelegte Entitaet "${proposedName}" (${type}, id=${proposedId}) konnte nicht in die Review-Queue eingetragen werden - sie erscheint nie zur Pruefung, obwohl sie als "unsure" markiert war`);
+    }
   }
 }
 
