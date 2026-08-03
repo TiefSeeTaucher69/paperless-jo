@@ -23,12 +23,14 @@ class OllamaReachabilityGuard {
       await this.client.get(`${config.ollama.apiUrl}/api/tags`);
       return true;
     } catch (error) {
+      // config._maskUrl statt config.ollama.apiUrl im Klartext - data/.env-Werte (hier die
+      // Ollama-URL) duerfen laut CLAUDE.md nie im Log erscheinen.
       console.warn(
-        `[WARNING] AUDIT-007: Ollama unter ${config.ollama.apiUrl} nicht erreichbar ` +
-        `(${error.message}), obwohl ENTITY_RESOLVER_ENABLED und/oder ` +
+        `[WARNING] ollamaReachabilityGuard: Ollama unter ${config._maskUrl(config.ollama.apiUrl)} ` +
+        `nicht erreichbar (${error.message}), obwohl ENTITY_RESOLVER_ENABLED und/oder ` +
         'EMBEDDING_SIMILARITY_ENABLED aktiv sind. Judge- und Embedding-Aufrufe sind fest ' +
         'an Ollama gebunden und werden bis zur naechsten Verfuegbarkeit auf "unsure" bzw. ' +
-        'Trigram-only degradieren.'
+        'Trigram-only degradieren. (AUDIT-007)'
       );
       return false;
     }

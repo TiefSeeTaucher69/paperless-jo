@@ -85,3 +85,7 @@ test('kurzes ambiges Rechtsform-Token am Ende wird entfernt, wenn genug Rest ble
 test('unambiges Rechtsform-Token am Ende wird weiterhin immer entfernt', () => {
   assert.strictEqual(normalizeForType('X GmbH', 'correspondent'), 'x');
 });
+
+test('kurzes ambiges Rechtsform-Token wird bei exakt 3 Zeichen Rest entfernt (Grenzfall, AUDIT-016)', () => {
+  assert.strictEqual(normalizeForType('IBM SE', 'correspondent'), 'ibm');
+});
