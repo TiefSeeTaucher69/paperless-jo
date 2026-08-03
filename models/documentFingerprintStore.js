@@ -68,7 +68,7 @@ class DocumentFingerprintStore {
       const rows = this.db.prepare(
         `SELECT * FROM document_fingerprints
          WHERE correspondent_id = ? AND source != 'inherited'
-         ORDER BY id DESC LIMIT ?`
+         ORDER BY created_at DESC, id DESC LIMIT ?`
       ).all(correspondentId, MAX_CANDIDATES_PER_CORRESPONDENT);
       return rows.map(row => ({
         documentId: row.document_id,
@@ -145,6 +145,15 @@ class DocumentFingerprintStore {
       const validSet = new Set(validDocumentIds);
       const orphanIds = rows.map(r => r.document_id).filter(id => !validSet.has(id));
       if (orphanIds.length === 0) {
+        return 0;
+      }
+      // Review-Fix: eine partiell abgebrochene Paperless-Paginierung liefert eine unvollstaendige
+      // "gueltige" Liste, gegen die fast die gesamte Tabelle als "verwaist" erscheinen wuerde. Ein
+      // Loeschlauf, der mehr als die Haelfte der Tabelle betreffen wuerde, wird deshalb verweigert
+      // statt blind durchgefuehrt - ein sichtbar ausbleibendes Aufraeumen faellt eher auf als eine
+      // leise Teilloeschung echter Daten.
+      if (rows.length >= 20 && orphanIds.length > rows.length / 2) {
+        console.warn(`[WARNING] documentFingerprintStore.pruneOrphaned: ${orphanIds.length} von ${rows.length} Fingerprints wuerden als verwaist geloescht - das ueberschreitet die Sicherheitsschwelle (50%). Loeschung uebersprungen, moeglicherweise unvollstaendige Dokumentliste.`);
         return 0;
       }
       const placeholders = orphanIds.map(() => '?').join(',');

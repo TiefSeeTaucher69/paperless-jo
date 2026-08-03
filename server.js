@@ -284,18 +284,18 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
   updateData.created = analysis.document.document_date || doc.created;
 
   // Only process document type if document type classification is activated
-  if (fingerprintMatch) {
-    if (config.limitFunctions?.activateDocumentType !== 'no' && fingerprintMatch.documentTypeId) {
+  if (config.limitFunctions?.activateDocumentType !== 'no') {
+    if (fingerprintMatch && fingerprintMatch.documentTypeId) {
       updateData.document_type = fingerprintMatch.documentTypeId;
-    }
-  } else if (config.limitFunctions?.activateDocumentType !== 'no' && analysis.document.document_type) {
-    try {
-      const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type, options);
-      if (documentType) {
-        updateData.document_type = documentType.id;
+    } else if (analysis.document.document_type) {
+      try {
+        const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type, options);
+        if (documentType) {
+          updateData.document_type = documentType.id;
+        }
+      } catch (error) {
+        console.error(`[ERROR] Error processing document type:`, error);
       }
-    } catch (error) {
-      console.error(`[ERROR] Error processing document type:`, error);
     }
   }
 
@@ -447,10 +447,11 @@ async function scanDocuments() {
       }
     }
 
-    // AUDIT-020: einmal pro Scan-Zyklus aufraeumen statt gar nicht - documents ist hier
-    // bereits die vollstaendige, gerade abgerufene Liste, kostet also keinen zusaetzlichen
-    // Paperless-API-Aufruf.
-    if (config.documentFingerprint.enabled) {
+    // AUDIT-020 (Review-Fix): getAllDocuments() liefert bei PROCESS_PREDEFINED_DOCUMENTS=yes nur
+    // eine tag-gefilterte Teilmenge und bei nicht initialisiertem Client oder Paginierungsfehlern
+    // ein leeres bzw. unvollstaendiges Array - keines davon ist "der vollstaendige Bestand".
+    // Pruning wuerde sonst Fingerprints noch existierender Dokumente faelschlich loeschen.
+    if (config.documentFingerprint.enabled && process.env.PROCESS_PREDEFINED_DOCUMENTS !== 'yes' && documents.length > 0) {
       try {
         getDocumentProcessingPipeline().pruneOrphanedFingerprints(documents.map(d => d.id));
       } catch (error) {
