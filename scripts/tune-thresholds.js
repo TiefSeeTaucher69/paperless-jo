@@ -94,7 +94,114 @@ async function evaluateEmbeddingThresholds(pairs) {
   return { pairsWithSim, results };
 }
 
+async function runFingerprintTuning() {
+  const labeledPairs = loadJson('data/eval/fingerprint-pairs.json', null);
+  if (!labeledPairs) {
+    console.error(
+      '[ERROR] data/eval/fingerprint-pairs.json fehlt. Format: ' +
+      '[{ "documentIdA": 1, "documentIdB": 2, "label": "same"|"different" }, ...]. ' +
+      'Siehe Audit Abschnitt 18.4 fuer die empfohlene Verteilung (mind. 60 Paare ueber ' +
+      'die dort genannten Risikoklassen).'
+    );
+    process.exit(1);
+  }
+
+  const paperlessService = require('../services/paperlessService');
+  // AUDIT-025: dieselbe Kuerzung wie services/documentFingerprintService.js - jede Abweichung
+  // macht die Messung ungueltig (Audit Abschnitt 18.5 Punkt 1).
+  const FINGERPRINT_CONTENT_CHARS = 3000;
+  const contentCache = new Map();
+
+  async function getTruncatedContent(documentId) {
+    if (contentCache.has(documentId)) {
+      return contentCache.get(documentId);
+    }
+    const content = await paperlessService.getDocumentContent(documentId);
+    const truncated = (content || '').slice(0, FINGERPRINT_CONTENT_CHARS);
+    contentCache.set(documentId, truncated);
+    return truncated;
+  }
+
+  const documentIds = [...new Set(labeledPairs.flatMap(p => [p.documentIdA, p.documentIdB]))];
+  const vectors = new Map();
+  for (const id of documentIds) {
+    try {
+      const text = await getTruncatedContent(id);
+      vectors.set(id, await entityEmbeddingService.embed(text));
+    } catch (error) {
+      console.error(`[ERROR] Embedding fuer Dokument ${id} fehlgeschlagen, Fingerprint-Tuning abgebrochen:`, error.message);
+      process.exit(1);
+    }
+  }
+
+  const pairsWithSim = labeledPairs.map(p => ({
+    ...p,
+    sim: entityEmbeddingService.cosineSimilarity(vectors.get(p.documentIdA), vectors.get(p.documentIdB))
+  }));
+
+  console.log(`Gelabelte Dokumentpaare: ${pairsWithSim.length} (${pairsWithSim.filter(p => p.label === 'same').length} same, ${pairsWithSim.filter(p => p.label === 'different').length} different)`);
+  console.log('\n=== Fingerprint-Aehnlichkeit (Dokumentinhalt) ===');
+  console.log('Threshold | Precision | Recall | TP | FP | FN | TN');
+
+  let bestPrecision1Threshold = null;
+  const results = [];
+  for (let i = 80; i <= 99; i++) {
+    const threshold = i / 100;
+    let tp = 0, fp = 0, fn = 0, tn = 0;
+    for (const { sim, label } of pairsWithSim) {
+      const predictedSame = sim >= threshold;
+      const actualSame = label === 'same';
+      if (predictedSame && actualSame) tp++;
+      else if (predictedSame && !actualSame) fp++;
+      else if (!predictedSame && actualSame) fn++;
+      else tn++;
+    }
+    const precision = tp + fp > 0 ? tp / (tp + fp) : null;
+    const recall = tp + fn > 0 ? tp / (tp + fn) : null;
+    results.push({ threshold, tp, fp, fn, tn, precision, recall });
+
+    // AUDIT-025 / Audit Abschnitt 18.5 Punkt 3: nach Precision optimieren, nicht F1 - ein
+    // False Positive ist beim Fingerprint unkorrigierbar und still, ein False Negative kostet
+    // nur einen ohnehin schon anfallenden LLM-Call. Kleinsten Threshold mit Precision=1.00 merken.
+    if (precision === 1 && bestPrecision1Threshold === null) {
+      bestPrecision1Threshold = threshold;
+    }
+
+    console.log(
+      `${threshold.toFixed(2)}      | `
+      + `${precision === null ? '  n/a  ' : precision.toFixed(2).padStart(7)} | `
+      + `${recall === null ? '  n/a ' : recall.toFixed(2).padStart(6)} | `
+      + `${String(tp).padStart(2)} | ${String(fp).padStart(2)} | ${String(fn).padStart(2)} | ${String(tn).padStart(2)}`
+    );
+  }
+
+  if (bestPrecision1Threshold !== null) {
+    const recommended = Math.min(0.99, bestPrecision1Threshold + 0.02);
+    console.log(`\nKleinster Threshold mit Precision=1.00: ${bestPrecision1Threshold.toFixed(2)}. Empfohlen mit Sicherheitsaufschlag (+0.02): FINGERPRINT_SIMILARITY_THRESHOLD=${recommended.toFixed(2)} (Audit Abschnitt 18.5 Punkt 3).`);
+  } else {
+    console.log('\nKein Threshold in [0.80, 0.99] erreicht Precision=1.00 - mit den vorliegenden Paaren ist der Fingerprint-Kanal nicht sicher aktivierbar (Audit Abschnitt 18.6).');
+  }
+
+  const worstDifferentPairs = pairsWithSim
+    .filter(p => p.label === 'different')
+    .sort((x, y) => y.sim - x.sim)
+    .slice(0, 5);
+  console.log('\nSchwierigste "different"-Paare (hoechste Aehnlichkeit trotz unterschiedlichem Label - bestimmen die obere Schwellwertgrenze, Audit Abschnitt 18.5 Punkt 4):');
+  worstDifferentPairs.forEach(p => console.log(`  Dokument ${p.documentIdA} / Dokument ${p.documentIdB}: ${p.sim.toFixed(3)}`));
+
+  const outPath = path.join('data', 'eval', `fingerprint-threshold-tuning-${new Date().toISOString().slice(0, 10)}.json`);
+  fs.writeFileSync(outPath, JSON.stringify({ pairs: pairsWithSim, results }, null, 2));
+  console.log(`\nDetails geschrieben nach ${outPath} (nicht in git).`);
+}
+
 async function main() {
+  // AUDIT-025: additiver Modus fuer die Fingerprint-Schwellwertmessung (Audit Abschnitt 18.5) -
+  // der bestehende Modus (Entitaets-Namenspaare, unten) bleibt vollstaendig unveraendert.
+  if (process.argv.includes('--fingerprint')) {
+    await runFingerprintTuning();
+    return;
+  }
+
   const labels = loadJson('data/eval/entity-labels.json', null);
   if (!labels) {
     console.error('[ERROR] data/eval/entity-labels.json fehlt. Siehe Plan-Dokument Task 11 fuer das Format.');
