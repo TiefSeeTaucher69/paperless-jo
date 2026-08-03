@@ -249,20 +249,20 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
   const fingerprintMatch = await getDocumentProcessingPipeline().findFingerprintMatch(correspondentId, content);
 
   // Only process tags if tagging is activated
-  if (fingerprintMatch) {
-    // AUDIT-010: a fingerprint hit reuses the matched document's tags outright - running
-    // processTags here would create new tag entities in Paperless that are immediately
-    // discarded, leaving them orphaned and never attached to any document.
-    if (config.limitFunctions?.activateTagging !== 'no') {
+  if (config.limitFunctions?.activateTagging !== 'no') {
+    if (fingerprintMatch) {
+      // AUDIT-010: a fingerprint hit reuses the matched document's tags outright - running
+      // processTags here would create new tag entities in Paperless that are immediately
+      // discarded, leaving them orphaned and never attached to any document.
       updateData.tags = fingerprintMatch.tagIds;
+    } else {
+      const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags, options);
+      if (errors.length > 0) {
+        console.warn('[ERROR] Some tags could not be processed:', errors);
+      }
+      updateData.tags = tagIds;
     }
-  } else if (config.limitFunctions?.activateTagging !== 'no') {
-    const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags, options);
-    if (errors.length > 0) {
-      console.warn('[ERROR] Some tags could not be processed:', errors);
-    }
-    updateData.tags = tagIds;
-  } else if (config.limitFunctions?.activateTagging === 'no' && config.addAIProcessedTag === 'yes') {
+  } else if (config.addAIProcessedTag === 'yes') {
     // Add AI processed tags to the document (processTags function awaits a tags array)
     // get tags from .env file and split them by comma and make an array
     console.log('[DEBUG] Tagging is deactivated but AI processed tag will be added');
