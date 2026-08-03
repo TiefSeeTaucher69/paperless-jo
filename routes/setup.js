@@ -1536,6 +1536,7 @@ try {
       }
   } catch (error) {
     console.error('[ERROR] in startScanning:', error);
+    scanRunGuard.finish();
   }
 });
 
