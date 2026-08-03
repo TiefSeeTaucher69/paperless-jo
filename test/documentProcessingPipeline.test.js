@@ -84,18 +84,15 @@ test('processAndSave ruft recordDocumentFingerprint NICHT auf, wenn der PATCH fe
 test('processAndSave zeichnet den Fingerprint mit den von updateDocument() zurueckgelieferten (tatsaechlich geschriebenen) Tags auf, nicht mit den vor dem Speichern eingefrorenen (AUDIT-011)', async () => {
   const recordCalls = [];
   const pipeline = makePipeline({
-    // updateDocument() vereinigt intern updateData.tags mit den bereits vorhandenen Tags des
-    // Dokuments (services/paperlessService.js:1588) - das zurueckgelieferte Dokument traegt
-    // deshalb den bereits vorhandenen Tag 1 zusaetzlich zum vom Fingerprint gelieferten Tag 55.
     paperlessService: { updateDocument: async () => ({ tags: [1, 55], document_type: 66 }) },
-    documentFingerprintService: {
-      findMatch: async () => ({ tagIds: [55], documentTypeId: 66 }),
-      recordFingerprint: async (args) => { recordCalls.push(args); }
-    },
+    documentFingerprintService: { findMatch: async () => null, recordFingerprint: async (args) => { recordCalls.push(args); } },
     config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
   });
 
-  const updateData = { tags: [1], document_type: 3 };
+  // updateData kommt hier bereits fertig vom Aufrufer (buildUpdateData in server.js/
+  // routes/setup.js) - processAndSave wendet den Fingerprint selbst nicht mehr an, siehe die
+  // findFingerprintMatch-Tests oben.
+  const updateData = { tags: [55], document_type: 66 };
   await pipeline.processAndSave({
     doc: { id: 7 }, updateData,
     analysis: { metrics: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, document: {} },
@@ -103,37 +100,124 @@ test('processAndSave zeichnet den Fingerprint mit den von updateDocument() zurue
     content: 'text', correspondentId: 99
   });
 
-  assert.deepStrictEqual(updateData.tags, [55]); // applyDocumentFingerprint ueberschreibt updateData VOR dem Speichern
   assert.strictEqual(recordCalls.length, 1);
-  // recordDocumentFingerprint bekommt NICHT updateData.tags ([55]), sondern das von
-  // updateDocument() zurueckgelieferte, tatsaechlich geschriebene Ergebnis ([1, 55]).
   assert.deepStrictEqual(recordCalls[0].tagIds, [1, 55]);
   assert.strictEqual(recordCalls[0].documentTypeId, 66);
 });
 
-test('applyDocumentFingerprint tut nichts, wenn documentFingerprint.enabled=false, selbst mit korrespondentId', async () => {
+test('processAndSave setzt source=llm, wenn kein Fingerprint verwendet wurde', async () => {
+  const recordCalls = [];
+  const pipeline = makePipeline({
+    paperlessService: { updateDocument: async () => ({ tags: [1], document_type: 3 }) },
+    documentFingerprintService: { findMatch: async () => null, recordFingerprint: async (args) => { recordCalls.push(args); } },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
+  });
+
+  await pipeline.processAndSave({
+    doc: { id: 7 }, updateData: { tags: [1], document_type: 3 },
+    analysis: { metrics: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, document: {} },
+    originalData: { tags: [], correspondent: null, title: 'Old' },
+    content: 'text', correspondentId: 99, usedFingerprint: false
+  });
+
+  assert.strictEqual(recordCalls[0].source, 'llm');
+});
+
+test('processAndSave setzt source=inherited, wenn der Aufrufer einen angewendeten Fingerprint-Treffer meldet (AUDIT-003)', async () => {
+  const recordCalls = [];
+  const pipeline = makePipeline({
+    paperlessService: { updateDocument: async () => ({ tags: [55], document_type: 66 }) },
+    documentFingerprintService: { findMatch: async () => null, recordFingerprint: async (args) => { recordCalls.push(args); } },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
+  });
+
+  await pipeline.processAndSave({
+    doc: { id: 7 }, updateData: { tags: [55], document_type: 66 },
+    analysis: { metrics: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, document: {} },
+    originalData: { tags: [], correspondent: null, title: 'Old' },
+    content: 'text', correspondentId: 99, usedFingerprint: true
+  });
+
+  assert.strictEqual(recordCalls[0].source, 'inherited');
+});
+
+test('findFingerprintMatch liefert null, wenn documentFingerprint.enabled=false, selbst mit korrespondentId', async () => {
   const findMatchCalls = [];
   const pipeline = makePipeline({
     documentFingerprintService: { findMatch: async () => { findMatchCalls.push(1); return null; }, recordFingerprint: async () => {} },
     config: { documentFingerprint: { enabled: false }, limitFunctions: {} }
   });
 
-  const updateData = { tags: [1] };
-  await pipeline.applyDocumentFingerprint({ id: 1 }, updateData, 'text', 42);
+  const result = await pipeline.findFingerprintMatch(42, 'text');
 
+  assert.strictEqual(result, null);
   assert.strictEqual(findMatchCalls.length, 0);
-  assert.deepStrictEqual(updateData.tags, [1]);
 });
 
-test('applyDocumentFingerprint respektiert activateTagging=no und ueberschreibt updateData.tags nicht', async () => {
+test('findFingerprintMatch liefert null ohne korrespondentId, selbst wenn aktiviert', async () => {
   const pipeline = makePipeline({
-    documentFingerprintService: { findMatch: async () => ({ tagIds: [55], documentTypeId: 66 }), recordFingerprint: async () => {} },
-    config: { documentFingerprint: { enabled: true }, limitFunctions: { activateTagging: 'no' } }
+    documentFingerprintService: { findMatch: async () => ({ tagIds: [1], documentTypeId: 2 }), recordFingerprint: async () => {} },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
   });
 
-  const updateData = { tags: [1], document_type: 3 };
-  await pipeline.applyDocumentFingerprint({ id: 1 }, updateData, 'text', 42);
+  const result = await pipeline.findFingerprintMatch(null, 'text');
 
-  assert.deepStrictEqual(updateData.tags, [1]);
-  assert.strictEqual(updateData.document_type, 66);
+  assert.strictEqual(result, null);
+});
+
+test('findFingerprintMatch liefert die Treffer-IDs, wenn sie gegen den aktuellen Paperless-Bestand gueltig sind', async () => {
+  const pipeline = makePipeline({
+    paperlessService: {
+      hasTagId: async (id) => [55, 56].includes(id),
+      hasDocumentTypeId: async (id) => id === 66
+    },
+    documentFingerprintService: { findMatch: async () => ({ tagIds: [55, 56], documentTypeId: 66 }), recordFingerprint: async () => {} },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.deepStrictEqual(result, { tagIds: [55, 56], documentTypeId: 66 });
+});
+
+test('findFingerprintMatch verwirft Tag-IDs, die in Paperless nicht mehr existieren (AUDIT-006)', async () => {
+  const pipeline = makePipeline({
+    paperlessService: {
+      hasTagId: async (id) => id === 55, // 56 existiert nicht mehr - z.B. geloescht oder gemergt
+      hasDocumentTypeId: async () => true
+    },
+    documentFingerprintService: { findMatch: async () => ({ tagIds: [55, 56], documentTypeId: 66 }), recordFingerprint: async () => {} },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.deepStrictEqual(result.tagIds, [55]);
+});
+
+test('findFingerprintMatch verwirft eine Dokumenttyp-ID, die in Paperless nicht mehr existiert (AUDIT-006)', async () => {
+  const pipeline = makePipeline({
+    paperlessService: {
+      hasTagId: async () => true,
+      hasDocumentTypeId: async () => false
+    },
+    documentFingerprintService: { findMatch: async () => ({ tagIds: [55], documentTypeId: 66 }), recordFingerprint: async () => {} },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.strictEqual(result.documentTypeId, null);
+});
+
+test('findFingerprintMatch faengt Fehler ab und liefert null, statt zu werfen', async () => {
+  const pipeline = makePipeline({
+    paperlessService: { hasTagId: async () => true, hasDocumentTypeId: async () => true },
+    documentFingerprintService: { findMatch: async () => { throw new Error('Embedding-Dienst nicht erreichbar'); }, recordFingerprint: async () => {} },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.strictEqual(result, null);
 });

@@ -76,3 +76,42 @@ test('findCandidates liefert model mit zurueck, upsertFingerprint speichert es',
     store.close();
   }
 });
+
+test('upsertFingerprint speichert source, findCandidates liefert es zurueck (AUDIT-003)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({
+      documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1],
+      embedding: [1, 0], model: 'bge-m3', source: 'llm'
+    });
+    const candidates = store.findCandidates(5);
+    assert.strictEqual(candidates[0].source, 'llm');
+  } finally {
+    store.close();
+  }
+});
+
+test('upsertFingerprint ohne explizites source speichert den Default "llm"', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    const candidates = store.findCandidates(5);
+    assert.strictEqual(candidates[0].source, 'llm');
+  } finally {
+    store.close();
+  }
+});
+
+test('findCandidates schliesst inherited-Fingerprints aus - sie duerfen selbst nicht mehr weitervererben (AUDIT-003)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3', source: 'llm' });
+    store.upsertFingerprint({ documentId: 2, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3', source: 'inherited' });
+
+    const candidates = store.findCandidates(5);
+    assert.strictEqual(candidates.length, 1);
+    assert.strictEqual(candidates[0].documentId, 1);
+  } finally {
+    store.close();
+  }
+});

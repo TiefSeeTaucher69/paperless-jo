@@ -68,10 +68,10 @@ class DocumentFingerprintService {
     return { tagIds: best.candidate.tagIds, documentTypeId: best.candidate.documentTypeId };
   }
 
-  async recordFingerprint({ documentId, correspondentId, documentTypeId, tagIds, content }) {
+  async recordFingerprint({ documentId, correspondentId, documentTypeId, tagIds, content, source = 'llm' }) {
     try {
       const vector = await this._embed(content);
-      this.store.upsertFingerprint({ documentId, correspondentId, documentTypeId, tagIds, embedding: vector, model: this.model });
+      this.store.upsertFingerprint({ documentId, correspondentId, documentTypeId, tagIds, embedding: vector, model: this.model, source });
     } catch (error) {
       console.warn('[WARNING] documentFingerprintService: Fingerprint konnte nicht gespeichert werden:', error.message);
     }

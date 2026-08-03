@@ -1517,14 +1517,14 @@ router.post('/api/scan/now', async (req, res) => {
             if (!result) continue;
     
             const { analysis, originalData, content } = result;
-            const updateData = await buildUpdateData(analysis, doc);
+            const { updateData, usedFingerprint } = await buildUpdateData(analysis, doc, content, originalData.correspondent);
             // updateDocument() (in DocumentProcessingPipeline#saveDocumentChanges) verwirft
             // updateData.correspondent zugunsten des bereits vorhandenen - das mutiert updateData
             // in place. Deshalb hier festhalten, was DIESER Lauf entschieden hat, damit processAndSave
             // mit der richtigen Korrespondenten-Identitaet fuer den Fingerprint arbeitet.
             const fingerprintCorrespondentId = originalData.correspondent || updateData.correspondent;
             await getDocumentProcessingPipeline().processAndSave({
-              doc, updateData, analysis, originalData, content, correspondentId: fingerprintCorrespondentId
+              doc, updateData, analysis, originalData, content, correspondentId: fingerprintCorrespondentId, usedFingerprint
             });
           } catch (error) {
             console.error(`[ERROR] processing document ${doc.id}:`, error);
@@ -1613,7 +1613,7 @@ async function processDocument(doc, existingTags, existingCorrespondentList, exi
   return { analysis, originalData, content };
 }
 
-async function buildUpdateData(analysis, doc) {
+async function buildUpdateData(analysis, doc, content, existingCorrespondentId) {
   const updateData = {};
 
   // Create options object with restriction settings
@@ -1625,8 +1625,28 @@ async function buildUpdateData(analysis, doc) {
 
   console.log(`[DEBUG] Building update data with restrictions: tags=${options.restrictToExistingTags}, correspondents=${options.restrictToExistingCorrespondents}`);
 
+  // AUDIT-010: correspondent resolution moved to the top, before tags/document_type - see the
+  // identical comment in server.js#buildUpdateData for the full reasoning.
+  if (config.limitFunctions?.activateCorrespondents !== 'no' && analysis.document.correspondent) {
+    try {
+      const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.document.correspondent, options);
+      if (correspondent) {
+        updateData.correspondent = correspondent.id;
+      }
+    } catch (error) {
+      console.error(`[ERROR] Error processing correspondent:`, error);
+    }
+  }
+
+  const correspondentId = existingCorrespondentId || updateData.correspondent;
+  const fingerprintMatch = await getDocumentProcessingPipeline().findFingerprintMatch(correspondentId, content);
+
   // Only process tags if tagging is activated
-  if (config.limitFunctions?.activateTagging !== 'no') {
+  if (fingerprintMatch) {
+    if (config.limitFunctions?.activateTagging !== 'no') {
+      updateData.tags = fingerprintMatch.tagIds;
+    }
+  } else if (config.limitFunctions?.activateTagging !== 'no') {
     const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags, options);
     if (errors.length > 0) {
       console.warn('[ERROR] Some tags could not be processed:', errors);
@@ -1654,7 +1674,11 @@ async function buildUpdateData(analysis, doc) {
   updateData.created = analysis.document.document_date || doc.created;
 
   // Only process document type if document type classification is activated
-  if (config.limitFunctions?.activateDocumentType !== 'no' && analysis.document.document_type) {
+  if (fingerprintMatch) {
+    if (config.limitFunctions?.activateDocumentType !== 'no' && fingerprintMatch.documentTypeId) {
+      updateData.document_type = fingerprintMatch.documentTypeId;
+    }
+  } else if (config.limitFunctions?.activateDocumentType !== 'no' && analysis.document.document_type) {
     try {
       const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type, options);
       if (documentType) {
@@ -1680,7 +1704,7 @@ async function buildUpdateData(analysis, doc) {
     // First, add any new/updated fields
     for (const key in customFields) {
       const customField = customFields[key];
-      
+
       if (!customField.field_name || !customField.value?.trim()) {
         console.log(`[DEBUG] Skipping empty/invalid custom field`);
         continue;
@@ -1708,24 +1732,12 @@ async function buildUpdateData(analysis, doc) {
     }
   }
 
-  // Only process correspondent if correspondent detection is activated
-  if (config.limitFunctions?.activateCorrespondents !== 'no' && analysis.document.correspondent) {
-    try {
-      const correspondent = await paperlessService.getOrCreateCorrespondent(analysis.document.correspondent, options);
-      if (correspondent) {
-        updateData.correspondent = correspondent.id;
-      }
-    } catch (error) {
-      console.error(`[ERROR] Error processing correspondent:`, error);
-    }
-  }
-
   // Always include language if provided as it's a core field
   if (analysis.document.language) {
     updateData.language = analysis.document.language;
   }
 
-  return updateData;
+  return { updateData, usedFingerprint: !!fingerprintMatch };
 }
 
 /**
@@ -2369,14 +2381,14 @@ async function processQueue(customPrompt) {
         if (!result) continue;
 
         const { analysis, originalData, content } = result;
-        const updateData = await buildUpdateData(analysis, doc);
+        const { updateData, usedFingerprint } = await buildUpdateData(analysis, doc, content, originalData.correspondent);
         // updateDocument() (in DocumentProcessingPipeline#saveDocumentChanges) verwirft
         // updateData.correspondent zugunsten des bereits vorhandenen - das mutiert updateData
         // in place. Deshalb hier festhalten, was DIESER Lauf entschieden hat, damit processAndSave
         // mit der richtigen Korrespondenten-Identitaet fuer den Fingerprint arbeitet.
         const fingerprintCorrespondentId = originalData.correspondent || updateData.correspondent;
         await getDocumentProcessingPipeline().processAndSave({
-          doc, updateData, analysis, originalData, content, correspondentId: fingerprintCorrespondentId
+          doc, updateData, analysis, originalData, content, correspondentId: fingerprintCorrespondentId, usedFingerprint
         });
       } catch (error) {
         console.error(`[ERROR] Failed to process document ${doc.id}:`, error);

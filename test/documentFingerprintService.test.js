@@ -107,7 +107,7 @@ test('findMatch ignoriert Kandidaten mit abweichendem Embedding-Modell', async (
   assert.strictEqual(result, null);
 });
 
-test('recordFingerprint: berechnet Embedding und speichert ueber den Store', async () => {
+test('recordFingerprint: berechnet Embedding und speichert ueber den Store, Default source=llm (AUDIT-003)', async () => {
   const store = fakeStore([]);
   const embeddingService = fakeEmbeddingService({ 'Neuer Inhalt': [1, 0] });
   const service = new DocumentFingerprintService({ store, embeddingService, similarityThreshold: 0.90, model: 'bge-m3' });
@@ -118,8 +118,20 @@ test('recordFingerprint: berechnet Embedding und speichert ueber den Store', asy
 
   assert.strictEqual(store.upserts.length, 1);
   assert.deepStrictEqual(store.upserts[0], {
-    documentId: 55, correspondentId: 5, documentTypeId: 3, tagIds: [1, 2], embedding: [1, 0], model: 'bge-m3'
+    documentId: 55, correspondentId: 5, documentTypeId: 3, tagIds: [1, 2], embedding: [1, 0], model: 'bge-m3', source: 'llm'
   });
+});
+
+test('recordFingerprint: gibt ein explizites source="inherited" an den Store weiter (AUDIT-003)', async () => {
+  const store = fakeStore([]);
+  const embeddingService = fakeEmbeddingService({ 'Geerbter Inhalt': [1, 0] });
+  const service = new DocumentFingerprintService({ store, embeddingService, similarityThreshold: 0.90, model: 'bge-m3' });
+
+  await service.recordFingerprint({
+    documentId: 56, correspondentId: 5, documentTypeId: 3, tagIds: [1, 2], content: 'Geerbter Inhalt', source: 'inherited'
+  });
+
+  assert.strictEqual(store.upserts[0].source, 'inherited');
 });
 
 test('recordFingerprint: Embedding-Fehler -> kein Absturz, kein Store-Write', async () => {
