@@ -373,3 +373,38 @@ test('listMergeLogForQueueEntry liefert leeres Array ohne Eintraege', () => {
   const store = freshStore();
   assert.deepStrictEqual(store.listMergeLogForQueueEntry(999), []);
 });
+
+test('completeMerge schreibt Alias, Queue-Status und Merge-Log atomar (AUDIT-015)', () => {
+  const store = freshStore();
+  store.insertQueueEntry({
+    entityType: 'correspondent', proposedName: 'Stadtwerke Beispielstadt', proposedId: 2,
+    candidateName: 'Stadtwerke Musterstadt', candidateId: 1, similarity: 0.95,
+    llmVerdict: null, llmReason: null, status: 'open'
+  });
+  const entry = store.listOpenQueueEntries()[0];
+
+  const ok = store.completeMerge({
+    alias: { entityType: 'correspondent', aliasNormalized: 'stadtwerke beispielstadt', canonicalName: 'Stadtwerke Musterstadt', canonicalId: 1, source: 'user' },
+    queueEntryId: entry.id,
+    mergeLog: { queueEntryId: entry.id, entityType: 'correspondent', fromId: 2, toId: 1, affectedCount: 3, chunksCompleted: 1, chunksTotal: 1, status: 'completed', errorMessage: null }
+  });
+
+  assert.strictEqual(ok, true);
+  assert.strictEqual(store.getQueueEntryById(entry.id).status, 'merged');
+  assert.ok(store.findAlias('correspondent', 'stadtwerke beispielstadt'));
+  assert.strictEqual(store.listMergeLogForQueueEntry(entry.id).length, 1);
+});
+
+test('completeMerge rollt Alias und Merge-Log zurueck, wenn der Queue-Eintrag nicht existiert (AUDIT-015)', () => {
+  const store = freshStore();
+
+  const ok = store.completeMerge({
+    alias: { entityType: 'correspondent', aliasNormalized: 'nichtvorhanden', canonicalName: 'X', canonicalId: 1, source: 'user' },
+    queueEntryId: 999999,
+    mergeLog: { queueEntryId: 999999, entityType: 'correspondent', fromId: 2, toId: 1, affectedCount: 0, chunksCompleted: 0, chunksTotal: 0, status: 'completed', errorMessage: null }
+  });
+
+  assert.strictEqual(ok, false);
+  assert.strictEqual(store.findAlias('correspondent', 'nichtvorhanden'), null, 'Alias-Insert muss zurueckgerollt sein');
+  assert.deepStrictEqual(store.listMergeLogForQueueEntry(999999), [], 'Merge-Log-Insert muss zurueckgerollt sein');
+});

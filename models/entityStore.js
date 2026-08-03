@@ -109,16 +109,20 @@ class EntityStore {
     }
   }
 
-  insertAlias({ entityType, aliasNormalized, canonicalName, canonicalId, source }) {
+  _insertAliasRaw({ entityType, aliasNormalized, canonicalName, canonicalId, source }) {
+    this.db.prepare(`
+      INSERT INTO entity_aliases (entity_type, alias_normalized, canonical_name, canonical_id, source, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(entity_type, alias_normalized) DO UPDATE SET
+        canonical_name = excluded.canonical_name,
+        canonical_id = excluded.canonical_id,
+        source = excluded.source
+    `).run(entityType, aliasNormalized, canonicalName, canonicalId, source, new Date().toISOString());
+  }
+
+  insertAlias(args) {
     try {
-      this.db.prepare(`
-        INSERT INTO entity_aliases (entity_type, alias_normalized, canonical_name, canonical_id, source, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(entity_type, alias_normalized) DO UPDATE SET
-          canonical_name = excluded.canonical_name,
-          canonical_id = excluded.canonical_id,
-          source = excluded.source
-      `).run(entityType, aliasNormalized, canonicalName, canonicalId, source, new Date().toISOString());
+      this._insertAliasRaw(args);
       return true;
     } catch (error) {
       console.error('[ERROR] entityStore.insertAlias:', error.message);
@@ -282,12 +286,16 @@ class EntityStore {
     }
   }
 
+  _updateQueueStatusRaw(id, status) {
+    const result = this.db.prepare(`
+      UPDATE entity_review_queue SET status = ?, resolved_at = ? WHERE id = ?
+    `).run(status, new Date().toISOString(), id);
+    return result.changes > 0;
+  }
+
   updateQueueStatus(id, status) {
     try {
-      const result = this.db.prepare(`
-        UPDATE entity_review_queue SET status = ?, resolved_at = ? WHERE id = ?
-      `).run(status, new Date().toISOString(), id);
-      return result.changes > 0;
+      return this._updateQueueStatusRaw(id, status);
     } catch (error) {
       console.error('[ERROR] entityStore.updateQueueStatus:', error.message);
       return false;
@@ -307,16 +315,43 @@ class EntityStore {
   // Persistiert jeden echten Merge-Versuch (erfolgreich oder fehlgeschlagen) unabhaengig vom
   // Queue-Status - der Queue-Eintrag allein sagt nicht, wie viele Chunks liefen oder woran ein
   // fehlgeschlagener Merge scheiterte (AUDIT-013).
-  insertMergeLog({ queueEntryId = null, entityType, fromId = null, toId, affectedCount, chunksCompleted = 0, chunksTotal = 0, status, errorMessage = null }) {
+  _insertMergeLogRaw({ queueEntryId = null, entityType, fromId = null, toId, affectedCount, chunksCompleted = 0, chunksTotal = 0, status, errorMessage = null }) {
+    this.db.prepare(`
+      INSERT INTO entity_merge_log
+        (queue_entry_id, entity_type, from_id, to_id, affected_count, chunks_completed, chunks_total, status, error_message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(queueEntryId, entityType, fromId, toId, affectedCount, chunksCompleted, chunksTotal, status, errorMessage, new Date().toISOString());
+  }
+
+  insertMergeLog(args) {
     try {
-      this.db.prepare(`
-        INSERT INTO entity_merge_log
-          (queue_entry_id, entity_type, from_id, to_id, affected_count, chunks_completed, chunks_total, status, error_message, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(queueEntryId, entityType, fromId, toId, affectedCount, chunksCompleted, chunksTotal, status, errorMessage, new Date().toISOString());
+      this._insertMergeLogRaw(args);
       return true;
     } catch (error) {
       console.error('[ERROR] entityStore.insertMergeLog:', error.message);
+      return false;
+    }
+  }
+
+  // Merge-Abschluss schreibt Alias + Queue-Status + Merge-Log gemeinsam in einer Transaktion -
+  // schlaegt einer der drei Schritte fehl, darf keiner der anderen bestehen bleiben. Ohne das
+  // koennte z.B. der Alias geschrieben werden, aber der Queue-Eintrag auf 'open' stehen bleiben:
+  // der naechste Resolver-Lauf wuerde denselben Vorschlag dann erneut zur Pruefung vorlegen,
+  // obwohl laut Alias-Tabelle schon entschieden ist (AUDIT-015).
+  completeMerge({ alias, queueEntryId, mergeLog }) {
+    try {
+      const runInTransaction = this.db.transaction(() => {
+        this._insertAliasRaw(alias);
+        const changed = this._updateQueueStatusRaw(queueEntryId, 'merged');
+        if (!changed) {
+          throw new Error(`kein Queue-Eintrag mit id=${queueEntryId} gefunden`);
+        }
+        this._insertMergeLogRaw(mergeLog);
+      });
+      runInTransaction();
+      return true;
+    } catch (error) {
+      console.error('[ERROR] entityStore.completeMerge:', error.message);
       return false;
     }
   }
