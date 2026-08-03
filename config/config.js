@@ -220,7 +220,9 @@ module.exports = {
     apiKey: process.env.AZURE_API_KEY || '',
     endpoint: process.env.AZURE_ENDPOINT || '',
     deploymentName: process.env.AZURE_DEPLOYMENT_NAME || '',
-    apiVersion: process.env.AZURE_API_VERSION || '2023-05-15'
+    // AUDIT-008: seed (siehe config.sampling) wird erst ab 2023-12-01-preview unterstuetzt;
+    // vorher lehnt Azure den Request mit HTTP 400 ab statt den Parameter zu ignorieren.
+    apiVersion: process.env.AZURE_API_VERSION || '2024-02-01'
   },
   customFields: process.env.CUSTOM_FIELDS || '',
   aiProvider: process.env.AI_PROVIDER || 'openai',

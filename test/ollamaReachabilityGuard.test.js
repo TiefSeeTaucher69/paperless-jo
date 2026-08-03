@@ -51,7 +51,8 @@ test('check() gibt genau eine Warnung aus und liefert false, wenn Embedding akti
     assert.strictEqual(result, false);
     assert.strictEqual(warnMessages.length, 1, 'darf genau eine Warnung ausgeben, nicht eine pro Entitaet');
     assert.ok(warnMessages[0].includes('AUDIT-007'));
-    assert.ok(warnMessages[0].includes(config.ollama.apiUrl));
+    assert.ok(warnMessages[0].includes(config._maskUrl(config.ollama.apiUrl)));
+    assert.ok(!warnMessages[0].includes(config.ollama.apiUrl.replace(/^https?:\/\//, '')), 'die rohe Ollama-URL darf nicht im Klartext geloggt werden');
   } finally {
     console.warn = savedWarn;
     config.entityResolver.enabled = savedResolver;
