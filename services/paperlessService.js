@@ -1511,6 +1511,17 @@ async getOrCreateDocumentType(name, options = {}) {
       }
       // fromId war bereits geloescht (z.B. durch einen frueheren Merge desselben Eintrags) - das ist kein Fehler.
     }
+
+    // AUDIT-006: ein Fingerprint zeigt sonst weiterhin auf die gerade geloeschte fromId - lazy
+    // require bricht den Zirkelbezug (documentProcessingPipeline benoetigt paperlessService
+    // bereits in getInstance()).
+    try {
+      const { getInstance: getDocumentProcessingPipeline } = require('./documentProcessingPipeline');
+      getDocumentProcessingPipeline().invalidateFingerprintsForMerge(type, fromId, toId);
+    } catch (error) {
+      console.warn('[WARNING] mergeEntity: Fingerprint-Bereinigung nach Merge fehlgeschlagen:', error.message);
+    }
+
     return { affectedCount: affected.length, documentIds: affected.map(d => d.id), deleted: true, ...bulkResult };
   }
 

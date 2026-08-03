@@ -115,3 +115,58 @@ test('findCandidates schliesst inherited-Fingerprints aus - sie duerfen selbst n
     store.close();
   }
 });
+
+test('invalidateForMerge aktualisiert correspondent_id bei einem Korrespondenten-Merge (AUDIT-006)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    store.invalidateForMerge('correspondent', 5, 9);
+
+    const candidates = store.findCandidates(9);
+    assert.strictEqual(candidates.length, 1);
+    assert.strictEqual(candidates[0].documentId, 1);
+    assert.strictEqual(store.findCandidates(5).length, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('invalidateForMerge aktualisiert document_type_id bei einem Dokumenttyp-Merge (AUDIT-006)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 3, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    store.invalidateForMerge('document_type', 3, 4);
+
+    const candidates = store.findCandidates(5);
+    assert.strictEqual(candidates[0].documentTypeId, 4);
+  } finally {
+    store.close();
+  }
+});
+
+test('invalidateForMerge ersetzt eine gemergte Tag-ID innerhalb von tag_ids und dedupliziert (AUDIT-006)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [10, 20], embedding: [1, 0], model: 'bge-m3' });
+    store.upsertFingerprint({ documentId: 2, correspondentId: 5, documentTypeId: 1, tagIds: [10, 30], embedding: [1, 0], model: 'bge-m3' });
+    store.invalidateForMerge('tag', 10, 30);
+
+    const candidates = store.findCandidates(5).sort((a, b) => a.documentId - b.documentId);
+    assert.deepStrictEqual(candidates[0].tagIds, [30, 20]);
+    assert.deepStrictEqual(candidates[1].tagIds, [30]); // dedupliziert statt [30, 30]
+  } finally {
+    store.close();
+  }
+});
+
+test('invalidateForMerge laesst Zeilen unberuehrt, deren tag_ids die fromId nur als Teilstring enthaelt (z.B. 12 bei fromId=1)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [12], embedding: [1, 0], model: 'bge-m3' });
+    store.invalidateForMerge('tag', 1, 99);
+
+    assert.deepStrictEqual(store.findCandidates(5)[0].tagIds, [12]);
+  } finally {
+    store.close();
+  }
+});

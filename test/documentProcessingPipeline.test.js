@@ -221,3 +221,24 @@ test('findFingerprintMatch faengt Fehler ab und liefert null, statt zu werfen', 
 
   assert.strictEqual(result, null);
 });
+
+test('invalidateFingerprintsForMerge delegiert an den Store, wenn der Fingerprint-Service existiert (AUDIT-006)', () => {
+  const calls = [];
+  const pipeline = makePipeline({
+    documentFingerprintService: { store: { invalidateForMerge: (...args) => calls.push(args) } },
+    config: { documentFingerprint: { enabled: true }, limitFunctions: {} }
+  });
+
+  pipeline.invalidateFingerprintsForMerge('tag', 5, 6);
+
+  assert.deepStrictEqual(calls, [['tag', 5, 6]]);
+});
+
+test('invalidateFingerprintsForMerge tut nichts ohne documentFingerprintService', () => {
+  const pipeline = makePipeline({
+    documentFingerprintService: null,
+    config: { documentFingerprint: { enabled: false }, limitFunctions: {} }
+  });
+
+  assert.doesNotThrow(() => pipeline.invalidateFingerprintsForMerge('tag', 5, 6));
+});
