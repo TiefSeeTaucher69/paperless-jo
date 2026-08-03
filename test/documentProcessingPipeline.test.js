@@ -81,10 +81,13 @@ test('processAndSave ruft recordDocumentFingerprint NICHT auf, wenn der PATCH fe
   assert.strictEqual(recordCalls.length, 0);
 });
 
-test('processAndSave wendet den Fingerprint an, speichert dann und zeichnet ihn mit den NACH Fingerprint-Anwendung aktuellen Tags auf', async () => {
+test('processAndSave zeichnet den Fingerprint mit den von updateDocument() zurueckgelieferten (tatsaechlich geschriebenen) Tags auf, nicht mit den vor dem Speichern eingefrorenen (AUDIT-011)', async () => {
   const recordCalls = [];
   const pipeline = makePipeline({
-    paperlessService: { updateDocument: async () => ({}) },
+    // updateDocument() vereinigt intern updateData.tags mit den bereits vorhandenen Tags des
+    // Dokuments (services/paperlessService.js:1588) - das zurueckgelieferte Dokument traegt
+    // deshalb den bereits vorhandenen Tag 1 zusaetzlich zum vom Fingerprint gelieferten Tag 55.
+    paperlessService: { updateDocument: async () => ({ tags: [1, 55], document_type: 66 }) },
     documentFingerprintService: {
       findMatch: async () => ({ tagIds: [55], documentTypeId: 66 }),
       recordFingerprint: async (args) => { recordCalls.push(args); }
@@ -96,14 +99,15 @@ test('processAndSave wendet den Fingerprint an, speichert dann und zeichnet ihn 
   await pipeline.processAndSave({
     doc: { id: 7 }, updateData,
     analysis: { metrics: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, document: {} },
-    originalData: { tags: [], correspondent: null, title: 'Old' },
+    originalData: { tags: [1], correspondent: null, title: 'Old' },
     content: 'text', correspondentId: 99
   });
 
-  assert.deepStrictEqual(updateData.tags, [55]);
-  assert.strictEqual(updateData.document_type, 66);
+  assert.deepStrictEqual(updateData.tags, [55]); // applyDocumentFingerprint ueberschreibt updateData VOR dem Speichern
   assert.strictEqual(recordCalls.length, 1);
-  assert.deepStrictEqual(recordCalls[0].tagIds, [55]);
+  // recordDocumentFingerprint bekommt NICHT updateData.tags ([55]), sondern das von
+  // updateDocument() zurueckgelieferte, tatsaechlich geschriebene Ergebnis ([1, 55]).
+  assert.deepStrictEqual(recordCalls[0].tagIds, [1, 55]);
   assert.strictEqual(recordCalls[0].documentTypeId, 66);
 });
 
