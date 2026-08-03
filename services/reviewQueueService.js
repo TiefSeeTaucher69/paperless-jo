@@ -37,19 +37,27 @@ class ReviewQueueService {
       throw error;
     }
 
-    this.store.insertAlias({
-      entityType: entry.entity_type,
-      aliasNormalized: entry.proposed_normalized,
-      canonicalName: entry.candidate_name,
-      canonicalId: entry.candidate_id,
-      source: 'user'
+    const persisted = this.store.completeMerge({
+      alias: {
+        entityType: entry.entity_type,
+        aliasNormalized: entry.proposed_normalized,
+        canonicalName: entry.candidate_name,
+        canonicalId: entry.candidate_id,
+        source: 'user'
+      },
+      queueEntryId: id,
+      mergeLog: {
+        queueEntryId: id, entityType: entry.entity_type, fromId: entry.proposed_id, toId: entry.candidate_id,
+        affectedCount: result.affectedCount, chunksCompleted: result.chunksCompleted ?? 0, chunksTotal: result.chunksTotal ?? 0,
+        status: 'completed', errorMessage: null
+      }
     });
-    this.store.updateQueueStatus(id, 'merged');
-    this.store.insertMergeLog({
-      queueEntryId: id, entityType: entry.entity_type, fromId: entry.proposed_id, toId: entry.candidate_id,
-      affectedCount: result.affectedCount, chunksCompleted: result.chunksCompleted ?? 0, chunksTotal: result.chunksTotal ?? 0,
-      status: 'completed', errorMessage: null
-    });
+    if (!persisted) {
+      // Der Merge in Paperless ist bereits vollzogen (fromId geloescht) - ein erneuter Versuch
+      // ueber die UI wuerde jetzt fehlschlagen. Laut loggen statt den Fehler zu verschlucken,
+      // aber dem Aufrufer trotzdem das erfolgreiche Paperless-Ergebnis zurueckgeben (AUDIT-015).
+      console.error(`[ERROR] reviewQueueService.merge: Merge fuer Queue-Eintrag ${id} in Paperless erfolgreich, aber Alias/Queue-Status/Merge-Log konnten nicht gespeichert werden - Eintrag bleibt inkonsistent, manuelle Pruefung von entity_aliases/entity_review_queue noetig`);
+    }
 
     return result;
   }
