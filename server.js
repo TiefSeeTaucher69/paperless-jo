@@ -10,6 +10,7 @@ const setupService = require('./services/setupService');
 const { ensureJwtSecret } = require('./services/jwtSecretGuard');
 const setupRoutes = require('./routes/setup');
 const reviewRoutes = require('./routes/review');
+const { getInstance: getDocumentProcessingPipeline } = require('./services/documentProcessingPipeline');
 
 // Add environment variables for RAG service if not already set
 process.env.RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://localhost:8000';
@@ -37,69 +38,6 @@ const txtLogger = new Logger({
 
 const app = express();
 let runningTask = false;
-
-let documentFingerprintServiceInstance = null;
-
-// Lazy statt Modul-Top-Level: verhindert, dass jeder Server-Boot data/entities.db
-// oeffnet, auch wenn DOCUMENT_FINGERPRINT_ENABLED=no (dieselbe Begruendung wie
-// paperlessService.js#_getEntityResolver und routes/review.js#getServices).
-function getDocumentFingerprintService() {
-  if (!documentFingerprintServiceInstance) {
-    const DocumentFingerprintStore = require('./models/documentFingerprintStore');
-    const DocumentFingerprintService = require('./services/documentFingerprintService');
-    const entityEmbeddingService = require('./services/entityEmbeddingService');
-
-    const store = new DocumentFingerprintStore(config.entityResolver.dbPath);
-    documentFingerprintServiceInstance = new DocumentFingerprintService({
-      store,
-      embeddingService: entityEmbeddingService,
-      similarityThreshold: config.documentFingerprint.similarityThreshold,
-      model: config.embedding.model
-    });
-  }
-  return documentFingerprintServiceInstance;
-}
-
-async function applyDocumentFingerprint(doc, updateData, content, correspondentId) {
-  if (!config.documentFingerprint.enabled || !correspondentId) {
-    return;
-  }
-  try {
-    const match = await getDocumentFingerprintService().findMatch(correspondentId, content);
-    if (!match) {
-      return;
-    }
-    // Respektiert dieselben Aktivierungs-Schalter wie buildUpdateData selbst - ein per
-    // activateTagging='no'/activateDocumentType='no' abgeschaltetes Feld darf der
-    // Fingerprint nicht wieder anschalten.
-    if (config.limitFunctions?.activateTagging !== 'no') {
-      updateData.tags = match.tagIds;
-    }
-    if (config.limitFunctions?.activateDocumentType !== 'no' && match.documentTypeId) {
-      updateData.document_type = match.documentTypeId;
-    }
-  } catch (error) {
-    console.warn('[WARNING] applyDocumentFingerprint: Fingerprint-Check fehlgeschlagen, Klassifikation laeuft ohne ihn weiter:', error.message);
-  }
-}
-
-async function recordDocumentFingerprint(doc, correspondentId, documentTypeId, tagIds, content) {
-  if (!config.documentFingerprint.enabled || !correspondentId) {
-    return;
-  }
-  try {
-    await getDocumentFingerprintService().recordFingerprint({
-      documentId: doc.id,
-      correspondentId,
-      documentTypeId: documentTypeId ?? null,
-      tagIds: tagIds ?? [],
-      content
-    });
-  } catch (error) {
-    console.warn('[WARNING] recordDocumentFingerprint: Fingerprint konnte nicht gespeichert werden:', error.message);
-  }
-}
-
 
 // Cross-origin access is opt-in via ALLOWED_ORIGINS (see config/config.js).
 // Same-origin requests (the app's own browser UI) are never affected by CORS
@@ -388,23 +326,6 @@ async function buildUpdateData(analysis, doc) {
   return updateData;
 }
 
-async function saveDocumentChanges(docId, updateData, analysis, originalData) {
-  const { tags: originalTags, correspondent: originalCorrespondent, title: originalTitle } = originalData;
-  
-  await Promise.all([
-    documentModel.saveOriginalData(docId, originalTags, originalCorrespondent, originalTitle),
-    paperlessService.updateDocument(docId, updateData),
-    documentModel.addProcessedDocument(docId, updateData.title),
-    documentModel.addOpenAIMetrics(
-      docId, 
-      analysis.metrics.promptTokens,
-      analysis.metrics.completionTokens,
-      analysis.metrics.totalTokens
-    ),
-    documentModel.addToHistory(docId, updateData.tags, updateData.title, analysis.document.correspondent)
-  ]);
-}
-
 // Main scanning functions
 async function scanInitial() {
   try {
@@ -441,11 +362,9 @@ async function scanInitial() {
         // entschieden hat, damit Fingerprint-Check und -Record die richtige Identitaet und die
         // richtigen Tags verwenden.
         const fingerprintCorrespondentId = originalData.correspondent || updateData.correspondent;
-        await applyDocumentFingerprint(doc, updateData, content, fingerprintCorrespondentId);
-        const fingerprintTagIds = updateData.tags;
-        const fingerprintDocumentTypeId = updateData.document_type;
-        await saveDocumentChanges(doc.id, updateData, analysis, originalData);
-        await recordDocumentFingerprint(doc, fingerprintCorrespondentId, fingerprintDocumentTypeId, fingerprintTagIds, content);
+        await getDocumentProcessingPipeline().processAndSave({
+          doc, updateData, analysis, originalData, content, correspondentId: fingerprintCorrespondentId
+        });
       } catch (error) {
         console.error(`[ERROR] processing document ${doc.id}:`, error);
       }
@@ -493,11 +412,9 @@ async function scanDocuments() {
         // entschieden hat, damit Fingerprint-Check und -Record die richtige Identitaet und die
         // richtigen Tags verwenden.
         const fingerprintCorrespondentId = originalData.correspondent || updateData.correspondent;
-        await applyDocumentFingerprint(doc, updateData, content, fingerprintCorrespondentId);
-        const fingerprintTagIds = updateData.tags;
-        const fingerprintDocumentTypeId = updateData.document_type;
-        await saveDocumentChanges(doc.id, updateData, analysis, originalData);
-        await recordDocumentFingerprint(doc, fingerprintCorrespondentId, fingerprintDocumentTypeId, fingerprintTagIds, content);
+        await getDocumentProcessingPipeline().processAndSave({
+          doc, updateData, analysis, originalData, content, correspondentId: fingerprintCorrespondentId
+        });
       } catch (error) {
         console.error(`[ERROR] processing document ${doc.id}:`, error);
       }
