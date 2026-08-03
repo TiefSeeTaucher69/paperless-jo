@@ -1469,7 +1469,8 @@ router.post('/api/reset-documents', async (req, res) => {
  *                   example: "Error during document scan"
  */
 router.post('/api/scan/now', async (req, res) => {
-try {
+  let started = false;
+  try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
       console.log(`Setup not completed. Visit http://your-machine-ip:${process.env.PAPERLESS_AI_PORT || 3000}/setup to complete setup.`);
@@ -1481,6 +1482,7 @@ try {
       res.status(409).json({ message: 'A scan is already running' });
       return;
     }
+    started = true;
 
     const userId = await paperlessService.getOwnUserID();
     if (!userId) {
@@ -1536,7 +1538,9 @@ try {
       }
   } catch (error) {
     console.error('[ERROR] in startScanning:', error);
-    scanRunGuard.finish();
+    if (started) {
+      scanRunGuard.finish();
+    }
   }
 });
 
