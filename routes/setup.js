@@ -23,6 +23,7 @@ const customService = require('../services/customService.js');
 const config = require('../config/config.js');
 const { mapEntitySimilarityFields } = require('./settingsFormMapping');
 const { getInstance: getDocumentProcessingPipeline } = require('../services/documentProcessingPipeline');
+const scanRunGuard = require('../services/scanRunGuard');
 require('dotenv').config({ path: '../data/.env' });
 
 /**
@@ -1475,9 +1476,16 @@ try {
       return;
     }
 
+    if (!scanRunGuard.tryStart()) {
+      console.log('[DEBUG] Scan-now abgelehnt: es laeuft bereits ein Scan (AUDIT-014)');
+      res.status(409).json({ message: 'A scan is already running' });
+      return;
+    }
+
     const userId = await paperlessService.getOwnUserID();
     if (!userId) {
       console.error('Failed to get own user ID. Abort scanning.');
+      scanRunGuard.finish();
       return;
     }
     
@@ -1522,7 +1530,7 @@ try {
       } catch (error) {
         console.error('[ERROR]  during document scan:', error);
       } finally {
-        runningTask = false;
+        scanRunGuard.finish();
         console.log('[INFO] Task completed');
         res.send('Task completed');
       }
