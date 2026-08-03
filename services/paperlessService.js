@@ -156,6 +156,26 @@ class PaperlessService {
     }
   }
 
+  // AUDIT-006: ein Fingerprint-Treffer liefert IDs, die seit dem Speichern des Fingerprints in
+  // Paperless geloescht oder gemergt worden sein koennen - vor dem Uebernehmen wird deshalb
+  // gegen den aktuellen Bestand geprueft statt die ID ungeprueft in den PATCH zu geben (der
+  // sonst mit HTTP 400 fehlschlaegt und das gesamte Update verwirft, siehe AUDIT-006).
+  async hasTagId(id) {
+    await this.ensureTagCache();
+    for (const tag of this.tagCache.values()) {
+      if (tag.id === id) return true;
+    }
+    return false;
+  }
+
+  async hasDocumentTypeId(id) {
+    await this.ensureDocumentTypeCache();
+    for (const documentType of this.documentTypeCache.values()) {
+      if (documentType.id === id) return true;
+    }
+    return false;
+  }
+
   _getEntityResolver() {
     if (!this._entityResolverInstance) {
       const EntityStore = require('../models/entityStore');
