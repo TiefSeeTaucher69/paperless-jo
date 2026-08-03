@@ -1474,6 +1474,7 @@ router.post('/api/scan/now', async (req, res) => {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
       console.log(`Setup not completed. Visit http://your-machine-ip:${process.env.PAPERLESS_AI_PORT || 3000}/setup to complete setup.`);
+      res.status(400).json({ message: 'Setup not completed' });
       return;
     }
 
@@ -1488,6 +1489,7 @@ router.post('/api/scan/now', async (req, res) => {
     if (!userId) {
       console.error('Failed to get own user ID. Abort scanning.');
       scanRunGuard.finish();
+      res.status(500).json({ message: 'Failed to get own user ID' });
       return;
     }
     
@@ -1540,6 +1542,9 @@ router.post('/api/scan/now', async (req, res) => {
     console.error('[ERROR] in startScanning:', error);
     if (started) {
       scanRunGuard.finish();
+    }
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
     }
   }
 });
@@ -2365,11 +2370,10 @@ async function processQueue(customPrompt) {
 
         const { analysis, originalData, content } = result;
         const updateData = await buildUpdateData(analysis, doc);
-        // updateDocument() (innerhalb von saveDocumentChanges) verwirft updateData.correspondent
-        // ggf. zugunsten des bereits vorhandenen und merged updateData.tags mit den bestehenden
-        // Tags - beides mutiert updateData in place. Deshalb hier festhalten, was DIESER Lauf
-        // entschieden hat, damit Fingerprint-Check und -Record die richtige Identitaet und die
-        // richtigen Tags verwenden.
+        // updateDocument() (in DocumentProcessingPipeline#saveDocumentChanges) verwirft
+        // updateData.correspondent zugunsten des bereits vorhandenen - das mutiert updateData
+        // in place. Deshalb hier festhalten, was DIESER Lauf entschieden hat, damit processAndSave
+        // mit der richtigen Korrespondenten-Identitaet fuer den Fingerprint arbeitet.
         const fingerprintCorrespondentId = originalData.correspondent || updateData.correspondent;
         await getDocumentProcessingPipeline().processAndSave({
           doc, updateData, analysis, originalData, content, correspondentId: fingerprintCorrespondentId

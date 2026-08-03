@@ -360,11 +360,10 @@ async function scanInitial() {
 
         const { analysis, originalData, content } = result;
         const updateData = await buildUpdateData(analysis, doc);
-        // updateDocument() (innerhalb von saveDocumentChanges) verwirft updateData.correspondent
-        // ggf. zugunsten des bereits vorhandenen und merged updateData.tags mit den bestehenden
-        // Tags - beides mutiert updateData in place. Deshalb hier festhalten, was DIESER Lauf
-        // entschieden hat, damit Fingerprint-Check und -Record die richtige Identitaet und die
-        // richtigen Tags verwenden.
+        // updateDocument() (in DocumentProcessingPipeline#saveDocumentChanges) verwirft
+        // updateData.correspondent zugunsten des bereits vorhandenen - das mutiert updateData
+        // in place. Deshalb hier festhalten, was DIESER Lauf entschieden hat, damit processAndSave
+        // mit der richtigen Korrespondenten-Identitaet fuer den Fingerprint arbeitet.
         const fingerprintCorrespondentId = originalData.correspondent || updateData.correspondent;
         await getDocumentProcessingPipeline().processAndSave({
           doc, updateData, analysis, originalData, content, correspondentId: fingerprintCorrespondentId
@@ -411,11 +410,10 @@ async function scanDocuments() {
 
         const { analysis, originalData, content } = result;
         const updateData = await buildUpdateData(analysis, doc);
-        // updateDocument() (innerhalb von saveDocumentChanges) verwirft updateData.correspondent
-        // ggf. zugunsten des bereits vorhandenen und merged updateData.tags mit den bestehenden
-        // Tags - beides mutiert updateData in place. Deshalb hier festhalten, was DIESER Lauf
-        // entschieden hat, damit Fingerprint-Check und -Record die richtige Identitaet und die
-        // richtigen Tags verwenden.
+        // updateDocument() (in DocumentProcessingPipeline#saveDocumentChanges) verwirft
+        // updateData.correspondent zugunsten des bereits vorhandenen - das mutiert updateData
+        // in place. Deshalb hier festhalten, was DIESER Lauf entschieden hat, damit processAndSave
+        // mit der richtigen Korrespondenten-Identitaet fuer den Fingerprint arbeitet.
         const fingerprintCorrespondentId = originalData.correspondent || updateData.correspondent;
         await getDocumentProcessingPipeline().processAndSave({
           doc, updateData, analysis, originalData, content, correspondentId: fingerprintCorrespondentId

@@ -47,7 +47,7 @@ class EntityResolver {
           entityType: type, aliasNormalized: normalizedProposed,
           canonicalName: entity.name, canonicalId: entity.id, source: 'auto'
         })) {
-          console.error(`[ERROR] entityResolver: Alias "${normalizedProposed}" -> "${entity.name}" (${type}) konnte nicht gespeichert werden - Zuordnung wird fuer dieses Dokument angewendet, aber nicht gelernt; der naechste Lauf wiederholt Trigram/Judge fuer diesen Namen`);
+          console.error(`[ERROR] entityResolver: Alias "${normalizedProposed}" -> "${entity.name}" (${type}) konnte nicht gespeichert werden - Zuordnung wird fuer dieses Dokument angewendet, aber nicht gelernt; der naechste Lauf ermittelt die Zuordnung erneut ueber die Normalisierung statt ueber den Alias-Cache`);
         }
         return { action: 'map', id: entity.id, canonicalName: entity.name, via: 'normalized' };
       }

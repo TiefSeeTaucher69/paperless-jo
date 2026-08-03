@@ -108,6 +108,8 @@ test('merge loggt einen Fehler, wenn completeMerge fehlschlaegt, gibt aber das P
   const store = fakeStore();
   store.entries.set(1, { id: 1, status: 'open', entity_type: 'correspondent', proposed_id: 10, candidate_id: 20, proposed_normalized: 'stadtwerke', candidate_name: 'Stadtwerke GmbH' });
   store.completeMerge = () => false;
+  const mergeLogCalls = [];
+  store.insertMergeLog = (args) => { mergeLogCalls.push(args); return true; };
   const paperlessService = { mergeEntity: async () => ({ affectedCount: 3, documentIds: [1, 2, 3], deleted: true, chunksCompleted: 1, chunksTotal: 1 }) };
   const service = new ReviewQueueService({ store, paperlessService });
 
@@ -123,6 +125,10 @@ test('merge loggt einen Fehler, wenn completeMerge fehlschlaegt, gibt aber das P
 
   assert.strictEqual(result.deleted, true);
   assert.ok(errorCalls.some(msg => msg.includes('Queue-Eintrag 1')), 'erwartete eine console.error-Meldung mit dem Queue-Eintrag');
+  assert.strictEqual(mergeLogCalls.length, 1, 'erwartete einen eigenstaendigen insertMergeLog-Fallback ausserhalb der fehlgeschlagenen Transaktion');
+  assert.strictEqual(mergeLogCalls[0].status, 'completed');
+  assert.strictEqual(mergeLogCalls[0].affectedCount, 3);
+  assert.ok(mergeLogCalls[0].errorMessage.includes('completeMerge'), 'errorMessage sollte erklaeren, warum dieser Log-Eintrag ausserhalb der Transaktion entstand');
 });
 
 test('merge persistiert einen fehlgeschlagenen Merge-Log-Eintrag, wirft weiter und aendert weder Alias noch Status', async () => {
