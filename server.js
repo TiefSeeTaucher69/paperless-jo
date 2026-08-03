@@ -11,6 +11,7 @@ const { ensureJwtSecret } = require('./services/jwtSecretGuard');
 const setupRoutes = require('./routes/setup');
 const reviewRoutes = require('./routes/review');
 const { getInstance: getDocumentProcessingPipeline } = require('./services/documentProcessingPipeline');
+const scanRunGuard = require('./services/scanRunGuard');
 
 // Add environment variables for RAG service if not already set
 process.env.RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://localhost:8000';
@@ -37,7 +38,6 @@ const txtLogger = new Logger({
 });
 
 const app = express();
-let runningTask = false;
 
 // Cross-origin access is opt-in via ALLOWED_ORIGINS (see config/config.js).
 // Same-origin requests (the app's own browser UI) are never affected by CORS
@@ -328,6 +328,10 @@ async function buildUpdateData(analysis, doc) {
 
 // Main scanning functions
 async function scanInitial() {
+  if (!scanRunGuard.tryStart()) {
+    console.log('[DEBUG] Initial scan uebersprungen: es laeuft bereits ein Scan');
+    return;
+  }
   try {
     const isConfigured = await setupService.isConfigured();
     if (!isConfigured) {
@@ -345,7 +349,7 @@ async function scanInitial() {
     //get existing correspondent list
     existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
     let existingDocumentTypesList = existingDocumentTypes.map(docType => docType.name);
-    
+
     // Extract tag names from tag objects
     const existingTagNames = existingTags.map(tag => tag.name);
 
@@ -371,16 +375,17 @@ async function scanInitial() {
     }
   } catch (error) {
     console.error('[ERROR] during initial document scan:', error);
+  } finally {
+    scanRunGuard.finish();
   }
 }
 
 async function scanDocuments() {
-  if (runningTask) {
+  if (!scanRunGuard.tryStart()) {
     console.log('[DEBUG] Task already running');
     return;
   }
 
-  runningTask = true;
   try {
     let [existingTags, documents, ownUserId, existingCorrespondentList, existingDocumentTypes] = await Promise.all([
       paperlessService.getTags(),
@@ -422,7 +427,7 @@ async function scanDocuments() {
   } catch (error) {
     console.error('[ERROR]  during document scan:', error);
   } finally {
-    runningTask = false;
+    scanRunGuard.finish();
     console.log('[INFO] Task completed');
   }
 }
