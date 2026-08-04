@@ -36,15 +36,45 @@ const ENTITY_LISTERS = {
   document_type: () => paperlessService.listDocumentTypesNames()
 };
 
+// AUDIT-030: feste Whitelists statt Query-Werte ungeprueft weiterzureichen.
+const ENTITY_TYPES = Object.keys(ENTITY_LISTERS);
+const QUEUE_SORTS = ['created_at_asc', 'created_at_desc', 'similarity_asc', 'similarity_desc'];
+const REVIEW_PAGE_SIZE = 25;
+
 router.get('/review', isAuthenticated, (req, res) => {
   const { reviewQueueService } = getServices();
+
+  const entityType = ENTITY_TYPES.includes(req.query.entityType) ? req.query.entityType : null;
+  const sort = QUEUE_SORTS.includes(req.query.sort) ? req.query.sort : 'created_at_asc';
+  const requestedPage = Math.max(1, parseInt(req.query.page, 10) || 1);
+
+  const total = reviewQueueService.countOpen({ entityType });
+  const totalPages = Math.max(1, Math.ceil(total / REVIEW_PAGE_SIZE));
+  const currentPage = Math.min(requestedPage, totalPages);
+
   const baseURL = (process.env.PAPERLESS_API_URL || '').replace(/\/api$/, '');
-  const queue = reviewQueueService.listOpen().map(entry => ({
+  const queue = reviewQueueService.listOpen({
+    entityType, sort, limit: REVIEW_PAGE_SIZE, offset: (currentPage - 1) * REVIEW_PAGE_SIZE
+  }).map(entry => ({
     ...entry,
     documentLink: entry.document_id ? `${baseURL}/documents/${entry.document_id}/` : null
   }));
 
-  res.render('review', { queue, version: config.PAPERLESS_AI_VERSION || ' ' });
+  const pageUrl = (targetPage) => {
+    const params = new URLSearchParams();
+    if (entityType) params.set('entityType', entityType);
+    if (sort !== 'created_at_asc') params.set('sort', sort);
+    params.set('page', targetPage);
+    return `/review?${params.toString()}`;
+  };
+
+  res.render('review', {
+    queue, version: config.PAPERLESS_AI_VERSION || ' ',
+    entityType, sort, entityTypes: ENTITY_TYPES,
+    currentPage, totalPages, total,
+    prevPageUrl: pageUrl(Math.max(1, currentPage - 1)),
+    nextPageUrl: pageUrl(Math.min(totalPages, currentPage + 1))
+  });
 });
 
 router.get('/api/review/:id/documents', authenticateJWT, async (req, res) => {
@@ -125,6 +155,24 @@ router.post('/api/review/backfill/:entityType', authenticateJWT, async (req, res
   } catch (error) {
     console.error(`[ERROR] Altbestands-Durchlauf fuer "${entityType}" fehlgeschlagen:`, error.message);
     res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/api/review/bulk-reject', authenticateJWT, (req, res) => {
+  const entityType = ENTITY_TYPES.includes(req.body?.entityType) ? req.body.entityType : null;
+  const maxSimilarity = Number(req.body?.maxSimilarity);
+
+  if (!Number.isFinite(maxSimilarity) || maxSimilarity < 0 || maxSimilarity > 1) {
+    return res.status(400).json({ message: 'maxSimilarity must be a number between 0 and 1' });
+  }
+
+  try {
+    const { reviewQueueService } = getServices();
+    const rejected = reviewQueueService.bulkReject({ entityType, maxSimilarity });
+    res.json({ rejected });
+  } catch (error) {
+    console.error('[ERROR] Massen-Ablehnung fehlgeschlagen:', error.message);
+    res.status(400).json({ message: error.message });
   }
 });
 

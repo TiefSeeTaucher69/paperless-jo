@@ -64,6 +64,41 @@
                     <button class="backfill-btn px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors" data-entity-type="document_type">Scan existing document types</button>
                 </div>
 
+                <div class="material-card mb-6">
+                    <form method="GET" action="/review" class="flex flex-wrap items-end gap-4 p-4">
+                        <div>
+                            <label class="block text-sm mb-1" for="entityType">Type</label>
+                            <select name="entityType" id="entityType" class="border rounded px-2 py-1">
+                                <option value="">All</option>
+                                <% entityTypes.forEach(function(type) { %>
+                                <option value="<%= type %>" <%= entityType === type ? 'selected' : '' %>><%= type %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1" for="sort">Sort</label>
+                            <select name="sort" id="sort" class="border rounded px-2 py-1">
+                                <option value="created_at_asc" <%= sort === 'created_at_asc' ? 'selected' : '' %>>Oldest first</option>
+                                <option value="created_at_desc" <%= sort === 'created_at_desc' ? 'selected' : '' %>>Newest first</option>
+                                <option value="similarity_asc" <%= sort === 'similarity_asc' ? 'selected' : '' %>>Similarity: low to high</option>
+                                <option value="similarity_desc" <%= sort === 'similarity_desc' ? 'selected' : '' %>>Similarity: high to low</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">Apply</button>
+                        <span class="text-sm text-gray-400"><%= total %> open entries</span>
+                    </form>
+                </div>
+
+                <div class="material-card mb-6">
+                    <div class="flex flex-wrap items-end gap-4 p-4">
+                        <div>
+                            <label class="block text-sm mb-1" for="bulkRejectThreshold">Reject all below similarity</label>
+                            <input type="number" id="bulkRejectThreshold" step="0.01" min="0" max="1" value="0.70" class="border rounded px-2 py-1 w-24">
+                        </div>
+                        <button id="bulkRejectBtn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Reject matches below threshold</button>
+                    </div>
+                </div>
+
                 <div class="material-card">
                     <div class="overflow-x-auto">
                         <table class="w-full" id="reviewTable">
@@ -113,6 +148,12 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                <div class="flex justify-between items-center mt-4">
+                    <a href="<%= prevPageUrl %>" class="px-3 py-2 <%= currentPage <= 1 ? 'pointer-events-none text-gray-300' : 'text-blue-500 hover:underline' %>">&laquo; Previous</a>
+                    <span class="text-sm text-gray-400">Page <%= currentPage %> of <%= totalPages %></span>
+                    <a href="<%= nextPageUrl %>" class="px-3 py-2 <%= currentPage >= totalPages ? 'pointer-events-none text-gray-300' : 'text-blue-500 hover:underline' %>">Next &raquo;</a>
                 </div>
             </div>
         </main>

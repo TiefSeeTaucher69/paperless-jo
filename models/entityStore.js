@@ -4,6 +4,16 @@ const path = require('path');
 const fs = require('fs');
 const { normalizeForType } = require('../services/entityNormalizer');
 
+// AUDIT-030: Whitelist statt direkter String-Interpolation des sort-Parameters (der aus der
+// Review-UI kommt) - ORDER BY-Spalten lassen sich in SQLite nicht als gebundene Parameter
+// uebergeben, deshalb hier ein fester, serverseitiger Satz erlaubter Ausdruecke.
+const QUEUE_SORT_COLUMNS = {
+  created_at_asc: 'created_at ASC',
+  created_at_desc: 'created_at DESC',
+  similarity_asc: 'similarity ASC',
+  similarity_desc: 'similarity DESC'
+};
+
 class EntityStore {
   constructor(dbPath) {
     const resolvedPath = dbPath || path.join(process.cwd(), 'data', 'entities.db');
@@ -280,11 +290,21 @@ class EntityStore {
     }
   }
 
-  listOpenQueueEntries() {
+  listOpenQueueEntries({ entityType = null, sort = 'created_at_asc', limit = null, offset = 0 } = {}) {
     try {
-      return this.db.prepare(`
-        SELECT * FROM entity_review_queue WHERE status = 'open' ORDER BY created_at ASC
-      `).all();
+      const orderBy = QUEUE_SORT_COLUMNS[sort] || QUEUE_SORT_COLUMNS.created_at_asc;
+      const params = [];
+      let sql = `SELECT * FROM entity_review_queue WHERE status = 'open'`;
+      if (entityType) {
+        sql += ` AND entity_type = ?`;
+        params.push(entityType);
+      }
+      sql += ` ORDER BY ${orderBy}`;
+      if (limit != null) {
+        sql += ` LIMIT ? OFFSET ?`;
+        params.push(limit, offset);
+      }
+      return this.db.prepare(sql).all(...params);
     } catch (error) {
       console.error('[ERROR] entityStore.listOpenQueueEntries:', error.message);
       return [];
@@ -316,12 +336,36 @@ class EntityStore {
     }
   }
 
-  countOpenQueueEntries() {
+  countOpenQueueEntries({ entityType = null } = {}) {
     try {
-      const row = this.db.prepare(`SELECT COUNT(*) as count FROM entity_review_queue WHERE status = 'open'`).get();
-      return row.count;
+      const params = [];
+      let sql = `SELECT COUNT(*) as count FROM entity_review_queue WHERE status = 'open'`;
+      if (entityType) {
+        sql += ` AND entity_type = ?`;
+        params.push(entityType);
+      }
+      return this.db.prepare(sql).get(...params).count;
     } catch (error) {
       console.error('[ERROR] entityStore.countOpenQueueEntries:', error.message);
+      return 0;
+    }
+  }
+
+  // AUDIT-030: Massenaktion fuer die Review-UI - lehnt alle offenen Eintraege unterhalb einer
+  // Aehnlichkeits-Schwelle ab, optional gefiltert auf einen Entity-Typ. similarity traegt seit
+  // AUDIT-029 nur noch die Trigram-Skala, ist also fuer diesen Vergleich unzweideutig.
+  bulkRejectBelowSimilarity({ entityType = null, maxSimilarity }) {
+    try {
+      const params = [new Date().toISOString(), maxSimilarity];
+      let sql = `UPDATE entity_review_queue SET status = 'rejected', resolved_at = ? WHERE status = 'open' AND similarity < ?`;
+      if (entityType) {
+        sql += ` AND entity_type = ?`;
+        params.push(entityType);
+      }
+      const result = this.db.prepare(sql).run(...params);
+      return result.changes;
+    } catch (error) {
+      console.error('[ERROR] entityStore.bulkRejectBelowSimilarity:', error.message);
       return 0;
     }
   }

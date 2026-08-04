@@ -45,6 +45,7 @@ class ReviewManager {
         document.querySelectorAll('.backfill-btn').forEach(btn => {
             btn.addEventListener('click', () => this.backfill(btn.dataset.entityType, btn));
         });
+        document.getElementById('bulkRejectBtn')?.addEventListener('click', () => this.bulkReject());
 
         this.modal?.querySelector('.modal-overlay')?.addEventListener('click', () => this.hideModal());
         this.modal?.querySelector('.modal-close')?.addEventListener('click', () => this.hideModal());
@@ -185,6 +186,40 @@ class ReviewManager {
         } finally {
             button.disabled = false;
             button.textContent = originalText;
+        }
+    }
+
+    async bulkReject() {
+        const thresholdInput = document.getElementById('bulkRejectThreshold');
+        const maxSimilarity = parseFloat(thresholdInput.value);
+        if (!Number.isFinite(maxSimilarity) || maxSimilarity < 0 || maxSimilarity > 1) {
+            alert('Enter a similarity threshold between 0 and 1.');
+            return;
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const entityType = params.get('entityType') || null;
+        const scope = entityType ? ` (type: ${entityType})` : '';
+        if (!confirm(`Reject all open entries with similarity below ${maxSimilarity}${scope}? This cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/review/bulk-reject', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+                body: JSON.stringify({ entityType, maxSimilarity })
+            });
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.message || 'Bulk reject failed');
+            }
+            const result = await response.json();
+            alert(`${result.rejected} entries rejected.`);
+            window.location.reload();
+        } catch (error) {
+            console.error('Bulk reject failed:', error);
+            alert(error.message || 'Bulk reject failed. Please try again.');
         }
     }
 

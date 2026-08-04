@@ -228,6 +228,67 @@ test('countOpenQueueEntries zaehlt nur offene Eintraege', () => {
   assert.strictEqual(store.countOpenQueueEntries(), 1);
 });
 
+test('listOpenQueueEntries filtert nach entityType (AUDIT-030)', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Rechnung', proposedId: 1, candidateName: 'Rechnungen', candidateId: 2, similarity: 0.8, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  store.insertQueueEntry({ entityType: 'correspondent', proposedName: 'Stadtwerke A', proposedId: 3, candidateName: 'Stadtwerke B', candidateId: 4, similarity: 0.75, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+
+  const tagsOnly = store.listOpenQueueEntries({ entityType: 'tag' });
+
+  assert.strictEqual(tagsOnly.length, 1);
+  assert.strictEqual(tagsOnly[0].entity_type, 'tag');
+});
+
+test('listOpenQueueEntries sortiert nach similarity, aufsteigend und absteigend (AUDIT-030)', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Niedrig', proposedId: 1, candidateName: 'Kandidat A', candidateId: 2, similarity: 0.3, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Hoch', proposedId: 3, candidateName: 'Kandidat B', candidateId: 4, similarity: 0.9, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+
+  const ascending = store.listOpenQueueEntries({ sort: 'similarity_asc' });
+  assert.deepStrictEqual(ascending.map(e => e.proposed_name), ['Niedrig', 'Hoch']);
+
+  const descending = store.listOpenQueueEntries({ sort: 'similarity_desc' });
+  assert.deepStrictEqual(descending.map(e => e.proposed_name), ['Hoch', 'Niedrig']);
+});
+
+test('listOpenQueueEntries begrenzt mit limit/offset fuer Pagination (AUDIT-030)', () => {
+  const store = freshStore();
+  for (let i = 1; i <= 5; i++) {
+    store.insertQueueEntry({ entityType: 'tag', proposedName: `Eintrag ${i}`, proposedId: i, candidateName: `Kandidat ${i}`, candidateId: i + 100, similarity: 0.5, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  }
+
+  const firstPage = store.listOpenQueueEntries({ limit: 2, offset: 0 });
+  const secondPage = store.listOpenQueueEntries({ limit: 2, offset: 2 });
+
+  assert.strictEqual(firstPage.length, 2);
+  assert.strictEqual(secondPage.length, 2);
+  assert.notStrictEqual(firstPage[0].id, secondPage[0].id);
+});
+
+test('countOpenQueueEntries filtert nach entityType (AUDIT-030)', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Rechnung', proposedId: 1, candidateName: 'Rechnungen', candidateId: 2, similarity: 0.8, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  store.insertQueueEntry({ entityType: 'correspondent', proposedName: 'Stadtwerke A', proposedId: 3, candidateName: 'Stadtwerke B', candidateId: 4, similarity: 0.75, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+
+  assert.strictEqual(store.countOpenQueueEntries({ entityType: 'tag' }), 1);
+  assert.strictEqual(store.countOpenQueueEntries(), 2);
+});
+
+test('bulkRejectBelowSimilarity lehnt nur offene Eintraege unterhalb der Schwelle ab, optional gefiltert nach entityType (AUDIT-030)', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Niedrig', proposedId: 1, candidateName: 'Kandidat A', candidateId: 2, similarity: 0.3, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'Hoch', proposedId: 3, candidateName: 'Kandidat B', candidateId: 4, similarity: 0.9, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  store.insertQueueEntry({ entityType: 'correspondent', proposedName: 'Niedrig2', proposedId: 5, candidateName: 'Kandidat C', candidateId: 6, similarity: 0.2, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+
+  const rejectedCount = store.bulkRejectBelowSimilarity({ entityType: 'tag', maxSimilarity: 0.5 });
+
+  assert.strictEqual(rejectedCount, 1);
+  const remaining = store.listOpenQueueEntries();
+  assert.strictEqual(remaining.length, 2);
+  assert.ok(remaining.some(e => e.proposed_name === 'Hoch'));
+  assert.ok(remaining.some(e => e.proposed_name === 'Niedrig2'));
+});
+
 test('getEmbedding liefert null, wenn nichts gespeichert ist', () => {
   const store = freshStore();
   assert.strictEqual(store.getEmbedding('tag', 1), null);

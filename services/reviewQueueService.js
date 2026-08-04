@@ -4,8 +4,19 @@ class ReviewQueueService {
     this.paperlessService = paperlessService;
   }
 
-  listOpen() {
-    return this.store.listOpenQueueEntries();
+  listOpen(options = {}) {
+    return this.store.listOpenQueueEntries(options);
+  }
+
+  countOpen(options = {}) {
+    return this.store.countOpenQueueEntries(options);
+  }
+
+  bulkReject({ entityType = null, maxSimilarity }) {
+    if (!Number.isFinite(maxSimilarity)) {
+      throw new Error('maxSimilarity must be a finite number');
+    }
+    return this.store.bulkRejectBelowSimilarity({ entityType, maxSimilarity });
   }
 
   _getEntryOrThrow(id) {
