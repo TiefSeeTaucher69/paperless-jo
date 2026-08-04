@@ -440,7 +440,7 @@ The custom_fields are optional; only fill in values you actually find in the doc
      * @param {string} id - Document ID
      */
     async _handleThumbnailCaching(id) {
-        if (!id) return;
+        if (!id || !/^\d+$/.test(String(id))) return;
 
         const cachePath = path.join(config.thumbnailCacheDir, `${id}.png`);
         try {
