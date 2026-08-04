@@ -7,11 +7,15 @@ const { normalizeForType } = require('../services/entityNormalizer');
 // AUDIT-030: Whitelist statt direkter String-Interpolation des sort-Parameters (der aus der
 // Review-UI kommt) - ORDER BY-Spalten lassen sich in SQLite nicht als gebundene Parameter
 // uebergeben, deshalb hier ein fester, serverseitiger Satz erlaubter Ausdruecke.
+// Finding 1 (final review): jede Sortierung braucht die eindeutige id als zweites Kriterium,
+// sonst ist die Reihenfolge gleicher Werte (created_at-Kollisionen beim Backfill, gleiche
+// gerundete similarity) laut SQL-Standard nicht stabil und LIMIT/OFFSET-Pagination kann Zeilen
+// ueberspringen oder doppelt liefern.
 const QUEUE_SORT_COLUMNS = {
-  created_at_asc: 'created_at ASC',
-  created_at_desc: 'created_at DESC',
-  similarity_asc: 'similarity ASC',
-  similarity_desc: 'similarity DESC'
+  created_at_asc: 'created_at ASC, id ASC',
+  created_at_desc: 'created_at DESC, id ASC',
+  similarity_asc: 'similarity ASC, id ASC',
+  similarity_desc: 'similarity DESC, id ASC'
 };
 
 class EntityStore {

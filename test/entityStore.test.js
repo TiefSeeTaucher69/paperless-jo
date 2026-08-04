@@ -251,6 +251,47 @@ test('listOpenQueueEntries sortiert nach similarity, aufsteigend und absteigend 
   assert.deepStrictEqual(descending.map(e => e.proposed_name), ['Hoch', 'Niedrig']);
 });
 
+test('listOpenQueueEntries pagiert stabil bei gleichem similarity-Wert dank eindeutigem id-Tiebreaker in ORDER BY (Finding 1, final review)', () => {
+  const store = freshStore();
+  for (let i = 1; i <= 4; i++) {
+    store.insertQueueEntry({ entityType: 'tag', proposedName: `Tie ${i}`, proposedId: i, candidateName: `Kandidat ${i}`, candidateId: i + 300, similarity: 0.42, llmVerdict: null, llmReason: null, status: 'open', documentId: null });
+  }
+
+  // Verhaltens-Nachweis: Pagination ueber vier Zeilen mit identischem similarity-Wert darf die
+  // Vereinigung aller Seiten weder verkleinern (Zeile verschluckt) noch vergroessern (Zeile
+  // dupliziert).
+  const all = store.listOpenQueueEntries({ sort: 'similarity_desc' });
+  const allIds = all.map(e => e.id).sort((a, b) => a - b);
+  assert.strictEqual(allIds.length, 4);
+
+  const firstPage = store.listOpenQueueEntries({ sort: 'similarity_desc', limit: 2, offset: 0 });
+  const secondPage = store.listOpenQueueEntries({ sort: 'similarity_desc', limit: 2, offset: 2 });
+  const pagedIds = [...firstPage.map(e => e.id), ...secondPage.map(e => e.id)].sort((a, b) => a - b);
+  assert.deepStrictEqual(pagedIds, allIds, 'Pagination ueber gleich-similarity Zeilen darf keine Zeile ueberspringen oder duplizieren');
+
+  // Direkter Nachweis der Ursache, weil obiges Verhalten in der aktuellen better-sqlite3-Version
+  // schon zufaellig (Scan-Reihenfolge = rowid-Reihenfolge) stabil sein kann, ohne durch die Query
+  // selbst garantiert zu sein: Wir fangen das tatsaechlich ausgefuehrte SQL ab und pruefen, dass
+  // jede der vier QUEUE_SORT_COLUMNS-Varianten "id" als zweites Sortierkriterium enthaelt.
+  const originalPrepare = store.db.prepare.bind(store.db);
+  const capturedSql = [];
+  store.db.prepare = (sql) => {
+    capturedSql.push(sql);
+    return originalPrepare(sql);
+  };
+  try {
+    for (const sort of ['created_at_asc', 'created_at_desc', 'similarity_asc', 'similarity_desc']) {
+      store.listOpenQueueEntries({ sort });
+    }
+  } finally {
+    store.db.prepare = originalPrepare;
+  }
+  assert.strictEqual(capturedSql.length, 4);
+  for (const sql of capturedSql) {
+    assert.match(sql, /ORDER BY [a-z_]+ (ASC|DESC), id ASC/i, `SQL fehlt eindeutiger id-Tiebreaker: ${sql}`);
+  }
+});
+
 test('listOpenQueueEntries begrenzt mit limit/offset fuer Pagination (AUDIT-030)', () => {
   const store = freshStore();
   for (let i = 1; i <= 5; i++) {
