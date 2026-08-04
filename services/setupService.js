@@ -424,7 +424,7 @@ class SetupService {
   async hasEnvConfig() {
     try {
       await fs.access(this.envPath, fs.constants.F_OK);
-    } catch (err) {
+    } catch {
       return false;
     }
     const config = await this.loadConfig();
