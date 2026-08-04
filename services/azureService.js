@@ -400,39 +400,6 @@ class AzureOpenAIService {
       this.initialize();
 
       if (!this.client) {
-        throw new Error('AzureOpenAI client not initialized - missing API key');
-      }
-
-      const model = process.env.AZURE_DEPLOYMENT_NAME;
-
-      const response = await this.client.chat.completions.create({
-        model: model,
-        messages: [
-          {
-            role: "user",
-            content: "Test"
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 10
-      });
-
-      if (!response?.choices?.[0]?.message?.content) {
-        throw new Error('Invalid API response structure');
-      }
-
-      return { status: 'ok', model: model };
-    } catch (error) {
-      console.error('Error checking AzureOpenAI status:', error);
-      return { status: 'error', error: error.message };
-    }
-  }
-
-  async checkStatus() {
-    try {
-      this.initialize();
-
-      if (!this.client) {
         throw new Error('Azure OpenAI client not initialized - missing API key');
       }
 
