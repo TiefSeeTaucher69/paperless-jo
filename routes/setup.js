@@ -3613,7 +3613,7 @@ router.post('/setup', express.json(), async (req, res) => {
     // thing the handler does, before any paperlessService/documentModel
     // write path is reached.
     const [isEnvConfigured, existingUsers] = await Promise.all([
-      setupService.isConfigured(),
+      setupService.hasEnvConfig(),
       documentModel.getUsers()
     ]);
     const hasUsers = Array.isArray(existingUsers) && existingUsers.length > 0;

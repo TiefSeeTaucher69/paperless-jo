@@ -412,6 +412,24 @@ class SetupService {
     this.configured = false;
     return false;
   }
+
+  // Cheap, local, non-memoized check for whether initial setup has been
+  // persisted to disk. Unlike isConfigured(), this makes no network calls
+  // and never caches a stale result -- used by POST /setup's security gate,
+  // which must reflect the current on-disk state immediately (including the
+  // instant saveConfig() finishes writing .env), not a network-availability-
+  // dependent value that can get permanently stuck at false for the rest of
+  // the process if Paperless-ngx or the AI provider was briefly unreachable
+  // the first time isConfigured() happened to run.
+  async hasEnvConfig() {
+    try {
+      await fs.access(this.envPath, fs.constants.F_OK);
+    } catch (err) {
+      return false;
+    }
+    const config = await this.loadConfig();
+    return !!(config && config.PAPERLESS_API_URL);
+  }
 }
 
 const setupServiceSingleton = new SetupService();
