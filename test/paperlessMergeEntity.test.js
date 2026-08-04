@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const paperlessService = require('../services/paperlessService');
+const config = require('../config/config');
 
 function withMockClient(mockClient, fn) {
   const original = paperlessService.client;
@@ -340,13 +341,16 @@ test('mergeEntity ruft die Fingerprint-Invalidierung bei dryRun=true NICHT auf',
 });
 
 test('getOpenReviewQueueCount liefert die Anzahl offener Queue-Eintraege', () => {
-  const original = paperlessService._entityResolverInstance;
+  const originalInstance = paperlessService._entityResolverInstance;
+  const originalEnabled = config.entityResolver.enabled;
+  config.entityResolver.enabled = true;
   paperlessService._entityResolverInstance = { store: { countOpenQueueEntries: () => 3 } };
 
   try {
     assert.strictEqual(paperlessService.getOpenReviewQueueCount(), 3);
   } finally {
-    paperlessService._entityResolverInstance = original;
+    paperlessService._entityResolverInstance = originalInstance;
+    config.entityResolver.enabled = originalEnabled;
   }
 });
 
