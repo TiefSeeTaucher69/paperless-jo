@@ -208,6 +208,13 @@ module.exports = {
     enabled: parseEnvBoolean(process.env.DOCUMENT_FINGERPRINT_ENABLED, 'no') === 'yes',
     similarityThreshold: documentFingerprintSimilarityThreshold
   },
+  // AUDIT-018: full document text, correspondent names, and the LLM response
+  // were unconditionally appended to logs/prompt.txt on every analysis.
+  // Off by default -- an operator opts in only when they need to debug
+  // prompt behaviour, not by default in normal operation.
+  promptLogging: {
+    enabled: parseEnvBoolean(process.env.PROMPT_LOGGING_ENABLED, 'no') === 'yes'
+  },
   security: {
     allowedOrigins
   },
