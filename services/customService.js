@@ -39,20 +39,22 @@ class CustomOpenAIService {
       }
 
       // Handle thumbnail caching
-      try {
-        await fs.access(cachePath);
-        console.log('[DEBUG] Thumbnail already cached');
-      } catch (err) {
-        console.log('Thumbnail not cached, fetching from Paperless');
+      if (id && /^\d+$/.test(String(id))) {
+        try {
+          await fs.access(cachePath);
+          console.log('[DEBUG] Thumbnail already cached');
+        } catch (err) {
+          console.log('Thumbnail not cached, fetching from Paperless');
 
-        const thumbnailData = await paperlessService.getThumbnailImage(id);
+          const thumbnailData = await paperlessService.getThumbnailImage(id);
 
-        if (!thumbnailData) {
-          console.warn('Thumbnail nicht gefunden');
+          if (!thumbnailData) {
+            console.warn('Thumbnail nicht gefunden');
+          }
+
+          await fs.mkdir(path.dirname(cachePath), { recursive: true });
+          await fs.writeFile(cachePath, thumbnailData);
         }
-
-        await fs.mkdir(path.dirname(cachePath), { recursive: true });
-        await fs.writeFile(cachePath, thumbnailData);
       }
 
       // Format existing tags
