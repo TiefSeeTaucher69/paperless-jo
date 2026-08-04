@@ -271,3 +271,14 @@ test('findCandidates ordnet nach created_at, nicht nach Einfuegereihenfolge - ei
     store.close();
   }
 });
+
+test('_bufferToVector wirft RangeError statt still falsche Werte zu liefern, wenn byteOffset kein Vielfaches von 4 ist (AUDIT-026)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    const raw = new ArrayBuffer(16);
+    const misaligned = Buffer.from(raw, 1, 12); // byteOffset=1, kein Vielfaches von 4
+    assert.throws(() => store._bufferToVector(misaligned), RangeError);
+  } finally {
+    store.close();
+  }
+});

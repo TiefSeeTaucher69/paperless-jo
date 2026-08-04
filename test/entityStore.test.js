@@ -245,6 +245,32 @@ test('upsertEmbedding und getEmbedding roundtrip mit Float32-Praezision', () => 
   [0.1, 0.2, 0.3].forEach((v, i) => assert.ok(Math.abs(found.vector[i] - v) < 1e-6));
 });
 
+test('Float32-Rundung bleibt unter 1e-6 pro Komponente (AUDIT-026)', () => {
+  const store = freshStore();
+  const original = [0.123456789, -0.987654321, 0.333333333];
+  store.upsertEmbedding({ entityType: 'tag', id: 9, name: 'Praezisionstest', model: 'bge-m3', vector: original });
+
+  const found = store.getEmbedding('tag', 9);
+  found.vector.forEach((value, i) => {
+    assert.ok(Math.abs(value - original[i]) < 1e-6, `Index ${i}: ${value} weicht zu stark von ${original[i]} ab`);
+  });
+});
+
+test('SQLite-BLOB-Rueckgabe ist auch fuer kleine Vektoren 4-Byte-ausgerichtet (AUDIT-026: dokumentierte Grundannahme)', () => {
+  const store = freshStore();
+  store.upsertEmbedding({ entityType: 'tag', id: 1, name: 'Klein', model: 'bge-m3', vector: [1, 2] }); // 8-Byte-BLOB
+  const row = store.db.prepare(`SELECT vector FROM entity_embeddings WHERE entity_type = 'tag' AND entity_id = 1`).get();
+  assert.strictEqual(row.vector.byteOffset % 4, 0);
+  assert.doesNotThrow(() => store._bufferToVector(row.vector));
+});
+
+test('_bufferToVector wirft RangeError statt still falsche Werte zu liefern, wenn byteOffset kein Vielfaches von 4 ist (AUDIT-026)', () => {
+  const store = freshStore();
+  const raw = new ArrayBuffer(16);
+  const misaligned = Buffer.from(raw, 1, 12); // byteOffset=1, kein Vielfaches von 4
+  assert.throws(() => store._bufferToVector(misaligned), RangeError);
+});
+
 test('UNIQUE(entity_type, entity_id): erneutes Upsert ueberschreibt statt zu duplizieren', () => {
   const store = freshStore();
   store.upsertEmbedding({ entityType: 'tag', id: 1, name: 'Rechnung', model: 'bge-m3', vector: [1, 0] });
