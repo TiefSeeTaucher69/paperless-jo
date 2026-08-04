@@ -31,12 +31,15 @@ function delay(ms) {
 
 // AUDIT-028 Review-Fix: nur transiente Fehler rechtfertigen einen Retry. Ein axios-Fehler ohne
 // .response ist ein Netzwerk-/Timeout-Fehler (kann beim zweiten Versuch verschwinden); ein 5xx
-// ist ein serverseitiger Fehler, moeglicherweise voruebergehend. Ein 4xx bedeutet dagegen, dass
+// ist ein serverseitiger Fehler, moeglicherweise voruebergehend. 429 (Rate Limit) und 408
+// (Request Timeout) sind ebenfalls transient, auch wenn sie technisch 4xx sind - ein
+// vorgelagerter Reverse-Proxy vor Ollama kann beides senden. Andere 4xx bedeuten dagegen, dass
 // die Anfrage selbst abgelehnt wurde - das aendert sich beim identischen zweiten Versuch nicht,
 // ein Retry wuerde nur unnoetig 300ms plus einen zweiten Timeout kosten.
 function isTransientError(error) {
   if (!error.response) return true;
-  return error.response.status >= 500;
+  const status = error.response.status;
+  return status >= 500 || status === 429 || status === 408;
 }
 
 class EntityJudge {
