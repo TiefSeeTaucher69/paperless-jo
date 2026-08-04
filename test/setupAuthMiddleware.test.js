@@ -162,11 +162,46 @@ test('isAuthenticated -> csrfProtection composition: cookie is set, POST without
 // (routes/setup.js:1936) also applies to POST /setup, before any write path
 // is touched.
 test('POST /setup on an already-configured instance is blocked with 403 and never touches write paths (NACHAUDIT-01)', async () => {
-  const originalIsConfigured = setupService.isConfigured;
+  const originalHasEnvConfig = setupService.hasEnvConfig;
   const originalGetUsers = documentModel.getUsers;
   const originalInitWithCreds = paperlessService.initializeWithCredentials;
 
-  setupService.isConfigured = async () => true;
+  setupService.hasEnvConfig = async () => true;
+  documentModel.getUsers = async () => [{ id: 1, username: 'existing-admin' }];
+  let initCalled = false;
+  paperlessService.initializeWithCredentials = async () => {
+    initCalled = true;
+    return true;
+  };
+
+  try {
+    const res = await request('POST', '/setup', {
+      body: { paperlessUrl: 'http://attacker.example', paperlessToken: 'x' }
+    });
+    assert.strictEqual(res.status, 403, `expected 403, got ${res.status}`);
+    assert.strictEqual(initCalled, false, 'handler must return before touching paperlessService');
+  } finally {
+    setupService.hasEnvConfig = originalHasEnvConfig;
+    documentModel.getUsers = originalGetUsers;
+    paperlessService.initializeWithCredentials = originalInitWithCreds;
+  }
+});
+
+// Finding from final whole-branch review: the POST /setup guard must not
+// depend on setupService.isConfigured() (network-dependent, memoized for
+// the process lifetime -- see services/setupService.js:336-414). This test
+// simulates the failure mode directly: isConfigured() stuck at false (as it
+// would be after a dependency outage during its one evaluation), while the
+// cheap local hasEnvConfig() check correctly reports the instance is
+// already set up. The guard must still block.
+test('POST /setup blocks on hasEnvConfig() alone, independent of a stale/failed isConfigured() (final-review fix)', async () => {
+  const originalIsConfigured = setupService.isConfigured;
+  const originalHasEnvConfig = setupService.hasEnvConfig;
+  const originalGetUsers = documentModel.getUsers;
+  const originalInitWithCreds = paperlessService.initializeWithCredentials;
+
+  setupService.isConfigured = async () => false; // simulates a permanently-stuck-false memo from a past outage
+  setupService.hasEnvConfig = async () => true;  // but the instance genuinely has .env + PAPERLESS_API_URL on disk
   documentModel.getUsers = async () => [{ id: 1, username: 'existing-admin' }];
   let initCalled = false;
   paperlessService.initializeWithCredentials = async () => {
@@ -182,6 +217,7 @@ test('POST /setup on an already-configured instance is blocked with 403 and neve
     assert.strictEqual(initCalled, false, 'handler must return before touching paperlessService');
   } finally {
     setupService.isConfigured = originalIsConfigured;
+    setupService.hasEnvConfig = originalHasEnvConfig;
     documentModel.getUsers = originalGetUsers;
     paperlessService.initializeWithCredentials = originalInitWithCreds;
   }
@@ -191,11 +227,11 @@ test('POST /setup on an already-configured instance is blocked with 403 and neve
 // .env config yet, no users) must stay reachable. A gate that's too strict
 // would lock operators out of ever completing initial setup.
 test('POST /setup in the true first-run window (unconfigured, no users) still reaches the handler (NACHAUDIT-01 regression guard)', async () => {
-  const originalIsConfigured = setupService.isConfigured;
+  const originalHasEnvConfig = setupService.hasEnvConfig;
   const originalGetUsers = documentModel.getUsers;
   const originalInitWithCreds = paperlessService.initializeWithCredentials;
 
-  setupService.isConfigured = async () => false;
+  setupService.hasEnvConfig = async () => false;
   documentModel.getUsers = async () => [];
   let initCalled = false;
   paperlessService.initializeWithCredentials = async () => {
@@ -210,7 +246,7 @@ test('POST /setup in the true first-run window (unconfigured, no users) still re
     assert.strictEqual(initCalled, true, 'handler must proceed past the first-run gate');
     assert.strictEqual(res.status, 400, `expected 400 from the stubbed init failure, got ${res.status}`);
   } finally {
-    setupService.isConfigured = originalIsConfigured;
+    setupService.hasEnvConfig = originalHasEnvConfig;
     documentModel.getUsers = originalGetUsers;
     paperlessService.initializeWithCredentials = originalInitWithCreds;
   }
