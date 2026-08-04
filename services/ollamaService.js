@@ -442,7 +442,7 @@ The custom_fields are optional; only fill in values you actually find in the doc
     async _handleThumbnailCaching(id) {
         if (!id) return;
 
-        const cachePath = path.join('./public/images', `${id}.png`);
+        const cachePath = path.join(config.thumbnailCacheDir, `${id}.png`);
         try {
             await fs.access(cachePath);
             console.log('[DEBUG] Thumbnail already cached');
