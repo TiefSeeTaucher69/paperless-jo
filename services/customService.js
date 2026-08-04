@@ -219,10 +219,12 @@ class CustomOpenAIService {
       let parsedResponse;
       try {
         parsedResponse = JSON.parse(jsonContent);
-        //write to file and append to the file (txt)
-        fs.appendFile('./logs/response.txt', jsonContent, (err) => {
-          if (err) throw err;
-        });
+        if (config.promptLogging.enabled) {
+          //write to file and append to the file (txt)
+          fs.appendFile('./logs/response.txt', jsonContent, (err) => {
+            if (err) throw err;
+          });
+        }
       } catch (error) {
         console.error('Failed to parse JSON response:', error);
         throw new Error('Invalid JSON response from API');
