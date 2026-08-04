@@ -10,21 +10,46 @@ const JUDGE_SCHEMA = {
   required: ['verdict', 'reason']
 };
 
+// Grosszuegig genug fuer jeden real vorkommenden Entitaetsnamen (Paperless-Korrespondenten/
+// Tags/Dokumentarten liegen in der Praxis weit darunter), aber klein genug, dass System- +
+// User-Prompt sicher innerhalb von num_ctx=1024 bleiben (AUDIT-028).
+const MAX_NAME_LENGTH = 300;
+
+// Ein einzelner Retry faengt genau den Fall ab, der ohne ihn eine Welle von Queue-Eintraegen
+// erzeugt: eine kurzzeitig ueberlastete Ollama-Instanz (Timeout/5xx), nicht ein dauerhaft nicht
+// erreichbarer Host - dafuer bleibt der zweite Fehlschlag ein normaler Wurf, den der Aufrufer
+// (entityResolver._askJudge) unveraendert als 'unsure' behandelt (AUDIT-028).
+const RETRY_DELAY_MS = 300;
+
+function truncateName(name) {
+  return name.length > MAX_NAME_LENGTH ? name.slice(0, MAX_NAME_LENGTH) : name;
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 class EntityJudge {
   constructor() {
     this.client = axios.create({ timeout: 15000 });
   }
 
   async judge(entityType, nameA, nameB) {
+    const truncatedA = truncateName(nameA);
+    const truncatedB = truncateName(nameB);
+    if (truncatedA !== nameA || truncatedB !== nameB) {
+      console.warn(`[WARNING] entityJudge: Name(n) fuer ${entityType} ueberschreiten ${MAX_NAME_LENGTH} Zeichen und wurden vor dem Judge-Call gekuerzt`);
+    }
+
     const system = 'Du beurteilst, ob zwei Namen desselben Entity-Typs dieselbe reale Sache '
       + 'bezeichnen (z.B. Synonym, Abkuerzung, Schreibvariante) oder tatsaechlich verschieden '
       + 'sind. Du kennst nur die beiden Namen, kein Dokument. Antworte ausschliesslich ueber '
       + 'das vorgegebene JSON-Schema.';
 
-    const prompt = `Typ: ${entityType}\nName A: ${nameA}\nName B: ${nameB}\n\n`
+    const prompt = `Typ: ${entityType}\nName A: ${truncatedA}\nName B: ${truncatedB}\n\n`
       + 'Bezeichnen A und B dieselbe Sache? "same", "different" oder "unsure", falls unklar.';
 
-    const response = await this.client.post(`${config.ollama.apiUrl}/api/generate`, {
+    const requestBody = {
       model: config.ollama.model,
       prompt,
       system,
@@ -32,10 +57,20 @@ class EntityJudge {
       format: JUDGE_SCHEMA,
       options: {
         temperature: 0, // bewusst fest, unabhaengig von config.ollama.temperature
+        seed: config.ollama.seed, // AUDIT-028: Determinismus wie bei den anderen Ollama-Aufrufen (AUDIT-008)
         num_ctx: 1024,
         num_predict: 200
       }
-    });
+    };
+
+    let response;
+    try {
+      response = await this.client.post(`${config.ollama.apiUrl}/api/generate`, requestBody);
+    } catch (firstError) {
+      console.warn(`[WARNING] entityJudge: erster Versuch fehlgeschlagen (${firstError.message}), ein Retry folgt`);
+      await delay(RETRY_DELAY_MS);
+      response = await this.client.post(`${config.ollama.apiUrl}/api/generate`, requestBody);
+    }
 
     const raw = response.data.response;
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
