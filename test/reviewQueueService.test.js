@@ -32,6 +32,43 @@ test('listOpen delegiert an store.listOpenQueueEntries', () => {
   assert.strictEqual(service.listOpen().length, 1);
 });
 
+test('listOpen leitet Optionen (entityType/sort/limit/offset) an store.listOpenQueueEntries weiter (AUDIT-030)', () => {
+  const calls = [];
+  const store = fakeStore({ listOpenQueueEntries: (options) => { calls.push(options); return []; } });
+  const service = new ReviewQueueService({ store, paperlessService: {} });
+
+  service.listOpen({ entityType: 'tag', sort: 'similarity_desc', limit: 25, offset: 25 });
+
+  assert.deepStrictEqual(calls, [{ entityType: 'tag', sort: 'similarity_desc', limit: 25, offset: 25 }]);
+});
+
+test('countOpen delegiert an store.countOpenQueueEntries (AUDIT-030)', () => {
+  const store = fakeStore({ countOpenQueueEntries: () => 42 });
+  const service = new ReviewQueueService({ store, paperlessService: {} });
+
+  assert.strictEqual(service.countOpen({ entityType: 'tag' }), 42);
+});
+
+test('bulkReject wirft bei nicht-numerischem maxSimilarity, ohne den Store anzufassen (AUDIT-030)', () => {
+  const calls = [];
+  const store = fakeStore({ bulkRejectBelowSimilarity: (args) => { calls.push(args); return 0; } });
+  const service = new ReviewQueueService({ store, paperlessService: {} });
+
+  assert.throws(() => service.bulkReject({ maxSimilarity: NaN }), /maxSimilarity/);
+  assert.strictEqual(calls.length, 0);
+});
+
+test('bulkReject delegiert gueltige Werte an store.bulkRejectBelowSimilarity (AUDIT-030)', () => {
+  const calls = [];
+  const store = fakeStore({ bulkRejectBelowSimilarity: (args) => { calls.push(args); return 3; } });
+  const service = new ReviewQueueService({ store, paperlessService: {} });
+
+  const result = service.bulkReject({ entityType: 'tag', maxSimilarity: 0.5 });
+
+  assert.strictEqual(result, 3);
+  assert.deepStrictEqual(calls, [{ entityType: 'tag', maxSimilarity: 0.5 }]);
+});
+
 test('previewMerge ruft mergeEntity mit dryRun=true auf und aendert nichts am Eintrag', async () => {
   const store = fakeStore();
   store.entries.set(1, { id: 1, status: 'open', entity_type: 'correspondent', proposed_id: 10, candidate_id: 20, proposed_normalized: 'stadtwerke', candidate_name: 'Stadtwerke GmbH' });
