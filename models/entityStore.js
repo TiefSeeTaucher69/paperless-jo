@@ -182,10 +182,22 @@ class EntityStore {
     }
   }
 
+  // AUDIT-026: Float64->Float32-Abwertung (Ollama liefert Float64) verliert Praezision (~1e-7
+  // relativ) - fuer Cosinus-Aehnlichkeit unkritisch, aber "frisch berechnet" und "aus dem Cache
+  // gelesen" sind dadurch nicht mehr bitidentisch; ein Schwellwert exakt an der Kante kann
+  // deshalb je nach Quelle unterschiedlich entscheiden.
   _vectorToBuffer(vector) {
     return Buffer.from(Float32Array.from(vector).buffer);
   }
 
+  // _bufferToVector setzt voraus, dass buffer.byteOffset ein Vielfaches von 4 ist - sonst wirft
+  // der Float32Array-Konstruktor selbst einen RangeError (kein stiller Datenfehler, siehe Test
+  // "_bufferToVector wirft RangeError..."). Node allokiert Buffer unterhalb der Pool-Grenze
+  // (Buffer.poolSize/2, Default 4 KB) aus einem gemeinsamen, 8-Byte-ausgerichteten Pool;
+  // groessere Buffer (>= 4096 Byte, d.h. Vektoren ab 1024 Dimensionen wie bge-m3) werden einzeln
+  // alloziert und sind Betriebssystem-seitenaligniert. Beide Faelle sind ein Vielfaches von 4 -
+  // die Annahme haelt fuer jede in diesem Projekt verwendete Embedding-Dimension, ist aber nicht
+  // durch better-sqlite3 vertraglich garantiert, falls sich dessen BLOB-Rueckgabe je aendert.
   _bufferToVector(buffer) {
     return Array.from(new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4));
   }
