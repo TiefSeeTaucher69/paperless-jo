@@ -3603,6 +3603,20 @@ router.get('/health', async (req, res) => {
  */
 router.post('/setup', express.json(), async (req, res) => {
   try {
+    // NACHAUDIT-01: mirror GET /setup's isFullyConfigured check (see
+    // routes/setup.js:1936) so a fully set up instance can't be re-run
+    // through POST /setup by an unauthenticated caller. Must be the first
+    // thing the handler does, before any paperlessService/documentModel
+    // write path is reached.
+    const [isEnvConfigured, existingUsers] = await Promise.all([
+      setupService.isConfigured(),
+      documentModel.getUsers()
+    ]);
+    const hasUsers = Array.isArray(existingUsers) && existingUsers.length > 0;
+    if (isEnvConfigured && hasUsers) {
+      return res.status(403).json({ error: 'Setup already completed.' });
+    }
+
     const { 
       paperlessUrl, 
       paperlessToken,

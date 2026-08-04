@@ -12,6 +12,8 @@ const jwt = require('jsonwebtoken');
 process.env.JWT_SECRET = 'setup-auth-middleware-test-secret';
 
 const setupService = require('../services/setupService.js');
+const documentModel = require('../models/document.js');
+const paperlessService = require('../services/paperlessService.js');
 
 let server;
 let baseUrl;
@@ -147,5 +149,69 @@ test('isAuthenticated -> csrfProtection composition: cookie is set, POST without
     assert.notStrictEqual(postWithHeaderRes.status, 403);
   } finally {
     setupService.isConfigured = originalIsConfigured;
+  }
+});
+
+// NACHAUDIT-01: POST /setup had no first-run guard at all. PUBLIC_ROUTES
+// exempts it from isAuthenticated/csrfProtection (see the PUBLIC_ROUTES test
+// below), and the handler itself never checked isConfigured()/user count
+// before touching paperlessService.initializeWithCredentials and eventually
+// documentModel.addUser (which does DELETE FROM users before inserting).
+// Result: unauthenticated full account takeover in one request. This test
+// asserts the same isFullyConfigured gate that GET /setup already applies
+// (routes/setup.js:1936) also applies to POST /setup, before any write path
+// is touched.
+test('POST /setup on an already-configured instance is blocked with 403 and never touches write paths (NACHAUDIT-01)', async () => {
+  const originalIsConfigured = setupService.isConfigured;
+  const originalGetUsers = documentModel.getUsers;
+  const originalInitWithCreds = paperlessService.initializeWithCredentials;
+
+  setupService.isConfigured = async () => true;
+  documentModel.getUsers = async () => [{ id: 1, username: 'existing-admin' }];
+  let initCalled = false;
+  paperlessService.initializeWithCredentials = async () => {
+    initCalled = true;
+    return true;
+  };
+
+  try {
+    const res = await request('POST', '/setup', {
+      body: { paperlessUrl: 'http://attacker.example', paperlessToken: 'x' }
+    });
+    assert.strictEqual(res.status, 403, `expected 403, got ${res.status}`);
+    assert.strictEqual(initCalled, false, 'handler must return before touching paperlessService');
+  } finally {
+    setupService.isConfigured = originalIsConfigured;
+    documentModel.getUsers = originalGetUsers;
+    paperlessService.initializeWithCredentials = originalInitWithCreds;
+  }
+});
+
+// Regression guard in the other direction: the real first-run window (no
+// .env config yet, no users) must stay reachable. A gate that's too strict
+// would lock operators out of ever completing initial setup.
+test('POST /setup in the true first-run window (unconfigured, no users) still reaches the handler (NACHAUDIT-01 regression guard)', async () => {
+  const originalIsConfigured = setupService.isConfigured;
+  const originalGetUsers = documentModel.getUsers;
+  const originalInitWithCreds = paperlessService.initializeWithCredentials;
+
+  setupService.isConfigured = async () => false;
+  documentModel.getUsers = async () => [];
+  let initCalled = false;
+  paperlessService.initializeWithCredentials = async () => {
+    initCalled = true;
+    return false; // simulate an unreachable Paperless URL; avoids a real network call
+  };
+
+  try {
+    const res = await request('POST', '/setup', {
+      body: { paperlessUrl: 'http://example.invalid', paperlessToken: 'x' }
+    });
+    assert.strictEqual(initCalled, true, 'handler must proceed past the first-run gate');
+    assert.strictEqual(res.status, 400, `expected 400 from the stubbed init failure, got ${res.status}`);
+  } finally {
+    setupService.isConfigured = originalIsConfigured;
+    documentModel.getUsers = originalGetUsers;
+    paperlessService.initializeWithCredentials = originalInitWithCreds;
   }
 });
