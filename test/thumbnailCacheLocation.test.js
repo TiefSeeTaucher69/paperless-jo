@@ -54,6 +54,7 @@ after(async () => {
   setupService.isConfigured = savedIsConfigured;
   paperlessService.getThumbnailImage = savedGetThumbnailImage;
   await new Promise((resolve) => server.close(resolve));
+  await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
 function get(urlPath, headers = {}) {
