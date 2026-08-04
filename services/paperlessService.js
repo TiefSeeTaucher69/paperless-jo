@@ -856,30 +856,6 @@ class PaperlessService {
     return documents;
 }
 
-  async getAllDocumentIds() {
-    /**
-     * Get all Document IDs from the Paperless API.
-     * 
-     * @returns    An array of all Document IDs.
-     * @throws     An error if the request fails.
-     * @note       This method is used to get all Document IDs for further processing.
-     */
-    this.initialize();
-    try {
-      const response = await this.client.get('/documents/', {
-        params: { 
-          page,
-          page_size: 100,
-          fields: 'id',
-        }
-      });
-      return response.data.results.map(doc => doc.id);
-    } catch (error) {
-      console.error('[ERROR] fetching document IDs:', error.message);
-      return [];
-    }
-  }
-
   async getAllDocumentIdsScan() {
     /**
      * Get all Document IDs from the Paperless API.
