@@ -29,6 +29,16 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// AUDIT-028 Review-Fix: nur transiente Fehler rechtfertigen einen Retry. Ein axios-Fehler ohne
+// .response ist ein Netzwerk-/Timeout-Fehler (kann beim zweiten Versuch verschwinden); ein 5xx
+// ist ein serverseitiger Fehler, moeglicherweise voruebergehend. Ein 4xx bedeutet dagegen, dass
+// die Anfrage selbst abgelehnt wurde - das aendert sich beim identischen zweiten Versuch nicht,
+// ein Retry wuerde nur unnoetig 300ms plus einen zweiten Timeout kosten.
+function isTransientError(error) {
+  if (!error.response) return true;
+  return error.response.status >= 500;
+}
+
 class EntityJudge {
   constructor() {
     this.client = axios.create({ timeout: 15000 });
@@ -67,6 +77,9 @@ class EntityJudge {
     try {
       response = await this.client.post(`${config.ollama.apiUrl}/api/generate`, requestBody);
     } catch (firstError) {
+      if (!isTransientError(firstError)) {
+        throw firstError;
+      }
       console.warn(`[WARNING] entityJudge: erster Versuch fehlgeschlagen (${firstError.message}), ein Retry folgt`);
       await delay(RETRY_DELAY_MS);
       response = await this.client.post(`${config.ollama.apiUrl}/api/generate`, requestBody);

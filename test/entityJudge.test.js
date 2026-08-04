@@ -76,3 +76,27 @@ test('Retry erschoepft: beide Versuche schlagen fehl -> wirft weiterhin, Aufrufe
   await assert.rejects(() => entityJudge.judge('tag', 'A', 'B'), /ECONNREFUSED/);
   assert.strictEqual(calls, 2);
 });
+
+test('Kuerzt NICHT bei genau 300 Zeichen, kuerzt bei 301 Zeichen (AUDIT-028: Grenzwert)', async () => {
+  const exactLength = 'A'.repeat(300);
+  const captured300 = captureRequest({ response: { verdict: 'unsure', reason: 'grenzwert' } });
+  await entityJudge.judge('tag', exactLength, 'B');
+  const nameALine300 = captured300.body.prompt.split('\n').find(line => line.startsWith('Name A:'));
+  assert.strictEqual(nameALine300, `Name A: ${exactLength}`);
+
+  const overLength = 'A'.repeat(301);
+  const captured301 = captureRequest({ response: { verdict: 'unsure', reason: 'grenzwert' } });
+  await entityJudge.judge('tag', overLength, 'B');
+  const nameALine301 = captured301.body.prompt.split('\n').find(line => line.startsWith('Name A:'));
+  assert.strictEqual(nameALine301, `Name A: ${'A'.repeat(300)}`);
+});
+
+test('Retry NICHT bei 4xx-Fehlern (AUDIT-028: nur transiente Fehler werden wiederholt)', async () => {
+  let calls = 0;
+  const clientError = Object.assign(new Error('Request failed with status code 400'), {
+    response: { status: 400 }
+  });
+  entityJudge.client = { post: async () => { calls++; throw clientError; } };
+  await assert.rejects(() => entityJudge.judge('tag', 'A', 'B'), /400/);
+  assert.strictEqual(calls, 1);
+});
