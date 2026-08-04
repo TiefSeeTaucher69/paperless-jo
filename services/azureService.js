@@ -29,7 +29,7 @@ class AzureOpenAIService {
   }
 
   async analyzeDocument(content, existingTags = [], existingCorrespondentList = [], existingDocumentTypesList = [], id, customPrompt = null, options = {}) {
-    const cachePath = path.join('./public/images', `${id}.png`);
+    const cachePath = path.join(config.thumbnailCacheDir, `${id}.png`);
     try {
       this.initialize();
       const now = new Date();

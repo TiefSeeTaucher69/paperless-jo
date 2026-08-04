@@ -591,7 +591,7 @@ router.get('/playground', async (req, res) => {
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/thumb/:documentId', async (req, res) => {
-  const cachePath = path.join('./public/images', `${req.params.documentId}.png`);
+  const cachePath = path.join(config.thumbnailCacheDir, `${req.params.documentId}.png`);
 
   try {
     // Prüfe ob das Bild bereits im Cache existiert
