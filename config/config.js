@@ -235,6 +235,11 @@ module.exports = {
   aiProvider: process.env.AI_PROVIDER || 'openai',
   scanInterval: process.env.SCAN_INTERVAL || '*/30 * * * *',
   useExistingData: process.env.USE_EXISTING_DATA || 'no',
+  // AUDIT-018: thumbnails used to be cached under public/images/, a directory
+  // express.static serves to anyone without authentication. data/ is not
+  // statically served, so the only way to fetch a thumbnail is the
+  // authenticated GET /thumb/:documentId route (routes/setup.js).
+  thumbnailCacheDir: path.join(process.cwd(), 'data', 'cache', 'thumbnails'),
   // Add limit functions to config
   limitFunctions: {
     activateTagging: limitFunctions.activateTagging,
