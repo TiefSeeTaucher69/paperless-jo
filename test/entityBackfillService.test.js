@@ -169,6 +169,8 @@ test('run findet mit aktiviertem Embedding-Kanal ein Paar, das Trigram allein ve
     const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE entity_type = 'document_type'`).get();
     assert.ok(row.embedding_similarity > 0.9);
     assert.ok(row.trigram_similarity < 0.3);
+    // AUDIT-029: similarity darf nicht den hoeheren Embedding-Wert tragen (Skalen-Mischung).
+    assert.strictEqual(row.similarity, row.trigram_similarity);
   } finally {
     store.close();
   }

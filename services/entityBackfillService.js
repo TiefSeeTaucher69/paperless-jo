@@ -66,7 +66,7 @@ class EntityBackfillService {
           proposedId: proposed.id,
           candidateName: candidate.name,
           candidateId: candidate.id,
-          similarity: Math.max(trigramSim, embeddingSim ?? -1),
+          similarity: trigramSim, // AUDIT-029: einheitliche Skala statt Dice/Cosinus-Mischwert; siehe entityResolver.js
           trigramSimilarity: trigramSim,
           embeddingSimilarity: embeddingSim,
           llmVerdict: null,
