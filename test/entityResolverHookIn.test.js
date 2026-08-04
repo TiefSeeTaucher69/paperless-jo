@@ -66,6 +66,33 @@ test('aktivierter Resolver mit funktionierender Instanz liefert deren Entscheidu
   }
 });
 
+test('getOpenReviewQueueCount: deaktivierter Resolver liefert 0, ohne _getEntityResolver aufzurufen (AUDIT-009)', () => {
+  config.entityResolver.enabled = false;
+  const original = paperlessService._getEntityResolver;
+  let called = false;
+  paperlessService._getEntityResolver = () => { called = true; throw new Error('sollte bei deaktiviertem Resolver nicht aufgerufen werden'); };
+
+  try {
+    const count = paperlessService.getOpenReviewQueueCount();
+    assert.strictEqual(count, 0);
+    assert.strictEqual(called, false);
+  } finally {
+    paperlessService._getEntityResolver = original;
+  }
+});
+
+test('getOpenReviewQueueCount: aktivierter Resolver liefert die Store-Zaehlung durch', () => {
+  config.entityResolver.enabled = true;
+  paperlessService._entityResolverInstance = { store: { countOpenQueueEntries: () => 7 } };
+
+  try {
+    assert.strictEqual(paperlessService.getOpenReviewQueueCount(), 7);
+  } finally {
+    config.entityResolver.enabled = false;
+    paperlessService._entityResolverInstance = null;
+  }
+});
+
 test('processTags: bei deaktiviertem Resolver unveraendertes Verhalten', async () => {
   config.entityResolver.enabled = false;
   paperlessService.findExistingTag = async () => null;

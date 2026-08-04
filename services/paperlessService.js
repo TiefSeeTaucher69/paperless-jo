@@ -202,6 +202,12 @@ class PaperlessService {
   }
 
   getOpenReviewQueueCount() {
+    // AUDIT-009: fruehe Rueckkehr, bevor _getEntityResolver() aufgerufen wird - sonst legt jeder
+    // GET /dashboard bei deaktiviertem Resolver trotzdem data/entities.db samt Schema an, obwohl
+    // "kein neuer Codepfad bei deaktiviertem Flag" die dokumentierte Zusage ist.
+    if (!config.entityResolver.enabled) {
+      return 0;
+    }
     try {
       return this._getEntityResolver().store.countOpenQueueEntries();
     } catch (error) {
