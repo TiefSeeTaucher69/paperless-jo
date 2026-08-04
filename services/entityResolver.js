@@ -155,7 +155,11 @@ class EntityResolver {
     }
 
     const candidateEntity = judgeCandidate.entity;
-    const candidateCombined = Math.max(judgeCandidate.trigramSim, judgeCandidate.embeddingSim ?? -1);
+    // AUDIT-029: 'similarity' bleibt NOT NULL fuer Alt-Zeilen, mischt aber sonst Dice- und
+    // Cosinus-Skala in einer Spalte. Traegt ab hier nur noch den Trigram-Wert (immer vorhanden,
+    // nie null) - die tatsaechlichen Werte je Kanal stehen in trigram_similarity/
+    // embedding_similarity, die views/review.ejs bereits bevorzugt anzeigt.
+    const legacySimilarity = judgeCandidate.trigramSim;
     const verdict = await this._askJudge(type, proposedName, candidateEntity.name);
 
     if (verdict.verdict === 'same') {
@@ -172,7 +176,7 @@ class EntityResolver {
       if (!this.store.insertQueueEntry({
         entityType: type, proposedName, proposedId: null,
         candidateName: candidateEntity.name, candidateId: candidateEntity.id,
-        similarity: candidateCombined,
+        similarity: legacySimilarity,
         trigramSimilarity: judgeCandidate.trigramSim, embeddingSimilarity: judgeCandidate.embeddingSim,
         llmVerdict: 'different', llmReason: verdict.reason,
         status: 'rejected'
@@ -187,7 +191,7 @@ class EntityResolver {
     return {
       action: 'create_and_queue',
       candidate: { id: candidateEntity.id, name: candidateEntity.name },
-      similarity: candidateCombined,
+      similarity: legacySimilarity,
       trigramSimilarity: judgeCandidate.trigramSim,
       embeddingSimilarity: judgeCandidate.embeddingSim,
       verdict: verdict.verdict

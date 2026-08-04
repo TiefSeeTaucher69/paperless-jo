@@ -44,7 +44,9 @@ class EntityStore {
         candidate_name TEXT NOT NULL,
         candidate_normalized TEXT NOT NULL,
         candidate_id INTEGER NOT NULL,
-        similarity REAL NOT NULL,
+        similarity REAL NOT NULL, -- AUDIT-029: Trigram/Dice-Skala, NICHT der historische Mischwert
+                                   -- aus Dice und Cosinus; siehe trigram_similarity/embedding_similarity
+                                   -- fuer beide Kanaele einzeln.
         llm_verdict TEXT,
         llm_reason TEXT,
         status TEXT NOT NULL,
