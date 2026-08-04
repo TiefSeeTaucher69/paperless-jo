@@ -591,6 +591,10 @@ router.get('/playground', async (req, res) => {
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/thumb/:documentId', async (req, res) => {
+  if (!/^\d+$/.test(req.params.documentId)) {
+    return res.status(400).send('Invalid document ID');
+  }
+
   const cachePath = path.join(config.thumbnailCacheDir, `${req.params.documentId}.png`);
 
   try {

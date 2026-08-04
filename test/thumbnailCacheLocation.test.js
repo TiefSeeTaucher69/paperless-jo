@@ -88,3 +88,26 @@ test('GET /thumb/:documentId caches under config.thumbnailCacheDir, not public/,
   const publicPath = path.join(__dirname, '..', 'public', 'images', '999.png');
   await assert.rejects(() => fs.access(publicPath), /ENOENT/, 'thumbnail must not be cached under public/images/');
 });
+
+test('GET /thumb/:documentId rejects a non-numeric id (path-traversal hardening)', async () => {
+  const token = jwt.sign({ id: 1, username: 'testuser' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+  let getThumbnailImageCalled = false;
+  const originalGetThumbnailImage = paperlessService.getThumbnailImage;
+  paperlessService.getThumbnailImage = async () => {
+    getThumbnailImageCalled = true;
+    return Buffer.from('fake-png-bytes');
+  };
+
+  try {
+    // Encoded slashes ('%2f') survive Express's route-segment split and are
+    // decoded into the :documentId param value, so this exercises a real
+    // traversal-shaped id ("../../etc/passwd") rather than just "non-digit".
+    const res = await get('/thumb/..%2f..%2fetc%2fpasswd', { Cookie: `jwt=${token}` });
+
+    assert.strictEqual(res.status, 400, `expected 400, got ${res.status}`);
+    assert.strictEqual(getThumbnailImageCalled, false, 'must reject before calling out to Paperless or touching the filesystem');
+  } finally {
+    paperlessService.getThumbnailImage = originalGetThumbnailImage;
+  }
+});
