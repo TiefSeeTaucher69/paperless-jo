@@ -200,7 +200,7 @@ class ReviewManager {
         const params = new URLSearchParams(window.location.search);
         const entityType = params.get('entityType') || null;
         const scope = entityType ? ` (type: ${entityType})` : '';
-        if (!confirm(`Reject all open entries with similarity below ${maxSimilarity}${scope}? This cannot be undone.`)) {
+        if (!confirm(`Reject all open entries with trigram similarity below ${maxSimilarity}${scope}? This cannot be undone.`)) {
             return;
         }
 
