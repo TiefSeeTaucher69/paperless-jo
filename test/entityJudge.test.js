@@ -100,3 +100,20 @@ test('Retry NICHT bei 4xx-Fehlern (AUDIT-028: nur transiente Fehler werden wiede
   await assert.rejects(() => entityJudge.judge('tag', 'A', 'B'), /400/);
   assert.strictEqual(calls, 1);
 });
+
+test('Retry BEI 429 und 408 (AUDIT-028: Rate-Limit und Proxy-Timeout sind transient)', async () => {
+  let calls = 0;
+  const rateLimitError = Object.assign(new Error('Request failed with status code 429'), {
+    response: { status: 429 }
+  });
+  entityJudge.client = {
+    post: async () => {
+      calls++;
+      if (calls === 1) throw rateLimitError;
+      return { data: { response: { verdict: 'same', reason: 'nach Rate-Limit-Retry' } } };
+    }
+  };
+  const result = await entityJudge.judge('tag', 'A', 'B');
+  assert.strictEqual(calls, 2);
+  assert.deepStrictEqual(result, { verdict: 'same', reason: 'nach Rate-Limit-Retry' });
+});
