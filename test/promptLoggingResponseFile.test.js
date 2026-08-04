@@ -7,22 +7,43 @@ const config = require('../config/config');
 const paperlessService = require('../services/paperlessService');
 
 const RESPONSE_LOG_PATH = path.join(process.cwd(), 'logs', 'response.txt');
+const PROMPT_LOG_PATH = path.join(process.cwd(), 'logs', 'prompt.txt');
+const LOG_PATHS = [RESPONSE_LOG_PATH, PROMPT_LOG_PATH];
 
-async function withSavedResponseLog(fn) {
-  let originalContent;
-  try {
-    originalContent = await fs.readFile(RESPONSE_LOG_PATH, 'utf8');
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err;
-    originalContent = null;
+// Saves and restores both logs/response.txt and logs/prompt.txt around a
+// test body. analyzeDocument() writes to *both* files (via appendResponseLog
+// and writePromptToFile with no filePath override, i.e. the real default
+// path) when promptLogging.enabled is true, so both must be protected or a
+// real developer's logs/prompt.txt gets corrupted by the "enabled" tests.
+//
+// Also deletes each file *before* running the test body (after saving its
+// original content), not just after: otherwise a leftover file from a prior
+// PROMPT_LOGGING_ENABLED=yes run would make fileExists() already true before
+// analyzeDocument() ever runs, causing false failures in the "disabled"
+// tests regardless of whether the gate works.
+async function withSavedLogFiles(fn) {
+  const originalContents = new Map();
+
+  for (const logPath of LOG_PATHS) {
+    try {
+      originalContents.set(logPath, await fs.readFile(logPath, 'utf8'));
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      originalContents.set(logPath, null);
+    }
+    await fs.rm(logPath, { force: true });
   }
+
   try {
     await fn();
   } finally {
-    if (originalContent === null) {
-      await fs.rm(RESPONSE_LOG_PATH, { force: true });
-    } else {
-      await fs.writeFile(RESPONSE_LOG_PATH, originalContent);
+    for (const logPath of LOG_PATHS) {
+      const originalContent = originalContents.get(logPath);
+      if (originalContent === null) {
+        await fs.rm(logPath, { force: true });
+      } else {
+        await fs.writeFile(logPath, originalContent);
+      }
     }
   }
 }
@@ -109,7 +130,7 @@ for (const { name, modulePath } of PROVIDERS) {
     const service = require(modulePath);
     const savedEnabled = config.promptLogging.enabled;
 
-    await withSavedResponseLog(async () => {
+    await withSavedLogFiles(async () => {
       await withStubbedEnv(service, async () => {
         try {
           config.promptLogging.enabled = false;
@@ -121,6 +142,9 @@ for (const { name, modulePath } of PROVIDERS) {
           // of the gate rather than a race won by sheer luck.
           const appeared = await waitUntil(() => fileExists(RESPONSE_LOG_PATH), { timeoutMs: 500 });
           assert.strictEqual(appeared, false, `expected ${RESPONSE_LOG_PATH} not to exist when promptLogging.enabled is false`);
+
+          const promptAppeared = await fileExists(PROMPT_LOG_PATH);
+          assert.strictEqual(promptAppeared, false, `expected ${PROMPT_LOG_PATH} not to exist when promptLogging.enabled is false`);
         } finally {
           config.promptLogging.enabled = savedEnabled;
         }
@@ -132,7 +156,7 @@ for (const { name, modulePath } of PROVIDERS) {
     const service = require(modulePath);
     const savedEnabled = config.promptLogging.enabled;
 
-    await withSavedResponseLog(async () => {
+    await withSavedLogFiles(async () => {
       await withStubbedEnv(service, async () => {
         try {
           config.promptLogging.enabled = true;
