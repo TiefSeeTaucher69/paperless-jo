@@ -70,6 +70,8 @@ auf `PAPERLESS_API_URL` und ruft dann `/documents/`. Der Wert muss deshalb auf
 `/api` enden. Das Setup-UI zeigt ihn ohne `/api` und hängt es beim Speichern an
 — wer `data/.env` von Hand bearbeitet, erzeugt einen stillen Totalausfall, der
 sich nur als Parse-Fehler äußert. Kandidat für einen Robustheitsfix in Phase 1.
+**Stand Vollaudit 2026-08-02: weiterhin offen** — bewusst zurückgestellt
+("Kandidat", keine Zusage), kein vergessener Punkt (AUDIT-035).
 
 ## Phase 0 — Dry-Run-Harness
 
@@ -278,7 +280,9 @@ task-weise per TDD, je mit eigenem Task-Review, plus ein finaler
 Whole-Branch-Review in zwei Runden (6 Fix-Commits über beide Runden hinweg,
 bevor gemergt wurde). Vollständiger Implementierungsplan:
 [docs/superpowers/plans/2026-08-01-phase3-review-ui-merge-altbestand.md](../superpowers/plans/2026-08-01-phase3-review-ui-merge-altbestand.md).
-156/156 Tests grün.
+156/156 Tests grün bei Phase-3-Abschluss. **Nachtrag 2026-08-02 (Vollaudit):**
+nach Phase 4 und 5 sind es 217/217 — die 156 war zum Zeitpunkt des Auftrags
+bereits veraltet (AUDIT-031).
 
 **Der Whole-Branch-Review fand vier reale Probleme vor dem Merge**, alle
 behoben: ein Modul-Top-Level-DB-Open in `routes/review.js`, das den
@@ -355,11 +359,25 @@ Design-Entwurf:
 
 Erkennt wiederkehrende Dokumente desselben Korrespondenten über
 Inhalts-Ähnlichkeit (Embedding, dieselbe `bge-m3`-Infrastruktur wie Phase 4)
-und übernimmt bei Treffer nur Tags und Dokumentart aus der früheren, bereits
-bestätigten Klassifikation — Titel und Datum bleiben die frisch extrahierten
-Werte, weil sie sich bei echten wiederkehrenden Dokumenten legitim
-unterscheiden (anderer Monat, anderer Betrag). Läuft additiv neben dem
-bestehenden Resolver und ist per Default abgeschaltet
+und übernimmt bei Treffer nur Tags und Dokumentart aus einer früheren
+Klassifikation desselben Korrespondenten — Titel und Datum bleiben die frisch
+extrahierten Werte, weil sie sich bei echten wiederkehrenden Dokumenten legitim
+unterscheiden (anderer Monat, anderer Betrag).
+
+**Korrektur (Vollaudit 2026-08-02, AUDIT-003):** „bestätigt" bedeutete
+ursprünglich nicht menschlich geprüft, sondern nur „das Ergebnis einer eigenen
+KI-Klassifikation dieses Dokuments" — ein einzelner LLM-Fehltreffer hätte sich
+dadurch unbegrenzt durch eine ganze Dokumentserie fortpflanzen können, ohne
+Review-Queue, Judge oder Korrekturschleife. Seit dem Nachaudit-Fix trägt jeder
+Fingerprint seine Herkunft (`source: 'llm' | 'inherited'`, siehe
+[Fingerprint-Bereitschaft-Plan](../superpowers/plans/2026-08-03-fingerprint-bereitschaft-audit-003-006-010-011-020-022-025.md)),
+und nur `source='llm'`-Einträge kommen als Kandidat für ein drittes Dokument
+infrage — ein geerbter Fehltreffer kann sich damit nicht mehr weitervererben.
+Ein einzelner Fehler in der *Quell*-Klassifikation bleibt aber weiterhin
+unentdeckt, bis ihn ein Mensch korrigiert; „bestätigt" heißt nach wie vor nicht
+„von einem Menschen geprüft".
+
+Läuft additiv neben dem bestehenden Resolver und ist per Default abgeschaltet
 (`DOCUMENT_FINGERPRINT_ENABLED=no`) — bestehendes Verhalten bleibt ohne
 Konfigurationsänderung exakt gleich. Vor der Aktivierung ist ein eigener
 Tuning-Lauf nötig, damit `FINGERPRINT_SIMILARITY_THRESHOLD` (aktuell ein
