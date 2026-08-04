@@ -158,7 +158,7 @@ let PUBLIC_ROUTES = [
 // used elsewhere; this wrapper only adds the public-route bypass and the
 // first-run "redirect to /setup or /settings" logic that's specific to this router.
 router.use((req, res, next) => {
-  if (PUBLIC_ROUTES.some(route => req.path.startsWith(route))) {
+  if (PUBLIC_ROUTES.includes(req.path)) {
     return next();
   }
 

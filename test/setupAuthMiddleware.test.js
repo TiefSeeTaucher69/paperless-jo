@@ -215,3 +215,16 @@ test('POST /setup in the true first-run window (unconfigured, no users) still re
     paperlessService.initializeWithCredentials = originalInitWithCreds;
   }
 });
+
+// NACHAUDIT-01, recommendation 2: PUBLIC_ROUTES used `req.path.startsWith(route)`,
+// so any future route sharing a prefix with a public route (e.g. a
+// hypothetical /setup-wizard) would silently inherit the auth bypass too.
+// Exact-path matching removes that whole class of bug. This test doesn't
+// need a real colliding route to exist -- the bypass check runs in
+// router.use(), before Express even looks for a matching route handler, so
+// a nonexistent path still proves whether the bypass fired.
+test('a path that merely starts with a public prefix is NOT treated as public (PUBLIC_ROUTES exact-match, NACHAUDIT-01 hardening)', async () => {
+  const res = await request('GET', '/setup-wizard');
+  assert.strictEqual(res.status, 302, `expected 302 redirect for GET /setup-wizard, got ${res.status}`);
+  assert.strictEqual(res.location, '/login');
+});
