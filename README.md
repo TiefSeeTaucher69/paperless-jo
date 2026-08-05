@@ -64,18 +64,25 @@ Powered by **Retrieval-Augmented Generation (RAG)**, you can now search semantic
 
 ### 🔍 Entity Resolution & Similarity Matching (Experimental)
 
-Configurable from **Settings → Entity Resolution & Similarity Matching**:
+Configurable from **Settings → Entity Resolution & Similarity Matching**, or
+directly via `data/.env` (see `.env.example` for the full list with
+descriptions — useful for Docker Compose deployments that skip the setup
+wizard):
 
-- **EntityResolver** — fuzzy-matches AI-suggested tags/correspondents/document
-  types against what already exists in Paperless-ngx (trigram similarity)
-  instead of always creating a new entity. Tune the auto-merge and judge
-  thresholds to your data before relying on it.
-- **Embedding Similarity** — adds a second, semantic matching channel via an
-  Ollama embedding model (`bge-m3` by default). Requires `ollama pull bge-m3`
-  on the Ollama instance used by this app.
-- **Document Fingerprint** — reuses a recurring document's tags/document type
-  based on content similarity. **Not production-ready** (see the project's
-  audit report, AUDIT-003) — leave disabled outside of testing.
+- **EntityResolver** (`ENTITY_RESOLVER_ENABLED`, default `no`) — fuzzy-matches
+  AI-suggested tags/correspondents/document types against what already exists
+  in Paperless-ngx (trigram similarity) instead of always creating a new
+  entity. Tune `ENTITY_RESOLVER_AUTO_THRESHOLD` / `ENTITY_RESOLVER_JUDGE_MIN`
+  to your data before relying on it.
+- **Embedding Similarity** (`EMBEDDING_SIMILARITY_ENABLED`, default `no`) —
+  adds a second, semantic matching channel via an Ollama embedding model
+  (`bge-m3` by default). Requires `ollama pull bge-m3` on the Ollama instance
+  used by this app. Thresholds: `EMBED_AUTO_THRESHOLD` / `EMBED_JUDGE_MIN`.
+- **Document Fingerprint** (`DOCUMENT_FINGERPRINT_ENABLED`, default `no`) —
+  reuses a recurring document's tags/document type based on content
+  similarity (`FINGERPRINT_SIMILARITY_THRESHOLD`). **Not production-ready**
+  (see the project's audit report, AUDIT-003) — leave disabled outside of
+  testing.
 
 Matches below the auto-merge threshold go to the in-app Review Queue
 (`/review`) for manual confirmation instead of being applied automatically.

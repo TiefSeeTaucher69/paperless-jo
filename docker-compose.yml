@@ -14,6 +14,11 @@ services:
       - PAPERLESS_AI_PORT=${PAPERLESS_AI_PORT:-3000}
       - RAG_SERVICE_URL=http://localhost:8000
       - RAG_SERVICE_ENABLED=true
+      # Optional, disabled by default - see .env.example for the full list
+      # and README.md "Entity Resolution & Similarity Matching" for context.
+      # - ENTITY_RESOLVER_ENABLED=no
+      # - EMBEDDING_SIMILARITY_ENABLED=no
+      # - DOCUMENT_FINGERPRINT_ENABLED=no
     ports:
       - "3000:${PAPERLESS_AI_PORT:-3000}"
     volumes:
