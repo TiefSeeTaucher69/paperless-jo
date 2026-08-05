@@ -39,9 +39,17 @@ da rein deskriptiv und nicht abarbeitbar).
    (bewusst keine Änderung) sind erledigt. `npm test` 416/416 grün,
    `npm run lint` weiterhin exakt 83/83 Warnungen.
 
-3. [ ] **Review-Queue abarbeiten und Fix-Welle produktiv verifizieren**
+3. [x] **Review-Queue abarbeiten und Fix-Welle produktiv verifizieren**
    (AUDIT-030-Rest, Produktivlauf)
-   → Setzt Paket 1 voraus (Scan läuft über dieselben ungeschützten Routen).
+   → Durchgeführt am 2026-08-05 gegen eine frisch aufgesetzte Instanz (der
+   ursprüngliche 120-Eintrag-Bestand lag auf einem anderen, nicht mehr
+   erreichbaren Gerät). Ergebnis inkl. zweier dabei gefundener und behobener
+   Bugs (NACHAUDIT-14, NACHAUDIT-15) unten bei NACHAUDIT-08/-09 und im Plan
+   [2026-08-05-nachaudit-paket3-review-queue-produktivlauf.md](../superpowers/plans/2026-08-05-nachaudit-paket3-review-queue-produktivlauf.md).
+   **Mit Vorbehalt:** 3 von 18 manuell bestätigten Merges waren inhaltlich
+   falsch (menschlicher Fehler, durch fehlende Judge-Begründung in der UI
+   begünstigt) und wurden bewusst nicht zurückgerollt — kein Rollback-Pfad
+   vorhanden (siehe NACHAUDIT-12).
 
 4. [ ] **Fingerprint-Aktivierungsvoraussetzungen schließen** (Abschnitt 18.6,
    Punkt 1/5/6 aus dem Erstaudit)
@@ -200,6 +208,38 @@ Eine ungelesene Queue ist keine wirksame Absicherung des Resolvers.
 *Maßnahme:* Die 120 offenen Einträge über die Review-UI durchgehen
 (Merge/Reject/Bulk-Reject je nach Ähnlichkeit), Ergebnis dokumentieren.
 
+**Ergebnis (2026-08-05):** Der ursprüngliche 120-Eintrag-Bestand existiert
+nicht mehr (anderes Gerät, `data/entities.db` dort nicht gesichert). Auf
+einer frisch aufgesetzten Instanz gegen die reale Paperless-ngx-VM
+(64 Dokumente, 62 davon neu verarbeitet, 0 Scan-Fehler) sind **25 offene
+Queue-Einträge** entstanden. Davon:
+- 1 durch einen Folgefehler unbearbeitbar (siehe NACHAUDIT-15) → rejected.
+- 18 vom Nutzer über die Review-UI gemergt.
+- 6 vom Nutzer korrekt als „kein Duplikat" abgelehnt (u. a. „Kirchensteuer"
+  vs. „Lohnsteuer", „2023" vs. „2024" — beides zurecht abgelehnt).
+
+Stichprobe der 18 Merges ergab **3 inhaltlich falsche Zusammenführungen**:
+„September 2025"→„November 2025" (Tag, verschiedene Monate), „Austrittsdatum"
+→„Eintrittsdatum" (Tag, gegensätzliche Zeitpunkte im Beschäftigungsverhältnis),
+„Urlaubsvergütung"→„Ausbildungsvergütung" (Tag, unterschiedliche
+Vergütungsarten). Ursache: siehe NACHAUDIT-14 — der Nutzer traf diese
+Entscheidungen ohne jede KI-Begründung, nur anhand des nackten Namenspaars.
+Mehrere weitere Merges (u. a. „Abschlusszeugnis"→„Zeugnis",
+„Bescheinigung"→„Meldebescheinigung") sind vertretbar, aber verlustbehaftet
+(spezifischere Kategorie geht in generischerer auf) — Geschmacksfrage, kein
+klarer Fehler. Die 3 falschen Merges wurden bewusst **nicht** zurückgerollt
+(Nutzerentscheidung; kein Rollback-Pfad vorhanden, NACHAUDIT-12 bleibt damit
+relevant).
+
+Der automatische Scan selbst legte zusätzlich 3 `auto`- und 1 `llm`-Alias an
+(Trigram ≥ 0.8 bzw. Judge-„same"). Stichprobe: 2 davon plausibel, 2 zeigen
+denselben Effekt wie oben, nur maschinell — sie zementieren bereits
+fehlerhafte KI-Klassifikation der vorgelagerten Dokumentverarbeitung
+(„Invoice/Contract/..." als Dokumenttyp, eine Personalnummer als
+Korrespondent). Kein Schwellwert-Fehler, sondern ein Hinweis, dass der
+Resolver Eingabefehler unkritisch übernimmt statt sie zu erkennen —
+nicht weiter verfolgt, außerhalb des Scopes dieses Pakets.
+
 ### NACHAUDIT-09 — Merge-Log und aktive Schwellwerte nie unter echter Last beobachtet
 Seit der Umstellung von den Defaults (0.90/0.65) auf die gemessenen Werte
 (0.8/0.5, siehe `config.entityResolver.autoThreshold`/`.judgeMin`) lief noch
@@ -210,6 +250,68 @@ und stichprobenartig prüfen, dass Auto-Merges bei den neuen (niedrigeren)
 Schwellwerten sich wie erwartet verhalten — insbesondere, ob die
 Trigram-Auto-Merge-Schwelle 0.8 spürbar mehr automatische Zusammenführungen
 auslöst als die ursprünglich geschätzten 0.90, und ob das gewünscht ist.
+
+**Ergebnis (2026-08-05):** `entity_merge_log` enthält jetzt **18 `completed`-
+und 5 `failed`-Einträge** (alle 5 Fehlschläge derselbe Ursache, NACHAUDIT-15,
+gegen denselben Queue-Eintrag wiederholt). Die Transaktionslogik
+(`completeMerge`) selbst lief also unter echter Last fehlerfrei — jeder
+`completed`-Eintrag hat ein korrespondierendes, tatsächlich in Paperless
+durchgeführtes Umhängen von Dokumenten. Zur eigentlichen Schwellwertfrage
+(0.8 vs. 0.90): bei nur 64 Dokumenten und 4 automatischen Merges ist die
+Stichprobe zu klein für eine belastbare Rate-Aussage; die 4 Treffer waren
+je zur Hälfte plausibel bzw. zementierten vorgelagerten Klassifikationsmüll
+(s. o.) statt falsch zu sein. Eine Aussage „0.8 löst spürbar mehr
+Auto-Merges aus als 0.90" lässt sich aus diesem Lauf nicht validieren —
+dafür wäre ein größerer Dokumentbestand nötig.
+
+---
+
+### NACHAUDIT-14 — Judge-Begründung erreichte die Review-Queue nie (gefunden und behoben 2026-08-05)
+- **Schweregrad:** Medium · **Bereich:** Korrektheit/UX · **Gefunden bei:** Paket-3-Produktivlauf
+- **Dateien:** `services/entityResolver.js` (`resolve()`, `recordCreatedAndQueued()`), `services/paperlessService.js` (`_recordEntityQueue`), `views/review.ejs`
+- **Beobachtetes Verhalten:** Der LLM-Judge liefert bei jedem Verdikt (auch
+  „unsure") ein Pflichtfeld `reason` (`services/entityJudge.js`, Zeile 10:
+  `required: ['verdict', 'reason']`). Der `create_and_queue`-Rückgabewert von
+  `EntityResolver.resolve()` gab davon nur `verdict.verdict` weiter, nie
+  `verdict.reason`; `recordCreatedAndQueued()` schrieb zusätzlich
+  `llmReason: null` fest verdrahtet. Ergebnis: alle 25 Einträge der
+  Review-Queue hatten `llm_reason = NULL`, obwohl der Judge für jeden einen
+  Grund generiert hatte. Der Nutzer traf alle Merge/Reject-Entscheidungen
+  ausschließlich anhand des nackten Namenspaars — direkte Ursache für die 3
+  inhaltlich falschen Merges in NACHAUDIT-08.
+- **Fix:** `reason: verdict.reason` im `create_and_queue`-Rückgabewert
+  ergänzt, `recordCreatedAndQueued`/`_recordEntityQueue` reichen `reason`
+  jetzt durch, `views/review.ejs` zeigt `llm_reason` als Tooltip auf der
+  Judge-Spalte. Tests: 3 neue/erweiterte Fälle in
+  `test/entityResolver.test.js` (Grund wird durchgereicht, Grund wird
+  gespeichert, Rückwärtskompatibilität ohne Grund). Vollständige Suite
+  421/421 grün.
+- **Nicht behoben:** Die 3 bereits getroffenen Fehlentscheidungen aus
+  NACHAUDIT-08 (der Fix wirkt nur auf künftige Queue-Einträge).
+
+### NACHAUDIT-15 — Merge auf bereits gelöschtes Ziel liefert nichtssagenden 400er (gefunden und behoben 2026-08-05)
+- **Schweregrad:** Low/Medium · **Bereich:** Korrektheit/UX · **Gefunden bei:** Paket-3-Produktivlauf
+- **Dateien:** `services/paperlessService.js` (`mergeEntity`, neue
+  `_entityExists`), `public/js/review.js` (`previewMerge`)
+- **Beobachtetes Verhalten:** Zwei offene Queue-Einträge können denselben
+  Kandidaten referenzieren. Wird der eine gemergt (Kandidat bleibt, Vorschlag
+  wird in Paperless gelöscht), zeigt der andere Eintrag ggf. auf eine
+  inzwischen gelöschte `toId`. `mergeEntity` prüfte das nicht, der folgende
+  `POST /documents/bulk_edit/` scheiterte mit
+  `{"non_field_errors":["Document type does not exist"]}` — im Log nur als
+  generisches `Request failed with status code 400` sichtbar. Die
+  Preview-Fehlerbehandlung im Frontend (`previewMerge`) verschluckte
+  zusätzlich jede Server-Meldung und zeigte immer denselben generischen Text
+  („Merge preview failed. Please try again."), unabhängig von der
+  tatsächlichen Ursache — Nutzer sah 5 identische, nichtssagende
+  Fehlschläge auf denselben Klick.
+- **Fix:** `mergeEntity` prüft jetzt vor jedem Preview/Merge per neuer
+  `_entityExists(type, id)`, ob das Ziel noch existiert, und wirft sonst eine
+  klare Meldung (`Merge target ... no longer exists ...`).
+  `public/js/review.js#previewMerge` liest jetzt `body.message` aus der
+  Antwort statt eines hartkodierten generischen Texts. Tests: 3 neue/8
+  angepasste Fälle in `test/paperlessMergeEntity.test.js`. Vollständige
+  Suite 421/421 grün.
 
 ---
 
