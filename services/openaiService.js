@@ -217,7 +217,7 @@ class OpenAIService {
         parsedResponse = JSON.parse(jsonContent);
         if (config.promptLogging.enabled) {
           //write to file and append to the file (txt)
-          fs.appendFile('./logs/response.txt', jsonContent, (err) => {
+          fs.appendFile(path.join(config.promptLogging.logDir, 'response.txt'), jsonContent, (err) => {
             if (err) throw err;
           });
         }
