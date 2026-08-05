@@ -213,7 +213,10 @@ module.exports = {
   // Off by default -- an operator opts in only when they need to debug
   // prompt behaviour, not by default in normal operation.
   promptLogging: {
-    enabled: parseEnvBoolean(process.env.PROMPT_LOGGING_ENABLED, 'no') === 'yes'
+    enabled: parseEnvBoolean(process.env.PROMPT_LOGGING_ENABLED, 'no') === 'yes',
+    // Ueberschreibbar in Tests (siehe test/promptLoggingResponseFile.test.js),
+    // damit kein Testlauf die echte logs/-Datei anfasst. Im Betrieb immer './logs'.
+    logDir: './logs'
   },
   security: {
     allowedOrigins

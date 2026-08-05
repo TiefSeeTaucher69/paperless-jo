@@ -6,45 +6,24 @@ const path = require('path');
 const config = require('../config/config');
 const paperlessService = require('../services/paperlessService');
 
-const RESPONSE_LOG_PATH = path.join(process.cwd(), 'logs', 'response.txt');
-const PROMPT_LOG_PATH = path.join(process.cwd(), 'logs', 'prompt.txt');
-const LOG_PATHS = [RESPONSE_LOG_PATH, PROMPT_LOG_PATH];
-
-// Saves and restores both logs/response.txt and logs/prompt.txt around a
-// test body. analyzeDocument() writes to *both* files (via appendResponseLog
-// and writePromptToFile with no filePath override, i.e. the real default
-// path) when promptLogging.enabled is true, so both must be protected or a
-// real developer's logs/prompt.txt gets corrupted by the "enabled" tests.
-//
-// Also deletes each file *before* running the test body (after saving its
-// original content), not just after: otherwise a leftover file from a prior
-// PROMPT_LOGGING_ENABLED=yes run would make fileExists() already true before
-// analyzeDocument() ever runs, causing false failures in the "disabled"
-// tests regardless of whether the gate works.
-async function withSavedLogFiles(fn) {
-  const originalContents = new Map();
-
-  for (const logPath of LOG_PATHS) {
-    try {
-      originalContents.set(logPath, await fs.readFile(logPath, 'utf8'));
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-      originalContents.set(logPath, null);
-    }
-    await fs.rm(logPath, { force: true });
-  }
+// Vor Task 2 (NACHAUDIT-02-Nebenbefund) sicherte/restaurierte dieser Test
+// die *echte* logs/prompt.txt bzw. logs/response.txt. Ein abgebrochener
+// Testlauf konnte die Datei in einem Zwischenstand hinterlassen. Jetzt zeigt
+// config.promptLogging.logDir waehrend des Tests auf ein Temp-Verzeichnis -
+// dasselbe Muster wie config.thumbnailCacheDir weiter unten in dieser Datei.
+async function withTempLogDir(fn) {
+  const savedLogDir = config.promptLogging.logDir;
+  const tmpLogDir = await fs.mkdtemp(path.join(os.tmpdir(), 'prompt-log-test-'));
 
   try {
-    await fn();
+    config.promptLogging.logDir = tmpLogDir;
+    await fn({
+      responseLogPath: path.join(tmpLogDir, 'response.txt'),
+      promptLogPath: path.join(tmpLogDir, 'prompt.txt')
+    });
   } finally {
-    for (const logPath of LOG_PATHS) {
-      const originalContent = originalContents.get(logPath);
-      if (originalContent === null) {
-        await fs.rm(logPath, { force: true });
-      } else {
-        await fs.writeFile(logPath, originalContent);
-      }
-    }
+    config.promptLogging.logDir = savedLogDir;
+    await fs.rm(tmpLogDir, { recursive: true, force: true });
   }
 }
 
@@ -126,11 +105,11 @@ async function withStubbedEnv(service, run) {
 }
 
 for (const { name, modulePath } of PROVIDERS) {
-  test(`${name}Service: logs/response.txt is not written when promptLogging.enabled is false`, async () => {
+  test(`${name}Service: response.txt is not written when promptLogging.enabled is false`, async () => {
     const service = require(modulePath);
     const savedEnabled = config.promptLogging.enabled;
 
-    await withSavedLogFiles(async () => {
+    await withTempLogDir(async ({ responseLogPath, promptLogPath }) => {
       await withStubbedEnv(service, async () => {
         try {
           config.promptLogging.enabled = false;
@@ -140,11 +119,11 @@ for (const { name, modulePath } of PROVIDERS) {
           // Give any (incorrectly) fire-and-forget write a generous window to
           // land before asserting absence, so this assertion is a real check
           // of the gate rather than a race won by sheer luck.
-          const appeared = await waitUntil(() => fileExists(RESPONSE_LOG_PATH), { timeoutMs: 500 });
-          assert.strictEqual(appeared, false, `expected ${RESPONSE_LOG_PATH} not to exist when promptLogging.enabled is false`);
+          const appeared = await waitUntil(() => fileExists(responseLogPath), { timeoutMs: 500 });
+          assert.strictEqual(appeared, false, `expected ${responseLogPath} not to exist when promptLogging.enabled is false`);
 
-          const promptAppeared = await fileExists(PROMPT_LOG_PATH);
-          assert.strictEqual(promptAppeared, false, `expected ${PROMPT_LOG_PATH} not to exist when promptLogging.enabled is false`);
+          const promptAppeared = await fileExists(promptLogPath);
+          assert.strictEqual(promptAppeared, false, `expected ${promptLogPath} not to exist when promptLogging.enabled is false`);
         } finally {
           config.promptLogging.enabled = savedEnabled;
         }
@@ -152,11 +131,11 @@ for (const { name, modulePath } of PROVIDERS) {
     });
   });
 
-  test(`${name}Service: logs/response.txt is written when promptLogging.enabled is true`, async () => {
+  test(`${name}Service: response.txt is written when promptLogging.enabled is true`, async () => {
     const service = require(modulePath);
     const savedEnabled = config.promptLogging.enabled;
 
-    await withSavedLogFiles(async () => {
+    await withTempLogDir(async ({ responseLogPath }) => {
       await withStubbedEnv(service, async () => {
         try {
           config.promptLogging.enabled = true;
@@ -164,10 +143,10 @@ for (const { name, modulePath } of PROVIDERS) {
           const result = await service.analyzeDocument('DOKUMENT INHALT', [], [], [], 'test-doc-id');
           assert.strictEqual(result.error, undefined, `analyzeDocument reported an unexpected error: ${result.error}`);
 
-          const appeared = await waitUntil(() => fileExists(RESPONSE_LOG_PATH), { timeoutMs: 2000 });
-          assert.strictEqual(appeared, true, `expected ${RESPONSE_LOG_PATH} to be written when promptLogging.enabled is true`);
+          const appeared = await waitUntil(() => fileExists(responseLogPath), { timeoutMs: 2000 });
+          assert.strictEqual(appeared, true, `expected ${responseLogPath} to be written when promptLogging.enabled is true`);
 
-          const written = await fs.readFile(RESPONSE_LOG_PATH, 'utf8');
+          const written = await fs.readFile(responseLogPath, 'utf8');
           assert.ok(written.includes(RESPONSE_CONTENT.correspondent), 'expected the logged response to include the parsed correspondent');
         } finally {
           config.promptLogging.enabled = savedEnabled;
