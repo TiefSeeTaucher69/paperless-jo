@@ -24,12 +24,21 @@ da rein deskriptiv und nicht abarbeitbar).
 
 ## Arbeitsplan
 
-1. [ ] **Setup-Route absichern** (NACHAUDIT-01, P0)
+1. [x] **Setup-Route absichern** (NACHAUDIT-01, P0)
    → Muss zuerst, da unauthentifizierte Account-Übernahme.
 
 2. [ ] **Dokumentation und Altdaten bereinigen** (AUDIT-018-Altlast, AUDIT-031,
    AUDIT-019-Doku, Doku-Lücken)
    → Risikoarm, unabhängig von Paket 1, guter Lückenfüller.
+   → **Teilweise umgesetzt** laut
+   [2026-08-05-nachaudit-paket2-doku-altdaten.md](../superpowers/plans/2026-08-05-nachaudit-paket2-doku-altdaten.md):
+   NACHAUDIT-02-Hauptpunkt (verifiziert: `logs/prompt.txt` existiert nicht),
+   NACHAUDIT-04, NACHAUDIT-05, NACHAUDIT-06 (verifiziert: Fix-Doku bereits
+   versioniert) und NACHAUDIT-07 (bewusst keine Änderung) sind erledigt.
+   Noch offen: NACHAUDIT-03 (Testanzahl in der Roadmap) und der optionale
+   NACHAUDIT-02-Nebenbefund (Test-Hardening) — beide brauchen einen
+   lauffähigen `npm test`, der in der Planungs-/Umsetzungssitzung nicht zur
+   Verfügung stand (kein Node.js in der Ausführungsumgebung gefunden).
 
 3. [ ] **Review-Queue abarbeiten und Fix-Welle produktiv verifizieren**
    (AUDIT-030-Rest, Produktivlauf)
