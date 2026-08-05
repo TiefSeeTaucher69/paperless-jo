@@ -131,6 +131,10 @@ test('Stufe 4c: Judge sagt unsure -> create_and_queue, ohne Queue-Eintrag zu sch
   assert.strictEqual(result.action, 'create_and_queue');
   assert.deepStrictEqual(result.candidate, { id: 4, name: 'Meldebescheinigung' });
   assert.strictEqual(result.verdict, 'unsure');
+  // Der Judge-Grund muss bis zum Aufrufer durchgereicht werden, sonst hat die Review-UI keine
+  // Entscheidungsgrundlage ausser dem nackten Namenspaar (Ursache mehrerer inhaltlich falscher
+  // Nutzer-Merges in der Praxis, z.B. "Austrittsdatum"->"Eintrittsdatum").
+  assert.strictEqual(result.reason, 'nicht eindeutig');
   assert.strictEqual(store.findRejectedPair(
     'document_type',
     normalizeForType('Verdienstbescheinigung', 'document_type'),
@@ -180,6 +184,39 @@ test('recordCreatedAndQueued schreibt den Queue-Eintrag mit der echten proposed_
   assert.strictEqual(found.proposed_id, 55);
   assert.strictEqual(found.status, 'open');
   assert.strictEqual(found.document_id, 123);
+});
+
+test('recordCreatedAndQueued schreibt den Judge-Grund in llm_reason, wenn einer uebergeben wird', async () => {
+  const store = new EntityStore(':memory:');
+  const resolver = makeResolver({ store });
+
+  resolver.recordCreatedAndQueued({
+    type: 'tag', proposedName: 'Austrittsdatum', proposedId: 60,
+    candidate: { id: 6, name: 'Eintrittsdatum' }, similarity: 0.71, verdict: 'unsure',
+    reason: 'Beide betreffen ein Datum im Beschaeftigungsverhaeltnis, aber Austritt und Eintritt sind gegensaetzliche Zeitpunkte',
+    documentId: 124
+  });
+
+  const found = store.db.prepare(
+    `SELECT * FROM entity_review_queue WHERE proposed_name = ? AND candidate_name = ?`
+  ).get('Austrittsdatum', 'Eintrittsdatum');
+  assert.strictEqual(found.llm_reason, 'Beide betreffen ein Datum im Beschaeftigungsverhaeltnis, aber Austritt und Eintritt sind gegensaetzliche Zeitpunkte');
+});
+
+test('recordCreatedAndQueued schreibt llm_reason=null, wenn kein Grund uebergeben wird (Rueckwaertskompatibel)', async () => {
+  const store = new EntityStore(':memory:');
+  const resolver = makeResolver({ store });
+
+  resolver.recordCreatedAndQueued({
+    type: 'tag', proposedName: 'Ohne Grund', proposedId: 61,
+    candidate: { id: 7, name: 'Kandidat' }, similarity: 0.71, verdict: 'unsure',
+    documentId: 125
+  });
+
+  const found = store.db.prepare(
+    `SELECT * FROM entity_review_queue WHERE proposed_name = ? AND candidate_name = ?`
+  ).get('Ohne Grund', 'Kandidat');
+  assert.strictEqual(found.llm_reason, null);
 });
 
 function fakeEmbeddingService(vectors) {
