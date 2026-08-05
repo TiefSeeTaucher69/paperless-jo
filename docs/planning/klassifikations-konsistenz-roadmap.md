@@ -289,8 +289,11 @@ Whole-Branch-Review in zwei Runden (6 Fix-Commits über beide Runden hinweg,
 bevor gemergt wurde). Vollständiger Implementierungsplan:
 [docs/superpowers/plans/2026-08-01-phase3-review-ui-merge-altbestand.md](../superpowers/plans/2026-08-01-phase3-review-ui-merge-altbestand.md).
 156/156 Tests grün bei Phase-3-Abschluss. **Nachtrag 2026-08-02 (Vollaudit):**
-nach Phase 4 und 5 sind es 217/217 — die 156 war zum Zeitpunkt des Auftrags
-bereits veraltet (AUDIT-031).
+nach Phase 4 und 5 waren es 217/217 — die 156 war zum Zeitpunkt des Auftrags
+bereits veraltet (AUDIT-031). **Nachtrag 2026-08-05 (Nachaudit, NACHAUDIT-03):**
+416/416. Diese Zahl veraltet mit jeder neuen Testdatei erneut — als
+Fortschrittsindikator lesen, nicht als exakten Sollwert; für den aktuellen
+Stand `npm test` ausführen statt dieser Zeile zu vertrauen.
 
 **Der Whole-Branch-Review fand vier reale Probleme vor dem Merge**, alle
 behoben: ein Modul-Top-Level-DB-Open in `routes/review.js`, das den
