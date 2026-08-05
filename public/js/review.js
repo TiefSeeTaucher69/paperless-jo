@@ -123,7 +123,10 @@ class ReviewManager {
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
                 body: JSON.stringify({ dryRun: true })
             });
-            if (!response.ok) throw new Error('Preview failed');
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.message || 'Preview failed');
+            }
             const preview = await response.json();
 
             this.pendingMergeId = id;
@@ -132,7 +135,7 @@ class ReviewManager {
             this.showModal();
         } catch (error) {
             console.error('Merge preview failed:', error);
-            alert('Merge preview failed. Please try again.');
+            alert(error.message || 'Merge preview failed. Please try again.');
         }
     }
 

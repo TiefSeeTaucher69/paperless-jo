@@ -194,7 +194,8 @@ class EntityResolver {
       similarity: legacySimilarity,
       trigramSimilarity: judgeCandidate.trigramSim,
       embeddingSimilarity: judgeCandidate.embeddingSim,
-      verdict: verdict.verdict
+      verdict: verdict.verdict,
+      reason: verdict.reason
     };
   }
 
@@ -225,12 +226,12 @@ class EntityResolver {
     }
   }
 
-  recordCreatedAndQueued({ type, proposedName, proposedId, candidate, similarity, trigramSimilarity = null, embeddingSimilarity = null, verdict, documentId }) {
+  recordCreatedAndQueued({ type, proposedName, proposedId, candidate, similarity, trigramSimilarity = null, embeddingSimilarity = null, verdict, reason = null, documentId }) {
     if (!this.store.insertQueueEntry({
       entityType: type, proposedName, proposedId,
       candidateName: candidate.name, candidateId: candidate.id,
       similarity, trigramSimilarity, embeddingSimilarity,
-      llmVerdict: verdict, llmReason: null,
+      llmVerdict: verdict, llmReason: reason,
       status: 'open', documentId
     })) {
       console.error(`[ERROR] entityResolver: Neu angelegte Entitaet "${proposedName}" (${type}, id=${proposedId}) konnte nicht in die Review-Queue eingetragen werden - sie erscheint nie zur Pruefung, obwohl sie als "unsure" markiert war`);

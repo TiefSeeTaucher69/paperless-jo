@@ -25,7 +25,8 @@ test('mergeEntity mit dryRun=true fragt nur ab, schreibt und loescht nichts', as
   );
 
   assert.deepStrictEqual(result, { affectedCount: 2, documentIds: [10, 11], deleted: false });
-  assert.strictEqual(calls.filter(c => c.method === 'get').length, 1);
+  // 2 statt 1: der Existenz-Check des Merge-Ziels laeuft vor der Dokumentensuche.
+  assert.strictEqual(calls.filter(c => c.method === 'get').length, 2);
 });
 
 test('mergeEntity mit dryRun=false hängt um, verifiziert und loescht', async () => {
@@ -34,8 +35,9 @@ test('mergeEntity mit dryRun=false hängt um, verifiziert und loescht', async ()
   const mockClient = {
     get: async () => {
       getCallCount++;
-      // Erster Aufruf (vor dem Umhaengen) findet Dokumente, zweiter (danach) findet keine mehr.
-      return getCallCount === 1
+      // Aufruf 1 ist der Existenz-Check des Merge-Ziels (Body irrelevant, darf nur nicht werfen).
+      // Aufruf 2 (vor dem Umhaengen) findet Dokumente, ab Aufruf 3 (danach) keine mehr.
+      return getCallCount === 2
         ? { data: { results: [{ id: 20 }], next: null } }
         : { data: { results: [], next: null } };
     },
@@ -79,7 +81,7 @@ test('mergeEntity fuer type=tag nutzt modify_tags mit add_tags/remove_tags', asy
   const mockClient = {
     get: async () => {
       getCallCount++;
-      return getCallCount === 1
+      return getCallCount === 2
         ? { data: { results: [{ id: 40 }], next: null } }
         : { data: { results: [], next: null } };
     },
@@ -101,7 +103,7 @@ test('mergeEntity mit dryRun=false behandelt 404 beim Loeschen als bereits erled
   const mockClient = {
     get: async () => {
       getCallCount++;
-      return getCallCount === 1
+      return getCallCount === 2
         ? { data: { results: [{ id: 50 }], next: null } }
         : { data: { results: [], next: null } };
     },
@@ -125,7 +127,7 @@ test('mergeEntity mit dryRun=false wirft weiter, wenn das Loeschen nicht mit 404
   const mockClient = {
     get: async () => {
       getCallCount++;
-      return getCallCount === 1
+      return getCallCount === 2
         ? { data: { results: [{ id: 60 }], next: null } }
         : { data: { results: [], next: null } };
     },
@@ -164,7 +166,7 @@ test('mergeEntity mit dryRun=false und uebereinstimmenden expectedDocumentIds (a
   const mockClient = {
     get: async () => {
       getCallCount++;
-      return getCallCount === 1
+      return getCallCount === 2
         ? { data: { results: [{ id: 21 }, { id: 20 }], next: null } }
         : { data: { results: [], next: null } };
     },
@@ -185,7 +187,7 @@ test('mergeEntity ohne expectedDocumentIds prueft nicht auf Abweichung (Standard
   const mockClient = {
     get: async () => {
       getCallCount++;
-      return getCallCount === 1
+      return getCallCount === 2
         ? { data: { results: [{ id: 99 }], next: null } }
         : { data: { results: [], next: null } };
     },
@@ -257,6 +259,69 @@ test('mergeEntity haengt mergeProgress an den Fehler, wenn nach dem Umhaengen no
   }
 });
 
+test('mergeEntity wirft eine klare Meldung, wenn das Merge-Ziel bereits geloescht ist (dryRun=false)', async () => {
+  const calls = [];
+  const mockClient = {
+    get: async (url) => {
+      calls.push(url);
+      if (url === '/document_types/54/') {
+        const error = new Error('Request failed with status code 404');
+        error.response = { status: 404 };
+        throw error;
+      }
+      throw new Error(`unerwarteter GET: ${url}`);
+    },
+    post: async () => { throw new Error('post haette nicht aufgerufen werden duerfen - Ziel existiert nicht mehr'); },
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () => paperlessService.mergeEntity('document_type', 55, 54, { dryRun: false })),
+    /54.*existiert nicht mehr|no longer exists/
+  );
+  // Der Existenz-Check muss vor jedem anderen GET (z.B. _findDocumentsWithEntity) laufen,
+  // sonst wuerde ein teurer Dokumenten-Scan laufen, bevor der eigentliche Fehler auffliegt.
+  assert.deepStrictEqual(calls, ['/document_types/54/']);
+});
+
+test('mergeEntity wirft dieselbe klare Meldung schon im Preview (dryRun=true), bevor Dokumente gesucht werden', async () => {
+  const mockClient = {
+    get: async (url) => {
+      const error = new Error('Request failed with status code 404');
+      error.response = { status: 404 };
+      throw error;
+    },
+    post: async () => { throw new Error('post haette nicht aufgerufen werden duerfen'); },
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () => paperlessService.mergeEntity('tag', 5, 6, { dryRun: true })),
+    /no longer exists/
+  );
+});
+
+test('mergeEntity fuehrt normal fort, wenn das Merge-Ziel noch existiert', async () => {
+  let getCallCount = 0;
+  const mockClient = {
+    get: async (url) => {
+      getCallCount++;
+      if (getCallCount === 1) {
+        assert.strictEqual(url, '/tags/6/');
+        return { data: { id: 6 } };
+      }
+      return { data: { results: [{ id: 10 }], next: null } };
+    },
+    post: async () => ({ data: {} }),
+    delete: async () => ({ data: {} })
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.mergeEntity('tag', 5, 6, { dryRun: true })
+  );
+  assert.deepStrictEqual(result, { affectedCount: 1, documentIds: [10], deleted: false });
+});
+
 test('mergeEntity wirft bei fromId=null und stellt keinen HTTP-Request', async () => {
   const mockClient = {
     get: async () => { throw new Error('get haette nicht aufgerufen werden duerfen'); },
@@ -297,7 +362,7 @@ test('mergeEntity ruft nach einem echten Merge die Fingerprint-Invalidierung auf
   const mockClient = {
     get: async () => {
       getCallCount++;
-      return getCallCount === 1
+      return getCallCount === 2
         ? { data: { results: [{ id: 70 }], next: null } }
         : { data: { results: [], next: null } };
     },

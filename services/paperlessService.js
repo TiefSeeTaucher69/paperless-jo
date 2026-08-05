@@ -236,7 +236,7 @@ class PaperlessService {
         type, proposedName, proposedId, documentId,
         candidate: decision.candidate, similarity: decision.similarity,
         trigramSimilarity: decision.trigramSimilarity, embeddingSimilarity: decision.embeddingSimilarity,
-        verdict: decision.verdict
+        verdict: decision.verdict, reason: decision.reason
       });
     } catch (error) {
       console.warn(`[WARNING] Konnte Review-Queue-Eintrag fuer "${proposedName}" nicht schreiben:`, error.message);
@@ -1372,6 +1372,21 @@ async getOrCreateDocumentType(name, options = {}) {
     }
   }
 
+  async _entityExists(type, id) {
+    const endpointMap = { tag: 'tags', correspondent: 'correspondents', document_type: 'document_types' };
+    const endpoint = endpointMap[type];
+    if (!endpoint) {
+      throw new Error(`mergeEntity: unbekannter Typ "${type}"`);
+    }
+    try {
+      await this.client.get(`/${endpoint}/${id}/`);
+      return true;
+    } catch (error) {
+      if (error.response?.status === 404) return false;
+      throw error;
+    }
+  }
+
   async _findDocumentsWithEntity(type, id) {
     const filterFieldMap = {
       tag: 'tags__id',
@@ -1443,6 +1458,15 @@ async getOrCreateDocumentType(name, options = {}) {
     this.initialize();
     if (!Number.isInteger(fromId) || fromId <= 0 || !Number.isInteger(toId) || toId <= 0 || fromId === toId) {
       throw new Error(`mergeEntity: ungueltige IDs (fromId=${fromId}, toId=${toId})`);
+    }
+
+    // Ein anderer, bereits abgeschlossener Merge kann toId zwischenzeitlich geloescht haben (zwei
+    // offene Queue-Eintraege koennen denselben Kandidaten referenzieren). Ohne diesen Check faellt
+    // das erst beim bulk_edit als nichtssagender "Request failed with status code 400" auf - schon
+    // im Preview (dryRun=true) pruefen, damit der Nutzer das vor jeder Bestaetigung sieht.
+    const targetExists = await this._entityExists(type, toId);
+    if (!targetExists) {
+      throw new Error(`Merge target ${type} ${toId} no longer exists - it was likely deleted by an earlier merge in this session. Reject this queue entry; a future scan or backfill will propose a fresh match against the current entities.`);
     }
 
     const affected = await this._findDocumentsWithEntity(type, fromId);
