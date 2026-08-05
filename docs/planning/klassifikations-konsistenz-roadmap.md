@@ -132,14 +132,22 @@ gilt der Plan.
    abweichendes Format ungeprüft nach `updateData.created` durchzureichen —
    ergänzt nach dem Baseline-Lauf.
 
-**Abnahmekriterium:** dasselbe Dokument zweimal über
-`scripts/dry-run-eval.js --repeat 2` verarbeitet liefert ein identisches
-Ergebnis (gemessene Baseline vor Phase 1: 10 von 10 Dokumenten instabil), und
+**Abnahmekriterium (präzisiert 2026-08-05, NACHAUDIT-04):** dasselbe
+Dokument zweimal über `scripts/dry-run-eval.js --repeat 2` verarbeitet
+liefert identische Ergebnisse **bei identischem Bestand** (Tags,
+Korrespondenten, Dokumentarten unverändert zwischen den beiden Läufen), und
 die Bestandslisten sind im tatsächlich gesendeten Prompt nachweisbar enthalten
-(Prüfung über das bestehende Prompt-Log). Nicht über einen normalen
-Serverstart prüfen — `PROCESS_PREDEFINED_DOCUMENTS=yes` und
-`DISABLE_AUTOMATIC_PROCESSING` ungesetzt bedeuten: ein Start verarbeitet sofort
-Dokumente und schreibt nach Paperless.
+(Prüfung über das bestehende Prompt-Log). Vollständiger Determinismus über
+Läufe hinweg *unabhängig* vom Bestand ist mit diesem Design laut AUDIT-019
+strukturell nicht erreichbar (wachsende Bestandslisten zwischen Läufen sind
+eine legitime Rückkopplung, kein Bug) und ist **kein** Ziel dieses Kriteriums
+— der Ausgang über den EntityResolver (Phase 2) ist der Hebel gegen
+Inkonsistenz, nicht bitweise Prompt-Determinismus. Gemessene Baseline vor
+Phase 1: 10 von 10 Dokumenten instabil; nach Phase 1–5 weiterhin 4 von 10
+(Ursache: s. o., nicht durch Sampling behebbar).
+Nicht über einen normalen Serverstart prüfen — `PROCESS_PREDEFINED_DOCUMENTS=yes`
+und `DISABLE_AUTOMATIC_PROCESSING` ungesetzt bedeuten: ein Start verarbeitet
+sofort Dokumente und schreibt nach Paperless.
 
 ## Phase 2 — EntityResolver
 
