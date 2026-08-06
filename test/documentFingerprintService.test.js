@@ -156,7 +156,7 @@ test('findMatch gefolgt von recordFingerprint fuer denselben Inhalt embedded nur
   ]);
   let embedCalls = 0;
   const embeddingService = {
-    embed: async (text) => {
+    embed: async () => {
       embedCalls++;
       if (embedCalls > 1) throw new Error('embed sollte hier nur einmal aufgerufen werden');
       return [1, 0];
