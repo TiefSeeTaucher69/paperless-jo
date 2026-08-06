@@ -519,6 +519,23 @@ The custom_fields are optional; only fill in values you actually find in the doc
     }
 
     /**
+     * A document type is a category name, not a sentence or an unfilled prompt
+     * template. Mirrors _isPlausibleTag's heuristics - the observed prompt-placeholder
+     * leak was literally "Invoice/Contract/..." (1.2.c).
+     * @param {*} value
+     * @returns {boolean}
+     */
+    _isPlausibleDocumentType(value) {
+        if (typeof value !== 'string') return false;
+        const trimmed = value.trim();
+        if (!trimmed) return false;
+        if (trimmed.includes('/')) return false;
+        if (trimmed.includes('...')) return false;
+        if (trimmed.length > 60) return false;
+        return true;
+    }
+
+    /**
      * Normalize document_date to YYYY-MM-DD. Accepts ISO as-is and converts
      * unambiguous German DD.MM.YYYY notation (observed in the baseline run
      * alongside correct ISO output from the same prompt). Anything else is
@@ -560,6 +577,11 @@ The custom_fields are optional; only fill in values you actually find in the doc
             if (doc.tags.length < before) {
                 console.warn(`[WARNING] Dropped ${before - doc.tags.length} tag(s) that looked like extracted data rather than category labels`);
             }
+        }
+
+        if (doc.document_type && !this._isPlausibleDocumentType(doc.document_type)) {
+            console.warn(`[WARNING] Dropped document_type "${doc.document_type}" - looked like a prompt placeholder rather than a category name`);
+            doc.document_type = null;
         }
 
         if (doc.document_date) {
