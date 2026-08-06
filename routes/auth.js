@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const config = require('../config/config');
 
 // Read at call-time, not module-load-time: server.js guarantees JWT_SECRET is
 // generated and persisted before the first request is served (see Task 3).
@@ -25,7 +24,7 @@ const authenticateJWT = (req, res, next) => {
     const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded;
     next();
-  } catch (error) {
+  } catch {
     return res.status(403).json({ message: 'Invalid or expired token' });
   }
 };
@@ -47,7 +46,7 @@ const isAuthenticated = (req, res, next) => {
     const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded;
     next();
-  } catch (error) {
+  } catch {
     res.clearCookie('jwt');
     return res.redirect('/login');
   }
