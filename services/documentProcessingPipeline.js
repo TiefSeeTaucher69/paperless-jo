@@ -96,6 +96,28 @@ class DocumentProcessingPipeline {
     }
   }
 
+  // NACHAUDIT-12 (Audit Abschnitt 18.6, Bedingung 6): original_documents speichert bereits den
+  // Vorzustand (Tags, Korrespondent, Titel) vor jeder KI-Aenderung, aber es gab bisher keine
+  // Funktion, die daraus wiederherstellt. Nutzt overwriteDocumentFields (Replace-Semantik) statt
+  // saveDocumentChanges/updateDocument - eine Wiederherstellung muss auch seither hinzugekommene
+  // Tags/einen seither gesetzten Korrespondenten entfernen koennen, nicht nur ergaenzen.
+  async restoreOriginalData(documentId) {
+    const original = await this.documentModel.getOriginalData(documentId);
+    if (!original) {
+      return { restored: false, reason: 'no_original_data' };
+    }
+
+    const restoredFields = {
+      title: original.title,
+      tags: JSON.parse(original.tags || '[]'),
+      correspondent: original.correspondent ? Number(original.correspondent) : null
+    };
+
+    await this.paperlessService.overwriteDocumentFields(documentId, restoredFields);
+
+    return { restored: true, original: restoredFields };
+  }
+
   // AUDIT-004: der PATCH nach Paperless muss zuerst und fuer sich stehen. updateDocument()
   // wirft jetzt statt still null zurueckzugeben (services/paperlessService.js) - schlaegt er
   // fehl, duerfen addProcessedDocument/addOpenAIMetrics/addToHistory nicht laufen, sonst gilt

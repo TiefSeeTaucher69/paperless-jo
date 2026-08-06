@@ -1271,6 +1271,23 @@ router.get('/api/history', async (req, res) => {
   }
 });
 
+router.post('/api/documents/:id/restore-original', async (req, res) => {
+  const documentId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(documentId) || documentId <= 0) {
+    return res.status(400).json({ error: 'Invalid document id' });
+  }
+  try {
+    const result = await getDocumentProcessingPipeline().restoreOriginalData(documentId);
+    if (!result.restored) {
+      return res.status(404).json({ error: 'No original data recorded for this document' });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error(`[ERROR] restoring original data for document ${documentId}:`, error);
+    res.status(500).json({ error: 'Restore failed' });
+  }
+});
+
 /**
  * @swagger
  * /api/reset-all-documents:
