@@ -306,6 +306,21 @@ test('restoreOriginalData liefert restored:false, wenn kein Original gespeichert
   assert.deepStrictEqual(result, { restored: false, reason: 'no_original_data' });
 });
 
+test('restoreOriginalData liefert restored:false, wenn getOriginalData wegen eines internen DB-Fehlers [] statt null liefert (Review-Fix)', async () => {
+  const overwriteCalls = [];
+  const pipeline = makePipeline({
+    documentModel: { getOriginalData: async () => [] },
+    paperlessService: {
+      overwriteDocumentFields: async (documentId, fields) => { overwriteCalls.push({ documentId, fields }); return {}; }
+    }
+  });
+
+  const result = await pipeline.restoreOriginalData(42);
+
+  assert.deepStrictEqual(result, { restored: false, reason: 'no_original_data' });
+  assert.strictEqual(overwriteCalls.length, 0);
+});
+
 test('restoreOriginalData schreibt den gespeicherten Originalzustand ueber overwriteDocumentFields zurueck', async () => {
   const overwriteCalls = [];
   const pipeline = makePipeline({
