@@ -369,3 +369,76 @@ test('restoreOriginalData wirft weiter, wenn overwriteDocumentFields fehlschlaeg
 
   await assert.rejects(() => pipeline.restoreOriginalData(42), /PATCH fehlgeschlagen/);
 });
+
+test('findFingerprintMatch wendet den Treffer im Modus "apply" an (Default-Verhalten)', async () => {
+  const pipeline = makePipeline({
+    paperlessService: { hasTagId: async () => true, hasDocumentTypeId: async () => true },
+    documentFingerprintService: {
+      findMatch: async () => ({ tagIds: [1], documentTypeId: 2, similarity: 0.95, matchedDocumentId: 101 }),
+      recordFingerprint: async () => {}
+    },
+    config: { documentFingerprint: { enabled: true, mode: 'apply' }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.deepStrictEqual(result, { tagIds: [1], documentTypeId: 2 });
+});
+
+test('findFingerprintMatch protokolliert im Modus "observe" nur, wendet aber nichts an (NACHAUDIT-11)', async () => {
+  const observeCalls = [];
+  const pipeline = makePipeline({
+    paperlessService: { hasTagId: async () => true, hasDocumentTypeId: async () => true },
+    documentFingerprintService: {
+      findMatch: async () => ({ tagIds: [1], documentTypeId: 2, similarity: 0.95, matchedDocumentId: 101 }),
+      recordFingerprint: async () => {},
+      store: { recordObservation: (args) => { observeCalls.push(args); return true; } }
+    },
+    config: { documentFingerprint: { enabled: true, mode: 'observe' }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.strictEqual(result, null);
+  assert.strictEqual(observeCalls.length, 1);
+  assert.deepStrictEqual(observeCalls[0], {
+    correspondentId: 42, matchedDocumentId: 101, similarity: 0.95, tagIds: [1], documentTypeId: 2
+  });
+});
+
+test('findFingerprintMatch protokolliert im Modus "observe" die validierten (nicht die rohen) IDs (AUDIT-006 bleibt auch im Beobachtungsmodus gueltig)', async () => {
+  const observeCalls = [];
+  const pipeline = makePipeline({
+    paperlessService: {
+      hasTagId: async (id) => id === 1, // Tag 2 existiert nicht mehr
+      hasDocumentTypeId: async () => true
+    },
+    documentFingerprintService: {
+      findMatch: async () => ({ tagIds: [1, 2], documentTypeId: 3, similarity: 0.95, matchedDocumentId: 101 }),
+      recordFingerprint: async () => {},
+      store: { recordObservation: (args) => { observeCalls.push(args); return true; } }
+    },
+    config: { documentFingerprint: { enabled: true, mode: 'observe' }, limitFunctions: {} }
+  });
+
+  await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.deepStrictEqual(observeCalls[0].tagIds, [1]);
+});
+
+test('findFingerprintMatch protokolliert nichts im Modus "observe", wenn kein Treffer existiert', async () => {
+  const observeCalls = [];
+  const pipeline = makePipeline({
+    documentFingerprintService: {
+      findMatch: async () => null,
+      recordFingerprint: async () => {},
+      store: { recordObservation: (args) => { observeCalls.push(args); return true; } }
+    },
+    config: { documentFingerprint: { enabled: true, mode: 'observe' }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.strictEqual(result, null);
+  assert.strictEqual(observeCalls.length, 0);
+});
