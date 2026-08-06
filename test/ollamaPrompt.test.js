@@ -110,15 +110,47 @@ test('mustHavePrompt enthaelt keine Beispielwerte, die das Modell woertlich uebe
 test('_buildPrompt enthaelt in beiden useExistingData-Zweigen keine Prompt-Platzhalter (1.2.a)', () => {
   const forbidden = ['Invoice', 'Contract', 'Tag1', 'en/de/es'];
 
-  config.useExistingData = 'no';
-  const withoutExisting = ollamaService._buildPrompt('Text', [], [], [], {});
-  forbidden.forEach(value => assert.ok(!withoutExisting.system.includes(value), `useExistingData=no: "${value}" sollte nicht vorkommen`));
+  const savedUsePromptTags = process.env.USE_PROMPT_TAGS;
+  const savedUseExistingData = config.useExistingData;
+  const savedRestrictTags = config.restrictToExistingTags;
+  const savedRestrictCorrespondents = config.restrictToExistingCorrespondents;
 
-  config.useExistingData = 'yes';
-  config.restrictToExistingTags = 'no';
-  config.restrictToExistingCorrespondents = 'no';
-  const withExisting = ollamaService._buildPrompt('Text', ['Rechnung'], ['Finanzamt'], ['Bescheid'], {});
-  forbidden.forEach(value => assert.ok(!withExisting.system.includes(value), `useExistingData=yes: "${value}" sollte nicht vorkommen`));
+  try {
+    // Ambientes USE_PROMPT_TAGS (z.B. aus einer echten data/.env) darf nicht
+    // ungewollt den dritten Prompt-Zweig (specialPromptPreDefinedTags) aktivieren.
+    process.env.USE_PROMPT_TAGS = 'no';
 
-  config.useExistingData = 'no';
+    config.useExistingData = 'no';
+    const withoutExisting = ollamaService._buildPrompt('Text', [], [], [], {});
+    forbidden.forEach(value => assert.ok(!withoutExisting.system.includes(value), `useExistingData=no: "${value}" sollte nicht vorkommen`));
+
+    config.useExistingData = 'yes';
+    config.restrictToExistingTags = 'no';
+    config.restrictToExistingCorrespondents = 'no';
+    const withExisting = ollamaService._buildPrompt('Text', ['Rechnung'], ['Finanzamt'], ['Bescheid'], {});
+    forbidden.forEach(value => assert.ok(!withExisting.system.includes(value), `useExistingData=yes: "${value}" sollte nicht vorkommen`));
+  } finally {
+    if (savedUsePromptTags === undefined) delete process.env.USE_PROMPT_TAGS;
+    else process.env.USE_PROMPT_TAGS = savedUsePromptTags;
+    config.useExistingData = savedUseExistingData;
+    config.restrictToExistingTags = savedRestrictTags;
+    config.restrictToExistingCorrespondents = savedRestrictCorrespondents;
+  }
+});
+
+test('_buildPrompt enthaelt im USE_PROMPT_TAGS-Zweig keine Prompt-Platzhalter (1.2.a)', () => {
+  const forbidden = ['Invoice', 'Contract', 'Tag1', 'en/de/es'];
+
+  const savedUsePromptTags = process.env.USE_PROMPT_TAGS;
+
+  try {
+    // Dritter, eigenstaendiger Code-Pfad in _buildPrompt: ersetzt systemPrompt komplett
+    // durch config.specialPromptPreDefinedTags statt SYSTEM_PROMPT/mustHavePrompt zu nutzen.
+    process.env.USE_PROMPT_TAGS = 'yes';
+    const { system } = ollamaService._buildPrompt('Text', [], [], [], {});
+    forbidden.forEach(value => assert.ok(!system.includes(value), `USE_PROMPT_TAGS=yes: "${value}" sollte nicht vorkommen`));
+  } finally {
+    if (savedUsePromptTags === undefined) delete process.env.USE_PROMPT_TAGS;
+    else process.env.USE_PROMPT_TAGS = savedUsePromptTags;
+  }
 });

@@ -18,6 +18,16 @@ test('_hasPreExistingPromptMismatch: false wenn SYSTEM_PROMPT die Zeichenkette n
   assert.strictEqual(config._hasPreExistingPromptMismatch(undefined, 'no'), false);
 });
 
+test('_hasPreExistingPromptMismatch: true bei natuersprachlicher, kleingeschriebener Formulierung (wie in .env.example)', () => {
+  // Diese Phrase steht woertlich im Default-SYSTEM_PROMPT von .env.example - die alte,
+  // rein auf "Pre-existing" (case-sensitive) geankerte Pruefung hat sie nie erkannt.
+  const config = require('../config/config');
+  assert.strictEqual(
+    config._hasPreExistingPromptMismatch('FIRST check the existing tags before suggesting new ones', 'no'),
+    true
+  );
+});
+
 test('Startup warnt tatsaechlich, wenn SYSTEM_PROMPT+USE_EXISTING_DATA widersprechen', () => {
   const savedPrompt = process.env.SYSTEM_PROMPT;
   const savedUseExisting = process.env.USE_EXISTING_DATA;

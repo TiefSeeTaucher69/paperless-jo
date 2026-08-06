@@ -68,7 +68,9 @@ async function main() {
       const result = await entityJudge.judge(type, a, b);
       const durationMs = Date.now() - startedAt;
       durations.push(durationMs);
-      console.log(`${String(durationMs).padStart(6)} ms  ${result.verdict.padEnd(9)}  ${type}: "${a}" vs "${b}"`);
+      // result.verdict kann bei einer nicht parsebaren Modellantwort fehlen/kein String sein -
+      // .padEnd wuerde dann das ganze Messskript abbrechen statt nur die eine Zeile zu markieren.
+      console.log(`${String(durationMs).padStart(6)} ms  ${String(result?.verdict ?? 'INVALID').padEnd(9)}  ${type}: "${a}" vs "${b}"`);
     } catch (error) {
       const durationMs = Date.now() - startedAt;
       timeouts += 1;

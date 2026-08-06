@@ -155,7 +155,11 @@ const useExistingData = process.env.USE_EXISTING_DATA || 'no';
 // 'yes' (see services/ollamaService.js:_buildPrompt) - otherwise the rule refers to lists the
 // model never sees, silently and without any signal in normal operation.
 function hasPreExistingPromptMismatch(systemPrompt, useExistingDataValue) {
-  return (systemPrompt || '').includes('Pre-existing') && useExistingDataValue !== 'yes';
+  // Case-insensitive und nicht nur auf "Pre-existing" beschraenkt: operative SYSTEM_PROMPTs
+  // (siehe .env.example) formulieren das natuersprachlich ("FIRST check the existing tags...")
+  // statt mit der literalen Phrase "Pre-existing".
+  return /pre-existing|existing tags|existing correspondents|existing document types/i
+    .test(systemPrompt || '') && useExistingDataValue !== 'yes';
 }
 
 if (hasPreExistingPromptMismatch(process.env.SYSTEM_PROMPT, useExistingData)) {
@@ -293,9 +297,9 @@ module.exports = {
   {
     "title": "xxxxx",
     "correspondent": "xxxxxxxx",
-    "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
+    "tags": ["<tag>", "<tag>", "..."],
     "document_date": "YYYY-MM-DD",
-    "language": "en/de/es/..."
+    "language": "<ISO 639-1 code, e.g. de>"
   }`,
   mustHavePrompt: `  Return the result EXCLUSIVELY as a JSON object. The Tags, Title and Document_Type MUST be in the language that is used in the document.:
   IMPORTANT: The custom_fields are optional and can be left out if not needed, only try to fill out the values if you find a matching information in the document.

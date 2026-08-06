@@ -5,7 +5,7 @@ const config = require('../config/config');
 // AUDIT-007: entityJudge und entityEmbeddingService rufen Ollama fest verdrahtet auf,
 // unabhaengig von config.aiProvider. Ist der Resolver oder der Embedding-Kanal aktiv und
 // Ollama nicht erreichbar, faellt heute jeder Judge-Aufruf einzeln auf ECONNREFUSED ->
-// "unsure" zurueck und jeder Embedding-Aufruf einzeln in eine eigene console.warn-Zeile -
+// "unavailable" zurueck und jeder Embedding-Aufruf einzeln in eine eigene console.warn-Zeile -
 // bei einem groesseren Dokumentbestand potenziell hunderte identische Meldungen statt
 // einer. check() prueft einmalig beim Serverstart und gibt bei Nichterreichbarkeit genau
 // eine deutliche Warnung aus.
@@ -29,7 +29,7 @@ class OllamaReachabilityGuard {
         `[WARNING] ollamaReachabilityGuard: Ollama unter ${config._maskUrl(config.ollama.apiUrl)} ` +
         `nicht erreichbar (${error.message}), obwohl ENTITY_RESOLVER_ENABLED und/oder ` +
         'EMBEDDING_SIMILARITY_ENABLED aktiv sind. Judge- und Embedding-Aufrufe sind fest ' +
-        'an Ollama gebunden und werden bis zur naechsten Verfuegbarkeit auf "unsure" bzw. ' +
+        'an Ollama gebunden und werden bis zur naechsten Verfuegbarkeit auf "unavailable" bzw. ' +
         'Trigram-only degradieren. (AUDIT-007)'
       );
       return false;

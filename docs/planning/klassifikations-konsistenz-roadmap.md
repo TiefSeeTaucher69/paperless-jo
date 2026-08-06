@@ -406,6 +406,7 @@ dieser Instanz. Werte gehören hierher, nicht ins Beispiel.
 
 | Variable | gemessener Wert | Quelle |
 |---|---|---|
+| `USE_EXISTING_DATA` | yes | A/B-Test 2026-08-06, Dokumenttyp-Stabilität 1-von-3 → 3-von-3 |
 | `ENTITY_RESOLVER_AUTO_THRESHOLD` | 0.8 | Phase-2-Tuning; im Test 2026-08-06 bestätigt (5 von 5 Auto-Merges korrekt, höchster Wert 0.848 — 0.90 hätte alle fünf verhindert) |
 | `ENTITY_RESOLVER_JUDGE_MIN` | 0.5 | Phase-2-Tuning |
 | `EMBEDDING_EXCLUDED_TYPES` | `tag` | Phase-5-Messung 2026-08-02 |
