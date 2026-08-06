@@ -7,6 +7,17 @@
 // (siehe test/fingerprintObservationReport.test.js) - main() bleibt der einzige Ort, der eine
 // echte Datenbankverbindung oeffnet.
 const Database = require('better-sqlite3');
+const fs = require('fs');
+
+// Finding 2 (Nachaudit Paket 4, Review-Fix): auf einer Instanz, auf der
+// DOCUMENT_FINGERPRINT_ENABLED nie 'yes' war, existiert weder data/entities.db noch (falls die
+// Datei aus einem anderen Grund existiert) die Tabelle document_fingerprint_observations - die
+// wird erst beim Instanziieren von DocumentFingerprintStore angelegt. tableExists ist von main()
+// getrennt, damit dieser Vorab-Check ohne echte Datenbankverbindung testbar ist.
+function tableExists(db, name) {
+  const row = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name);
+  return !!row;
+}
 
 function buildReport(db) {
   const total = db.prepare(`SELECT COUNT(*) AS n FROM document_fingerprint_observations`).get();
@@ -28,7 +39,7 @@ function buildReport(db) {
     GROUP BY band ORDER BY band
   `).all();
   const recent = db.prepare(`
-    SELECT id, correspondent_id, matched_document_id, similarity, tag_ids, document_type_id, created_at
+    SELECT id, document_id, correspondent_id, matched_document_id, similarity, tag_ids, document_type_id, created_at
     FROM document_fingerprint_observations
     ORDER BY created_at DESC, id DESC LIMIT 20
   `).all();
@@ -58,20 +69,39 @@ function printReport(report, { dbPath, mode, similarityThreshold }) {
 
   console.log('\nJuengste 20 Beobachtungen (Ausgangspunkt fuer die Stichprobenpruefung):');
   for (const row of report.recent) {
-    console.log(`  [${row.created_at}] correspondent=${row.correspondent_id} matched_document=${row.matched_document_id} similarity=${row.similarity.toFixed(3)} tags=${row.tag_ids} document_type=${row.document_type_id ?? '(keine)'}`);
+    console.log(`  [${row.created_at}] document=${row.document_id ?? '(unbekannt)'} correspondent=${row.correspondent_id} matched_document=${row.matched_document_id} similarity=${row.similarity.toFixed(3)} tags=${row.tag_ids} document_type=${row.document_type_id ?? '(keine)'}`);
   }
 }
 
+const EMPTY_REPORT = { total: 0, byCorrespondent: [], bySimilarityBand: [], recent: [] };
+
 function main() {
   const config = require('../config/config');
-  const db = new Database(config.entityResolver.dbPath, { readonly: true });
+  const meta = {
+    dbPath: config.entityResolver.dbPath,
+    mode: config.documentFingerprint.mode,
+    similarityThreshold: config.documentFingerprint.similarityThreshold
+  };
+
+  // Finding 2: fehlt die Datenbankdatei komplett (Feature noch nie aktiviert), wuerde
+  // `new Database(..., {readonly:true})` mit SQLITE_CANTOPEN werfen, statt der freundlichen
+  // Hinweismeldung, die printReport fuer "keine Beobachtungen" ohnehin schon hat.
+  if (!fs.existsSync(meta.dbPath)) {
+    printReport(EMPTY_REPORT, meta);
+    return;
+  }
+
+  const db = new Database(meta.dbPath, { readonly: true });
   try {
+    // Die Datei kann existieren (z.B. wegen des EntityResolvers), ohne dass die
+    // Beobachtungstabelle je angelegt wurde - die entsteht erst, wenn DocumentFingerprintStore
+    // instanziiert wird (DOCUMENT_FINGERPRINT_ENABLED=yes).
+    if (!tableExists(db, 'document_fingerprint_observations')) {
+      printReport(EMPTY_REPORT, meta);
+      return;
+    }
     const report = buildReport(db);
-    printReport(report, {
-      dbPath: config.entityResolver.dbPath,
-      mode: config.documentFingerprint.mode,
-      similarityThreshold: config.documentFingerprint.similarityThreshold
-    });
+    printReport(report, meta);
   } finally {
     db.close();
   }
@@ -81,4 +111,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { buildReport, printReport };
+module.exports = { buildReport, printReport, tableExists };
