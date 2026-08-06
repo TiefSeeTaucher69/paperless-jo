@@ -23,28 +23,8 @@ class OllamaService {
             timeout: 1800000 // 30 minutes timeout
         });
 
-        // JSON schema for document analysis output
-        this.documentAnalysisSchema = {
-            type: "object",
-            properties: {
-                title: { type: "string" },
-                correspondent: { type: "string" },
-                tags: {
-                    type: "array",
-                    items: { type: "string" }
-                },
-                document_type: { type: "string" },
-                document_date: { type: "string" },
-                language: { type: "string" },
-                custom_fields: {
-                    type: "object",
-                    additionalProperties: true
-                }
-            },
-            required: ["title", "correspondent", "tags", "document_type", "document_date", "language"]
-        };
-
-        // Schema for playground analysis (simpler version)
+        // Schema for playground analysis (simpler version) - never includes custom_fields,
+        // the playground has no custom-fields UI.
         this.playgroundSchema = {
             type: "object",
             properties: {
@@ -60,6 +40,40 @@ class OllamaService {
             },
             required: ["title", "correspondent", "tags", "document_type", "document_date", "language"]
         };
+    }
+
+    /**
+     * JSON schema for document analysis output. A getter, not a fixed property: with
+     * additionalProperties:true, custom_fields let the model fill the field with invented
+     * keys (a tax ID and an IBAN were observed in the audit test) even while
+     * ACTIVATE_CUSTOM_FIELDS=no - those values are discarded downstream but still burn
+     * num_predict budget and can land in logs/prompt.txt (1.2.b). config.limitFunctions.
+     * activateCustomFields can change at runtime via routes/setup.js, so this must be
+     * recomputed on every access rather than cached once at construction time.
+     * @returns {Object}
+     */
+    get documentAnalysisSchema() {
+        const schema = {
+            type: "object",
+            properties: {
+                title: { type: "string" },
+                correspondent: { type: "string" },
+                tags: {
+                    type: "array",
+                    items: { type: "string" }
+                },
+                document_type: { type: "string" },
+                document_date: { type: "string" },
+                language: { type: "string" }
+            },
+            required: ["title", "correspondent", "tags", "document_type", "document_date", "language"]
+        };
+
+        if (config.limitFunctions.activateCustomFields === 'yes') {
+            schema.properties.custom_fields = { type: "object", additionalProperties: true };
+        }
+
+        return schema;
     }
 
     /**
