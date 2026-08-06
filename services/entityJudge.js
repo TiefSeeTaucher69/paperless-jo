@@ -77,6 +77,7 @@ class EntityJudge {
       }
     };
 
+    const startedAt = Date.now();
     let response;
     try {
       response = await this.client.post(`${config.ollama.apiUrl}/api/generate`, requestBody);
@@ -87,6 +88,14 @@ class EntityJudge {
       console.warn(`[WARNING] entityJudge: erster Versuch fehlgeschlagen (${firstError.message}), ein Retry folgt`);
       await delay(RETRY_DELAY_MS);
       response = await this.client.post(`${config.ollama.apiUrl}/api/generate`, requestBody);
+    }
+
+    // 1.1.d: billiger und aussagekraeftiger als ein Probe-Aufruf beim Start (der 8s
+    // Startzeit kosten wuerde) - haette den Befund A-3 (Judge antwortet nicht) von
+    // selbst sichtbar gemacht.
+    const durationMs = Date.now() - startedAt;
+    if (durationMs > config.entityJudge.timeoutMs * 0.5) {
+      console.warn(`[WARNING] entityJudge: Aufruf fuer ${entityType} ("${truncatedA}" vs "${truncatedB}") dauerte ${durationMs} ms - mehr als 50% von ENTITY_JUDGE_TIMEOUT_MS=${config.entityJudge.timeoutMs}`);
     }
 
     const raw = response.data.response;

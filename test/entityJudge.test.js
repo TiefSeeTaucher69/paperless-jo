@@ -130,3 +130,42 @@ test('num_predict ist 60 und der Prompt verlangt eine kurze Begruendung (1.1.b)'
   assert.strictEqual(captured.body.options.num_predict, 60);
   assert.ok(captured.body.prompt.includes('hoechstens 8 Woerter'));
 });
+
+test('warnt, wenn ein Aufruf laenger als 50% des konfigurierten Timeouts dauert (1.1.d)', async () => {
+  const savedWarn = console.warn;
+  const warnMessages = [];
+  console.warn = (...args) => { warnMessages.push(args.join(' ')); };
+  const savedTimeout = config.entityJudge.timeoutMs;
+  config.entityJudge.timeoutMs = 100;
+  entityJudge.client = {
+    post: async () => {
+      await new Promise(resolve => setTimeout(resolve, 60));
+      return { data: { response: { verdict: 'same', reason: 'langsam' } } };
+    }
+  };
+
+  try {
+    await entityJudge.judge('tag', 'A', 'B');
+    assert.ok(warnMessages.some(m => m.includes('dauerte')), 'sollte eine Latenz-Warnung ausgeben');
+  } finally {
+    console.warn = savedWarn;
+    config.entityJudge.timeoutMs = savedTimeout;
+  }
+});
+
+test('warnt NICHT, wenn ein Aufruf unter 50% des konfigurierten Timeouts bleibt (1.1.d)', async () => {
+  const savedWarn = console.warn;
+  const warnMessages = [];
+  console.warn = (...args) => { warnMessages.push(args.join(' ')); };
+  const savedTimeout = config.entityJudge.timeoutMs;
+  config.entityJudge.timeoutMs = 100000;
+  captureRequest({ response: { verdict: 'same', reason: 'schnell' } });
+
+  try {
+    await entityJudge.judge('tag', 'A', 'B');
+    assert.ok(!warnMessages.some(m => m.includes('dauerte')), 'sollte bei einem schnellen Aufruf nicht warnen');
+  } finally {
+    console.warn = savedWarn;
+    config.entityJudge.timeoutMs = savedTimeout;
+  }
+});
