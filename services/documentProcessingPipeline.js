@@ -142,6 +142,31 @@ class DocumentProcessingPipeline {
   }
 }
 
+// NACHAUDIT-13: gemeinsame Anwendungslogik fuer server.js/routes/setup.js#buildUpdateData -
+// beide Dateien duplizieren buildUpdateData bereits vollstaendig (AUDIT-014); diese zwei
+// Funktionen verhindern, dass die Entscheidung "wurde der Fingerprint-Treffer tatsaechlich
+// uebernommen" ein zweites Mal dupliziert wird, und machen sie isoliert testbar. Ein Treffer,
+// der wegen activateTagging='no'/activateDocumentType='no' NIE hier ankommt, oder dessen
+// tagIds/documentTypeId leer sind, darf nicht als angewendet gelten - sonst wird er trotzdem
+// als 'inherited' gespeichert und faellt faelschlich als Kandidat fuer ein drittes Dokument
+// weg (source='inherited' wird von findCandidates() ausgeschlossen, siehe
+// models/documentFingerprintStore.js), obwohl er in Paperless nie etwas bewirkt hat.
+function applyFingerprintTags(fingerprintMatch, updateData) {
+  if (fingerprintMatch && fingerprintMatch.tagIds.length > 0) {
+    updateData.tags = fingerprintMatch.tagIds;
+    return true;
+  }
+  return false;
+}
+
+function applyFingerprintDocumentType(fingerprintMatch, updateData) {
+  if (fingerprintMatch && fingerprintMatch.documentTypeId) {
+    updateData.document_type = fingerprintMatch.documentTypeId;
+    return true;
+  }
+  return false;
+}
+
 let instance = null;
 
 // Lazy statt Modul-Top-Level: verhindert, dass jeder Server-Boot data/entities.db oeffnet, auch
@@ -171,4 +196,4 @@ function getInstance() {
   return instance;
 }
 
-module.exports = { DocumentProcessingPipeline, getInstance };
+module.exports = { DocumentProcessingPipeline, getInstance, applyFingerprintTags, applyFingerprintDocumentType };

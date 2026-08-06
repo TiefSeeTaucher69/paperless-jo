@@ -22,7 +22,7 @@ const { csrfProtection } = require('../middleware/csrf');
 const customService = require('../services/customService.js');
 const config = require('../config/config.js');
 const { mapEntitySimilarityFields } = require('./settingsFormMapping');
-const { getInstance: getDocumentProcessingPipeline } = require('../services/documentProcessingPipeline');
+const { getInstance: getDocumentProcessingPipeline, applyFingerprintTags, applyFingerprintDocumentType } = require('../services/documentProcessingPipeline');
 const scanRunGuard = require('../services/scanRunGuard');
 require('dotenv').config({ path: '../data/.env' });
 
@@ -1644,14 +1644,15 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
 
   const correspondentId = existingCorrespondentId || updateData.correspondent;
   const fingerprintMatch = await getDocumentProcessingPipeline().findFingerprintMatch(correspondentId, content);
+  let fingerprintApplied = false;
 
   // Only process tags if tagging is activated
   if (config.limitFunctions?.activateTagging !== 'no') {
-    if (fingerprintMatch && fingerprintMatch.tagIds.length > 0) {
+    if (applyFingerprintTags(fingerprintMatch, updateData)) {
       // AUDIT-010: a fingerprint hit reuses the matched document's tags outright - running
       // processTags here would create new tag entities in Paperless that are immediately
       // discarded, leaving them orphaned and never attached to any document.
-      updateData.tags = fingerprintMatch.tagIds;
+      fingerprintApplied = true;
     } else {
       const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags, options);
       if (errors.length > 0) {
@@ -1682,8 +1683,8 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
 
   // Only process document type if document type classification is activated
   if (config.limitFunctions?.activateDocumentType !== 'no') {
-    if (fingerprintMatch && fingerprintMatch.documentTypeId) {
-      updateData.document_type = fingerprintMatch.documentTypeId;
+    if (applyFingerprintDocumentType(fingerprintMatch, updateData)) {
+      fingerprintApplied = true;
     } else if (analysis.document.document_type) {
       try {
         const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type, options);
@@ -1744,7 +1745,7 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
     updateData.language = analysis.document.language;
   }
 
-  return { updateData, usedFingerprint: !!fingerprintMatch };
+  return { updateData, usedFingerprint: fingerprintApplied };
 }
 
 /**
