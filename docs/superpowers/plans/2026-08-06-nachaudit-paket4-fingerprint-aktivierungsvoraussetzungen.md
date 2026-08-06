@@ -70,19 +70,25 @@ gelabelte Dokumentpaare und einen Messlauf (Task 8, Runbook).
   `services/documentFingerprintService.js` und `services/documentProcessingPipeline.js` sind
   deutsch kommentiert.
 - `server.js` und `routes/setup.js` enthalten (bekannte, in AUDIT-014 dokumentierte)
-  Duplikate von `buildUpdateData`. Jede Änderung an der einen Kopie muss identisch an der
-  anderen nachvollzogen werden — Task 1 macht das explizit für beide Dateien.
+  Komplett-Duplikate von `buildUpdateData`. Task 1 vergrößert diese Duplikation nicht um eine
+  weitere neu duplizierte Entscheidung — die NACHAUDIT-13-Anwendungslogik wandert in zwei
+  gemeinsam genutzte, isoliert getestete Funktionen in
+  `services/documentProcessingPipeline.js` (`applyFingerprintTags`/`applyFingerprintDocumentType`).
+  Der verbleibende, unveränderte Rest von `buildUpdateData` bleibt dupliziert (out of scope für
+  dieses Paket) — jede Änderung an einer der beiden Kopien muss trotzdem identisch an der
+  anderen nachvollzogen werden, Task 1 macht das explizit für beide Dateien.
 
 ## File Structure
 
 | Datei | Verantwortung | Änderung |
 |---|---|---|
-| `server.js` | `buildUpdateData`: `usedFingerprint`-Ermittlung | Modify (Task 1) |
-| `routes/setup.js` | `buildUpdateData`-Duplikat: `usedFingerprint`-Ermittlung; neue Route | Modify (Task 1, Task 3) |
+| `services/documentProcessingPipeline.js` | neue `applyFingerprintTags`/`applyFingerprintDocumentType`-Funktionen; neue `restoreOriginalData`-Methode; Modus-Gating in `findFingerprintMatch` | Modify (Task 1, Task 3, Task 4) |
+| `test/fingerprintApplication.test.js` | Tests für `applyFingerprintTags`/`applyFingerprintDocumentType` | Add (Task 1) |
+| `server.js` | `buildUpdateData`: nutzt die neuen Fingerprint-Funktionen | Modify (Task 1) |
+| `routes/setup.js` | `buildUpdateData`-Duplikat: nutzt dieselben Funktionen; neue Route | Modify (Task 1, Task 3) |
 | `services/paperlessService.js` | neue `overwriteDocumentFields`-Methode (Replace-PATCH) | Modify (Task 2) |
 | `test/paperlessOverwriteDocumentFields.test.js` | Tests für `overwriteDocumentFields` | Add (Task 2) |
 | `models/document.js` | `getOriginalData`: deterministische Sortierung | Modify (Task 3) |
-| `services/documentProcessingPipeline.js` | neue `restoreOriginalData`-Methode; Modus-Gating in `findFingerprintMatch` | Modify (Task 3, Task 4) |
 | `test/documentProcessingPipeline.test.js` | Tests für `restoreOriginalData` und Beobachtungsmodus | Modify (Task 3, Task 4) |
 | `test/setupAuthMiddleware.test.js` | neue Route in `PROTECTED_ROUTES` | Modify (Task 3) |
 | `config/config.js` | `documentFingerprint.mode` | Modify (Task 4) |
@@ -91,7 +97,8 @@ gelabelte Dokumentpaare und einen Messlauf (Task 8, Runbook).
 | `test/documentFingerprintService.test.js` | angepasste Assertions | Modify (Task 4) |
 | `models/documentFingerprintStore.js` | neue Tabelle `document_fingerprint_observations`, `recordObservation`/`listObservations` | Modify (Task 4) |
 | `test/documentFingerprintStore.test.js` | Tests für die neuen Store-Methoden | Modify (Task 4) |
-| `scripts/fingerprint-observation-report.js` | Read-only Verteilungsreport der Beobachtungen | Add (Task 5) |
+| `scripts/fingerprint-observation-report.js` | Read-only Verteilungsreport der Beobachtungen (`buildReport`/`printReport` exportiert, testbar) | Add (Task 5) |
+| `test/fingerprintObservationReport.test.js` | Tests für `buildReport` | Add (Task 5) |
 | `.env.example`, `README.md` | Dokumentation `DOCUMENT_FINGERPRINT_MODE` | Modify (Task 6) |
 | `data/.env` (nur auf Produktivinstanz) | `DOCUMENT_FINGERPRINT_ENABLED=yes`, `DOCUMENT_FINGERPRINT_MODE=observe`, später `FINGERPRINT_SIMILARITY_THRESHOLD` | Modify über Runbook (Task 7, Task 8), nie in diesem Checkout |
 | `data/eval/fingerprint-pairs.json` (nur auf Produktivinstanz) | gelabelte Dokumentpaare für die Schwellwertmessung | Add über Runbook (Task 8) |
@@ -102,26 +109,154 @@ gelabelte Dokumentpaare und einen Messlauf (Task 8, Runbook).
 ### Task 1: NACHAUDIT-13 — `usedFingerprint` nur setzen, wenn der Treffer tatsächlich übernommen wurde
 
 **Files:**
-- Modify: `server.js:248-350` (`buildUpdateData`)
-- Modify: `routes/setup.js:1645-1747` (`buildUpdateData`-Duplikat)
+- Modify: `services/documentProcessingPipeline.js` (zwei neue, exportierte Funktionen)
+- Create: `test/fingerprintApplication.test.js`
+- Modify: `server.js:248-350` (`buildUpdateData`) — nutzt die neuen Funktionen
+- Modify: `routes/setup.js:1645-1747` (`buildUpdateData`-Duplikat) — nutzt dieselben Funktionen
 
 **Interfaces:**
-- Konsumiert: nichts Neues.
-- Produziert: `buildUpdateData(...)` liefert weiterhin `{ updateData, usedFingerprint }`, aber
-  `usedFingerprint` ist jetzt `true` nur, wenn `updateData.tags` oder `updateData.document_type`
-  tatsächlich aus dem Fingerprint-Treffer gesetzt wurden — nicht mehr allein daraus, dass ein
-  Treffer existierte. `services/documentProcessingPipeline.js#processAndSave` konsumiert dieses
-  Feld bereits unverändert (`usedFingerprint ? 'inherited' : 'llm'`).
+- Produziert: `applyFingerprintTags(fingerprintMatch, updateData) -> boolean` und
+  `applyFingerprintDocumentType(fingerprintMatch, updateData) -> boolean`, beide exportiert aus
+  `services/documentProcessingPipeline.js` neben `DocumentProcessingPipeline`/`getInstance`.
+  Jede Funktion setzt das jeweilige Feld auf `updateData`, falls ein verwertbarer Treffer
+  vorliegt, und gibt zurück, ob sie das getan hat. `buildUpdateData(...)` liefert weiterhin
+  `{ updateData, usedFingerprint }`, aber `usedFingerprint` ist jetzt `true` nur, wenn eine der
+  beiden Funktionen tatsächlich etwas gesetzt hat — nicht mehr allein daraus, dass ein Treffer
+  existierte. `services/documentProcessingPipeline.js#processAndSave` konsumiert dieses Feld
+  bereits unverändert (`usedFingerprint ? 'inherited' : 'llm'`).
 
-**Kein isoliertes Unit-Testziel:** Wie schon bei der ursprünglichen `server.js`-Verdrahtung in
-[2026-08-02-phase5-fingerprint.md](../plans/2026-08-02-phase5-fingerprint.md) (Task 4) hat
-`buildUpdateData` keine eigene Testdatei — die Logik ist reine Verdrahtung in einer Datei ohne
-Test-Harness. Verifikation über den vollständigen Regressionslauf (Step 4) plus eine manuelle
-Sichtprüfung der geänderten Zeilen.
+**Warum eine gemeinsame Funktion statt zweimal duplizierter Logik:** `server.js` und
+`routes/setup.js` haben bereits eine bekannte, in AUDIT-014 dokumentierte Komplett-Duplikation
+von `buildUpdateData` — dieses Paket vergrößert sie nicht um eine weitere neu duplizierte
+Entscheidung. Die Anwendungslogik (gibt es einen Treffer, ist er nicht leer, setze das Feld)
+wandert in `services/documentProcessingPipeline.js`, wo bereits die gesamte übrige
+Fingerprint-Logik lebt (`findFingerprintMatch`, `recordDocumentFingerprint`) — beide Aufrufer
+binden nur noch dieselbe Funktion ein. Das macht die neue Logik zusätzlich erstmals isoliert
+testbar (anders als der Rest von `buildUpdateData`, der reine, nicht test-isolierte Verdrahtung
+bleibt — siehe [2026-08-02-phase5-fingerprint.md](../plans/2026-08-02-phase5-fingerprint.md),
+Task 4).
 
-- [ ] **Step 1: `server.js` ändern**
+- [ ] **Step 1: Write the failing tests**
 
-In `server.js`, ersetze (aktuell Zeilen 248-350):
+Create `test/fingerprintApplication.test.js`:
+
+```js
+const { test } = require('node:test');
+const assert = require('node:assert');
+const { applyFingerprintTags, applyFingerprintDocumentType } = require('../services/documentProcessingPipeline');
+
+test('applyFingerprintTags setzt updateData.tags und liefert true, wenn der Treffer Tags hat', () => {
+  const updateData = {};
+  const result = applyFingerprintTags({ tagIds: [1, 2], documentTypeId: 3 }, updateData);
+
+  assert.strictEqual(result, true);
+  assert.deepStrictEqual(updateData.tags, [1, 2]);
+});
+
+test('applyFingerprintTags setzt nichts und liefert false, wenn kein Treffer vorliegt', () => {
+  const updateData = {};
+  const result = applyFingerprintTags(null, updateData);
+
+  assert.strictEqual(result, false);
+  assert.strictEqual(updateData.tags, undefined);
+});
+
+test('applyFingerprintTags setzt nichts und liefert false, wenn der Treffer keine Tags hat (NACHAUDIT-13)', () => {
+  const updateData = {};
+  const result = applyFingerprintTags({ tagIds: [], documentTypeId: 3 }, updateData);
+
+  assert.strictEqual(result, false);
+  assert.strictEqual(updateData.tags, undefined);
+});
+
+test('applyFingerprintDocumentType setzt updateData.document_type und liefert true, wenn der Treffer eine Dokumentart hat', () => {
+  const updateData = {};
+  const result = applyFingerprintDocumentType({ tagIds: [1], documentTypeId: 3 }, updateData);
+
+  assert.strictEqual(result, true);
+  assert.strictEqual(updateData.document_type, 3);
+});
+
+test('applyFingerprintDocumentType setzt nichts und liefert false, wenn kein Treffer vorliegt', () => {
+  const updateData = {};
+  const result = applyFingerprintDocumentType(null, updateData);
+
+  assert.strictEqual(result, false);
+  assert.strictEqual(updateData.document_type, undefined);
+});
+
+test('applyFingerprintDocumentType setzt nichts und liefert false, wenn der Treffer keine Dokumentart hat (NACHAUDIT-13)', () => {
+  const updateData = {};
+  const result = applyFingerprintDocumentType({ tagIds: [1], documentTypeId: null }, updateData);
+
+  assert.strictEqual(result, false);
+  assert.strictEqual(updateData.document_type, undefined);
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `npx node --test test/fingerprintApplication.test.js`
+Expected: FAIL — `applyFingerprintTags is not a function` (noch nicht aus
+`services/documentProcessingPipeline.js` exportiert)
+
+- [ ] **Step 3: `services/documentProcessingPipeline.js` implementieren**
+
+Vor `let instance = null;` (aktuell die Zeile direkt nach dem Ende der Klasse
+`DocumentProcessingPipeline`) einfügen:
+
+```js
+// NACHAUDIT-13: gemeinsame Anwendungslogik fuer server.js/routes/setup.js#buildUpdateData -
+// beide Dateien duplizieren buildUpdateData bereits vollstaendig (AUDIT-014); diese zwei
+// Funktionen verhindern, dass die Entscheidung "wurde der Fingerprint-Treffer tatsaechlich
+// uebernommen" ein zweites Mal dupliziert wird, und machen sie isoliert testbar. Ein Treffer,
+// der wegen activateTagging='no'/activateDocumentType='no' NIE hier ankommt, oder dessen
+// tagIds/documentTypeId leer sind, darf nicht als angewendet gelten - sonst wird er trotzdem
+// als 'inherited' gespeichert und faellt faelschlich als Kandidat fuer ein drittes Dokument
+// weg (source='inherited' wird von findCandidates() ausgeschlossen, siehe
+// models/documentFingerprintStore.js), obwohl er in Paperless nie etwas bewirkt hat.
+function applyFingerprintTags(fingerprintMatch, updateData) {
+  if (fingerprintMatch && fingerprintMatch.tagIds.length > 0) {
+    updateData.tags = fingerprintMatch.tagIds;
+    return true;
+  }
+  return false;
+}
+
+function applyFingerprintDocumentType(fingerprintMatch, updateData) {
+  if (fingerprintMatch && fingerprintMatch.documentTypeId) {
+    updateData.document_type = fingerprintMatch.documentTypeId;
+    return true;
+  }
+  return false;
+}
+
+```
+
+Am Ende der Datei, ersetze:
+
+```js
+module.exports = { DocumentProcessingPipeline, getInstance };
+```
+
+durch:
+
+```js
+module.exports = { DocumentProcessingPipeline, getInstance, applyFingerprintTags, applyFingerprintDocumentType };
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `npx node --test test/fingerprintApplication.test.js`
+Expected: PASS, 6/6 tests green
+
+- [ ] **Step 5: `server.js` auf die neuen Funktionen umstellen**
+
+In `server.js`, der Require-Block für `documentProcessingPipeline` (die Zeile, die aktuell
+`getDocumentProcessingPipeline` importiert — analog zu `routes/setup.js:25`) wird erweitert, um
+zusätzlich `applyFingerprintTags`/`applyFingerprintDocumentType` zu destrukturieren.
+
+Ersetze (aktuell Zeilen 248-350):
 
 ```js
   const correspondentId = existingCorrespondentId || updateData.correspondent;
@@ -142,19 +277,14 @@ durch:
 ```js
   const correspondentId = existingCorrespondentId || updateData.correspondent;
   const fingerprintMatch = await getDocumentProcessingPipeline().findFingerprintMatch(correspondentId, content);
-  // NACHAUDIT-13: ein Treffer, der wegen activateTagging='no'/activateDocumentType='no' nie in
-  // updateData landet, darf nicht als 'inherited' gelten - sonst faellt er als Kandidat fuer ein
-  // drittes Dokument faelschlich weg (source='inherited' wird von findCandidates() ausgeschlossen,
-  // siehe models/documentFingerprintStore.js), obwohl er in Paperless nie etwas bewirkt hat.
   let fingerprintApplied = false;
 
   // Only process tags if tagging is activated
   if (config.limitFunctions?.activateTagging !== 'no') {
-    if (fingerprintMatch && fingerprintMatch.tagIds.length > 0) {
+    if (applyFingerprintTags(fingerprintMatch, updateData)) {
       // AUDIT-010: a fingerprint hit reuses the matched document's tags outright - running
       // processTags here would create new tag entities in Paperless that are immediately
       // discarded, leaving them orphaned and never attached to any document.
-      updateData.tags = fingerprintMatch.tagIds;
       fingerprintApplied = true;
     } else {
 ```
@@ -172,8 +302,7 @@ durch:
 
 ```js
   if (config.limitFunctions?.activateDocumentType !== 'no') {
-    if (fingerprintMatch && fingerprintMatch.documentTypeId) {
-      updateData.document_type = fingerprintMatch.documentTypeId;
+    if (applyFingerprintDocumentType(fingerprintMatch, updateData)) {
       fingerprintApplied = true;
     } else if (analysis.document.document_type) {
 ```
@@ -190,36 +319,55 @@ durch:
   return { updateData, usedFingerprint: fingerprintApplied };
 ```
 
-- [ ] **Step 2: identische Änderung in `routes/setup.js`**
+Am Kopf von `server.js`, wo `getDocumentProcessingPipeline` importiert wird (Suche nach
+`require('./services/documentProcessingPipeline')` bzw. `require('../services/documentProcessingPipeline')`
+— exakter Pfad hängt davon ab, ob relativ zu `server.js` oder einem Unterordner importiert wird),
+die Destrukturierung um die beiden neuen Funktionen erweitern, z. B. von
+
+```js
+const { getInstance: getDocumentProcessingPipeline } = require('./services/documentProcessingPipeline');
+```
+
+zu:
+
+```js
+const { getInstance: getDocumentProcessingPipeline, applyFingerprintTags, applyFingerprintDocumentType } = require('./services/documentProcessingPipeline');
+```
+
+- [ ] **Step 6: identische Umstellung in `routes/setup.js`**
 
 Vor der Änderung: `git diff` zwischen den beiden `buildUpdateData`-Funktionen prüfen (z. B.
 `diff <(sed -n '224,351p' server.js) <(sed -n '1620,1748p' routes/setup.js)`), um zu bestätigen,
 dass die Struktur an den betroffenen Stellen identisch ist, bevor blind gespiegelt wird.
 
-In `routes/setup.js`, dieselbe Transformation wie Step 1 an der strukturell identischen Stelle
-(aktuell Zeilen 1645-1747):
+In `routes/setup.js`, Zeile 25 (`const { getInstance: getDocumentProcessingPipeline } = require('../services/documentProcessingPipeline');`)
+erweitern zu:
+
+```js
+const { getInstance: getDocumentProcessingPipeline, applyFingerprintTags, applyFingerprintDocumentType } = require('../services/documentProcessingPipeline');
+```
+
+Dieselbe Transformation wie Step 5 an der strukturell identischen Stelle (aktuell Zeilen
+1645-1747):
 
 ```js
   const correspondentId = existingCorrespondentId || updateData.correspondent;
   const fingerprintMatch = await getDocumentProcessingPipeline().findFingerprintMatch(correspondentId, content);
-  // NACHAUDIT-13: siehe identischer Kommentar in server.js#buildUpdateData.
   let fingerprintApplied = false;
 
   // Only process tags if tagging is activated
   if (config.limitFunctions?.activateTagging !== 'no') {
-    if (fingerprintMatch && fingerprintMatch.tagIds.length > 0) {
+    if (applyFingerprintTags(fingerprintMatch, updateData)) {
       // AUDIT-010: a fingerprint hit reuses the matched document's tags outright - running
       // processTags here would create new tag entities in Paperless that are immediately
       // discarded, leaving them orphaned and never attached to any document.
-      updateData.tags = fingerprintMatch.tagIds;
       fingerprintApplied = true;
     } else {
 ```
 
 ```js
   if (config.limitFunctions?.activateDocumentType !== 'no') {
-    if (fingerprintMatch && fingerprintMatch.documentTypeId) {
-      updateData.document_type = fingerprintMatch.documentTypeId;
+    if (applyFingerprintDocumentType(fingerprintMatch, updateData)) {
       fingerprintApplied = true;
     } else if (analysis.document.document_type) {
 ```
@@ -228,31 +376,35 @@ In `routes/setup.js`, dieselbe Transformation wie Step 1 an der strukturell iden
   return { updateData, usedFingerprint: fingerprintApplied };
 ```
 
-- [ ] **Step 3: manuelle Sichtprüfung**
+- [ ] **Step 7: manuelle Sichtprüfung**
 
-`git diff server.js routes/setup.js` ansehen: beide Dateien müssen an den drei Stellen
-(Deklaration, Tag-Zweig, Dokumenttyp-Zweig, Return) identisch geändert sein. Kein anderer Teil
-der beiden `buildUpdateData`-Funktionen darf sich geändert haben.
+`git diff server.js routes/setup.js` ansehen: beide Dateien müssen an den betroffenen Stellen
+(Require-Zeile, Deklaration, Tag-Zweig, Dokumenttyp-Zweig, Return) identisch geändert sein. Kein
+anderer Teil der beiden `buildUpdateData`-Funktionen darf sich geändert haben.
 
-- [ ] **Step 4: vollständigen Regressionslauf ausführen**
+- [ ] **Step 8: vollständigen Regressionslauf ausführen**
 
 Run: `npm test`
-Expected: alle bisherigen Tests bleiben grün (kein Test greift `fingerprintApplied` direkt ab,
-aber `test/documentProcessingPipeline.test.js` deckt bereits ab, dass `usedFingerprint: true`
-zu `source: 'inherited'` führt — diese Verdrahtung bleibt durch diese Änderung unberührt).
+Expected: alle Tests grün, inklusive der 6 neuen aus Step 1 (`test/documentProcessingPipeline.test.js`
+deckt bereits ab, dass `usedFingerprint: true` zu `source: 'inherited'` führt — diese
+Verdrahtung bleibt durch diese Änderung unberührt).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add server.js routes/setup.js
+git add services/documentProcessingPipeline.js test/fingerprintApplication.test.js server.js routes/setup.js
 git commit -m "$(cat <<'EOF'
 fix: usedFingerprint nur bei tatsaechlich angewendetem Fingerprint-Treffer setzen
 
 NACHAUDIT-13: bei activateTagging='no'/activateDocumentType='no' wurde ein
 gefundener, aber nie in updateData uebernommener Fingerprint-Treffer trotzdem
 als 'inherited' gespeichert und schied dadurch faelschlich als Kandidat fuer
-ein drittes Dokument aus. usedFingerprint spiegelt jetzt, ob der Treffer
-tatsaechlich Tags/Dokumentart gesetzt hat.
+ein drittes Dokument aus. Die Anwendungsentscheidung steckt jetzt in den neuen,
+isoliert getesteten Funktionen applyFingerprintTags/applyFingerprintDocumentType
+(services/documentProcessingPipeline.js), die server.js und routes/setup.js
+gemeinsam nutzen, statt die Logik ein weiteres Mal zu duplizieren (AUDIT-014).
+usedFingerprint spiegelt jetzt, ob eine der beiden Funktionen tatsaechlich
+Tags/Dokumentart gesetzt hat.
 
 Nachaudit 2026-08-04, Paket 4 (NACHAUDIT-13).
 
@@ -1150,18 +1302,92 @@ EOF
 
 **Files:**
 - Create: `scripts/fingerprint-observation-report.js`
+- Create: `test/fingerprintObservationReport.test.js`
 
 **Interfaces:**
-- Konsumiert: `documentFingerprintStore.listObservations` (Task 4) über eine direkte
-  `better-sqlite3`-Verbindung (gleiches Muster wie `scripts/review-queue-report.js`).
-- Produziert: nichts Neues für andere Tasks — reines Ops-Skript, manuell ausgeführt in Task 7.
+- Konsumiert: eine `better-sqlite3`-`Database`-Instanz mit dem Schema aus
+  `document_fingerprint_observations` (Task 4) — im Skript selbst über
+  `config.entityResolver.dbPath` geöffnet, in Tests über `DocumentFingerprintStore(':memory:').db`
+  (Task 4, gleiches Muster wie `test/documentFingerprintStore.test.js`).
+- Produziert: `buildReport(db) -> {total, byCorrespondent, bySimilarityBand, recent}`, exportiert
+  aus `scripts/fingerprint-observation-report.js` für den Test. `printReport(report, {dbPath,
+  mode, similarityThreshold})` formatiert die Konsolenausgabe getrennt von der Datenermittlung.
+  Kein anderer Task konsumiert diese Funktionen.
 
-**Kein Unit-Test nötig:** read-only Reportskript ohne Verzweigungslogik, gleiches Muster wie
-`scripts/review-queue-report.js` aus
-[2026-08-05-nachaudit-paket3-review-queue-produktivlauf.md](../plans/2026-08-05-nachaudit-paket3-review-queue-produktivlauf.md)
-(Task 2), das ebenfalls ohne eigenen Test committet wurde.
+**Warum `buildReport` von der Konsolenausgabe getrennt ist:** anders als
+`scripts/review-queue-report.js` (Paket 3), das als reines Top-Level-Skript ohne exportierte
+Funktion committet wurde, trennt dieses Skript die vier SQL-Abfragen (`buildReport`, reine
+Funktion von `db` zu einer Datenstruktur) von `printReport`/`main` (Konsolenausgabe, Prozess).
+`buildReport` ist dadurch mit einer In-Memory-`DocumentFingerprintStore` testbar, ohne
+`data/entities.db` zu benötigen — die Trennung kostet keine zusätzliche Komplexität (vier
+`db.prepare(...).all()`/`.get()`-Aufrufe, ein Objekt zurückgeben statt sofort zu drucken).
 
-- [ ] **Step 1: Skript schreiben**
+- [ ] **Step 1: Write the failing tests**
+
+Create `test/fingerprintObservationReport.test.js`:
+
+```js
+const { test } = require('node:test');
+const assert = require('node:assert');
+const DocumentFingerprintStore = require('../models/documentFingerprintStore');
+const { buildReport } = require('../scripts/fingerprint-observation-report');
+
+test('buildReport liefert total=0 und leere Listen ohne gespeicherte Beobachtungen', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    const report = buildReport(store.db);
+    assert.strictEqual(report.total, 0);
+    assert.deepStrictEqual(report.byCorrespondent, []);
+    assert.deepStrictEqual(report.bySimilarityBand, []);
+    assert.deepStrictEqual(report.recent, []);
+  } finally {
+    store.close();
+  }
+});
+
+test('buildReport gruppiert nach Korrespondent und Aehnlichkeits-Band', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.recordObservation({ correspondentId: 5, matchedDocumentId: 1, similarity: 0.93, tagIds: [1], documentTypeId: null });
+    store.recordObservation({ correspondentId: 5, matchedDocumentId: 2, similarity: 0.82, tagIds: [2], documentTypeId: 3 });
+    store.recordObservation({ correspondentId: 9, matchedDocumentId: 3, similarity: 0.99, tagIds: [1], documentTypeId: null });
+
+    const report = buildReport(store.db);
+
+    assert.strictEqual(report.total, 3);
+    const byCorrespondent = Object.fromEntries(report.byCorrespondent.map(r => [r.correspondent_id, r.n]));
+    assert.deepStrictEqual(byCorrespondent, { 5: 2, 9: 1 });
+
+    const bands = Object.fromEntries(report.bySimilarityBand.map(r => [r.band, r.n]));
+    assert.strictEqual(bands['0.80-0.85'], 1);
+    assert.strictEqual(bands['0.90-0.95'], 1);
+    assert.strictEqual(bands['0.95-1.00'], 1);
+  } finally {
+    store.close();
+  }
+});
+
+test('buildReport liefert die juengsten Beobachtungen zuerst, begrenzt auf 20', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    for (let i = 1; i <= 25; i++) {
+      store.recordObservation({ correspondentId: 5, matchedDocumentId: i, similarity: 0.9, tagIds: [1], documentTypeId: null });
+    }
+    const report = buildReport(store.db);
+    assert.strictEqual(report.recent.length, 20);
+    assert.strictEqual(report.recent[0].matched_document_id, 25);
+  } finally {
+    store.close();
+  }
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `npx node --test test/fingerprintObservationReport.test.js`
+Expected: FAIL — `Cannot find module '../scripts/fingerprint-observation-report'`
+
+- [ ] **Step 3: Write the implementation**
 
 Create `scripts/fingerprint-observation-report.js`:
 
@@ -1171,77 +1397,116 @@ Create `scripts/fingerprint-observation-report.js`:
 // NACHAUDIT-11, Audit Abschnitt 18.6 Bedingung 5). Zeigt, wie viele Treffer im Beobachtungsmodus
 // protokolliert wurden und mit welcher Aehnlichkeit - Grundlage fuer die Stichprobenpruefung vor
 // einer Umschaltung auf DOCUMENT_FINGERPRINT_MODE=apply. Aendert keine Daten.
+// buildReport/printReport sind getrennt, damit buildReport ohne data/entities.db testbar ist
+// (siehe test/fingerprintObservationReport.test.js) - main() bleibt der einzige Ort, der eine
+// echte Datenbankverbindung oeffnet.
 const Database = require('better-sqlite3');
-const config = require('../config/config');
 
-const db = new Database(config.entityResolver.dbPath, { readonly: true });
+function buildReport(db) {
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM document_fingerprint_observations`).get();
+  const byCorrespondent = db.prepare(`
+    SELECT correspondent_id, COUNT(*) AS n
+    FROM document_fingerprint_observations
+    GROUP BY correspondent_id ORDER BY n DESC LIMIT 20
+  `).all();
+  const bySimilarityBand = db.prepare(`
+    SELECT
+      CASE
+        WHEN similarity < 0.85 THEN '0.80-0.85'
+        WHEN similarity < 0.90 THEN '0.85-0.90'
+        WHEN similarity < 0.95 THEN '0.90-0.95'
+        ELSE '0.95-1.00'
+      END AS band,
+      COUNT(*) AS n
+    FROM document_fingerprint_observations
+    GROUP BY band ORDER BY band
+  `).all();
+  const recent = db.prepare(`
+    SELECT id, correspondent_id, matched_document_id, similarity, tag_ids, document_type_id, created_at
+    FROM document_fingerprint_observations
+    ORDER BY created_at DESC, id DESC LIMIT 20
+  `).all();
 
-console.log(`Datenbank: ${config.entityResolver.dbPath}`);
-console.log(`Modus: ${config.documentFingerprint.mode}, Schwellwert: ${config.documentFingerprint.similarityThreshold}`);
-
-const total = db.prepare(`SELECT COUNT(*) AS n FROM document_fingerprint_observations`).get();
-console.log(`\nProtokollierte Beobachtungen gesamt: ${total.n}`);
-
-if (total.n === 0) {
-  console.log('\nKeine Beobachtungen vorhanden. Voraussetzung: DOCUMENT_FINGERPRINT_ENABLED=yes und DOCUMENT_FINGERPRINT_MODE=observe in data/.env, danach mindestens ein Scan-Zyklus.');
-  db.close();
-  process.exit(0);
+  return { total: total.n, byCorrespondent, bySimilarityBand, recent };
 }
 
-console.log('\nNach Korrespondent (Top 20):');
-for (const row of db.prepare(`
-  SELECT correspondent_id, COUNT(*) AS n
-  FROM document_fingerprint_observations
-  GROUP BY correspondent_id ORDER BY n DESC LIMIT 20
-`).all()) {
-  console.log(`  Korrespondent ${row.correspondent_id}: ${row.n}`);
+function printReport(report, { dbPath, mode, similarityThreshold }) {
+  console.log(`Datenbank: ${dbPath}`);
+  console.log(`Modus: ${mode}, Schwellwert: ${similarityThreshold}`);
+  console.log(`\nProtokollierte Beobachtungen gesamt: ${report.total}`);
+
+  if (report.total === 0) {
+    console.log('\nKeine Beobachtungen vorhanden. Voraussetzung: DOCUMENT_FINGERPRINT_ENABLED=yes und DOCUMENT_FINGERPRINT_MODE=observe in data/.env, danach mindestens ein Scan-Zyklus.');
+    return;
+  }
+
+  console.log('\nNach Korrespondent (Top 20):');
+  for (const row of report.byCorrespondent) {
+    console.log(`  Korrespondent ${row.correspondent_id}: ${row.n}`);
+  }
+
+  console.log('\nAehnlichkeits-Baender:');
+  for (const row of report.bySimilarityBand) {
+    console.log(`  ${row.band}: ${row.n}`);
+  }
+
+  console.log('\nJuengste 20 Beobachtungen (Ausgangspunkt fuer die Stichprobenpruefung):');
+  for (const row of report.recent) {
+    console.log(`  [${row.created_at}] correspondent=${row.correspondent_id} matched_document=${row.matched_document_id} similarity=${row.similarity.toFixed(3)} tags=${row.tag_ids} document_type=${row.document_type_id ?? '(keine)'}`);
+  }
 }
 
-console.log('\nAehnlichkeits-Baender:');
-for (const row of db.prepare(`
-  SELECT
-    CASE
-      WHEN similarity < 0.85 THEN '0.80-0.85'
-      WHEN similarity < 0.90 THEN '0.85-0.90'
-      WHEN similarity < 0.95 THEN '0.90-0.95'
-      ELSE '0.95-1.00'
-    END AS band,
-    COUNT(*) AS n
-  FROM document_fingerprint_observations
-  GROUP BY band ORDER BY band
-`).all()) {
-  console.log(`  ${row.band}: ${row.n}`);
+function main() {
+  const config = require('../config/config');
+  const db = new Database(config.entityResolver.dbPath, { readonly: true });
+  try {
+    const report = buildReport(db);
+    printReport(report, {
+      dbPath: config.entityResolver.dbPath,
+      mode: config.documentFingerprint.mode,
+      similarityThreshold: config.documentFingerprint.similarityThreshold
+    });
+  } finally {
+    db.close();
+  }
 }
 
-console.log('\nJuengste 20 Beobachtungen (Ausgangspunkt fuer die Stichprobenpruefung):');
-for (const row of db.prepare(`
-  SELECT id, correspondent_id, matched_document_id, similarity, tag_ids, document_type_id, created_at
-  FROM document_fingerprint_observations
-  ORDER BY created_at DESC, id DESC LIMIT 20
-`).all()) {
-  console.log(`  [${row.created_at}] correspondent=${row.correspondent_id} matched_document=${row.matched_document_id} similarity=${row.similarity.toFixed(3)} tags=${row.tag_ids} document_type=${row.document_type_id ?? '(keine)'}`);
+if (require.main === module) {
+  main();
 }
 
-db.close();
+module.exports = { buildReport, printReport };
 ```
 
-- [ ] **Step 2: Syntax-Check**
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `npx node --test test/fingerprintObservationReport.test.js`
+Expected: PASS, 3/3 tests green
+
+- [ ] **Step 5: Run the full suite to check for regressions**
+
+Run: `npm test`
+Expected: alle Tests grün.
+
+- [ ] **Step 6: Syntax/Smoke-Check des CLI-Pfads**
 
 Run: `node --check scripts/fingerprint-observation-report.js`
-Expected: kein Fehler (das Skript selbst kann in diesem Checkout nicht sinnvoll ausgeführt
-werden, da `data/entities.db` hier nicht existiert — Ausführung ist Teil von Task 7).
+Expected: kein Fehler. `main()` selbst kann in diesem Checkout nicht sinnvoll ausgeführt werden,
+da `data/entities.db` hier nicht existiert — die reale Ausführung ist Teil von Task 7; die
+Datenermittlung (`buildReport`) ist bereits durch Step 1-4 abgedeckt.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add scripts/fingerprint-observation-report.js
+git add scripts/fingerprint-observation-report.js test/fingerprintObservationReport.test.js
 git commit -m "$(cat <<'EOF'
 feat: Read-only Verteilungsreport fuer Fingerprint-Beobachtungen (NACHAUDIT-11)
 
 Zeigt protokollierte Beobachtungen aus DOCUMENT_FINGERPRINT_MODE=observe nach
 Korrespondent und Aehnlichkeits-Band, plus die juengsten 20 Eintraege fuer
 eine manuelle Stichprobenpruefung - Grundlage fuer die Aktivierungsentscheidung
-nach Audit Abschnitt 18.6, Bedingung 5. Aendert keine Daten.
+nach Audit Abschnitt 18.6, Bedingung 5. Aendert keine Daten. Die Datenermittlung
+(buildReport) ist von der Konsolenausgabe getrennt und dadurch isoliert getestet.
 
 Nachaudit 2026-08-04, Paket 4 (NACHAUDIT-11, Sichtbarkeit).
 
