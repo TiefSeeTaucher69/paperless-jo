@@ -281,7 +281,11 @@ module.exports = {
     if (id) {
       try {
         //only one document with id exists
-        return db.prepare('SELECT * FROM original_documents WHERE document_id = ?').get(id);
+        // NACHAUDIT-12: explizite Sortierung statt impliziter Scan-Reihenfolge - original_documents
+        // hat keine UNIQUE-Constraint auf document_id (jede erneute Verarbeitung fuegt eine neue
+        // Zeile ein), und eine Wiederherstellung muss deterministisch den AELTESTEN bekannten
+        // Zustand treffen (vor jeder KI-Verarbeitung), nicht irgendeinen.
+        return db.prepare('SELECT * FROM original_documents WHERE document_id = ? ORDER BY id ASC LIMIT 1').get(id);
       } catch (error) {
         console.error('[ERROR] getting original data for id:', id, error);
         return [];

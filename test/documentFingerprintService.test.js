@@ -43,7 +43,7 @@ test('findMatch: Kandidat ueber Schwelle -> tagIds/documentTypeId des Kandidaten
   const service = new DocumentFingerprintService({ store, embeddingService, similarityThreshold: 0.90, model: 'bge-m3' });
 
   const result = await service.findMatch(5, 'Gehaltsabrechnung Juli');
-  assert.deepStrictEqual(result, { tagIds: [1, 2], documentTypeId: 3 });
+  assert.deepStrictEqual(result, { tagIds: [1, 2], documentTypeId: 3, similarity: 1, matchedDocumentId: 101 });
 });
 
 test('findMatch: Kandidat unter Schwelle -> null', async () => {
@@ -66,7 +66,9 @@ test('findMatch: mehrere Kandidaten, aehnlichster gewinnt', async () => {
   const service = new DocumentFingerprintService({ store, embeddingService, similarityThreshold: 0.90, model: 'bge-m3' });
 
   const result = await service.findMatch(5, 'Text');
-  assert.deepStrictEqual(result, { tagIds: [2], documentTypeId: 2 });
+  // Hinweis: [0.99, 0.14] vs. [0.99, 0.14] ist mathematisch Cosine=1, aber sqrt(x)*sqrt(x) rundet
+  // in Gleitkomma nicht exakt auf x zurueck -> 1.0000000000000002 statt 1 (mit Node nachgerechnet).
+  assert.deepStrictEqual(result, { tagIds: [2], documentTypeId: 2, similarity: 1.0000000000000002, matchedDocumentId: 2 });
 });
 
 test('findMatch: Embedding-Fehler -> null, kein Absturz', async () => {
@@ -93,7 +95,7 @@ test('findMatch: Text wird vor dem Embedding-Call auf 3000 Zeichen gekuerzt', as
   const service = new DocumentFingerprintService({ store, embeddingService, similarityThreshold: 0.90, model: 'bge-m3' });
 
   const result = await service.findMatch(5, longContent);
-  assert.deepStrictEqual(result, { tagIds: [1], documentTypeId: 3 });
+  assert.deepStrictEqual(result, { tagIds: [1], documentTypeId: 3, similarity: 1, matchedDocumentId: 101 });
 });
 
 test('findMatch ignoriert Kandidaten mit abweichendem Embedding-Modell', async () => {
@@ -169,7 +171,7 @@ test('findMatch gefolgt von recordFingerprint fuer denselben Inhalt embedded nur
   const service = new DocumentFingerprintService({ store, embeddingService, similarityThreshold: 0.90, model: 'bge-m3' });
 
   const match = await service.findMatch(5, 'Wiederkehrender Inhalt');
-  assert.deepStrictEqual(match, { tagIds: [1, 2], documentTypeId: 3 });
+  assert.deepStrictEqual(match, { tagIds: [1, 2], documentTypeId: 3, similarity: 1, matchedDocumentId: 101 });
 
   await service.recordFingerprint({ documentId: 202, correspondentId: 5, documentTypeId: 3, tagIds: [1, 2], content: 'Wiederkehrender Inhalt' });
   assert.strictEqual(embedCalls, 1);
@@ -197,7 +199,7 @@ test('Memo-Cache ist an den Inhalt gebunden: zwei verschiedene Dokumente embedde
   const service = new DocumentFingerprintService({ store, embeddingService, similarityThreshold: 0.90, model: 'bge-m3' });
 
   const matchA = await service.findMatch(5, 'Dokument A');
-  assert.deepStrictEqual(matchA, { tagIds: [1, 2], documentTypeId: 3 });
+  assert.deepStrictEqual(matchA, { tagIds: [1, 2], documentTypeId: 3, similarity: 1, matchedDocumentId: 101 });
 
   const matchB = await service.findMatch(5, 'Dokument B');
   assert.strictEqual(matchB, null); // Cosine([0,1], [1,0]) = 0, weit unter der Schwelle

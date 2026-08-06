@@ -80,9 +80,12 @@ wizard):
   used by this app. Thresholds: `EMBED_AUTO_THRESHOLD` / `EMBED_JUDGE_MIN`.
 - **Document Fingerprint** (`DOCUMENT_FINGERPRINT_ENABLED`, default `no`) —
   reuses a recurring document's tags/document type based on content
-  similarity (`FINGERPRINT_SIMILARITY_THRESHOLD`). **Not production-ready**
-  (see the project's audit report, AUDIT-003) — leave disabled outside of
-  testing.
+  similarity (`FINGERPRINT_SIMILARITY_THRESHOLD`). `DOCUMENT_FINGERPRINT_MODE`
+  (`observe`, default, or `apply`) controls whether a hit is only logged
+  (`document_fingerprint_observations`, see `scripts/fingerprint-observation-report.js`)
+  or actually applied. **Not production-ready** (see the project's audit
+  report, section 18.6, for the remaining activation conditions) — leave
+  disabled outside of testing.
 
 Matches below the auto-merge threshold go to the in-app Review Queue
 (`/review`) for manual confirmation instead of being applied automatically.

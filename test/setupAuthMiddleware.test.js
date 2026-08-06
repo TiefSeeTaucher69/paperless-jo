@@ -74,6 +74,7 @@ const PROTECTED_ROUTES = [
   ['POST', '/api/reset-documents'],
   ['POST', '/api/scan/now'],
   ['POST', '/api/webhook/document'],
+  ['POST', '/api/documents/42/restore-original'],
   ['GET', '/dashboard'],
   ['GET', '/playground'],
   ['GET', '/history'],

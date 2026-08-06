@@ -282,3 +282,101 @@ test('_bufferToVector wirft RangeError statt still falsche Werte zu liefern, wen
     store.close();
   }
 });
+
+test('recordObservation speichert eine Beobachtung, listObservations liefert sie zurueck', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    const ok = store.recordObservation({
+      documentId: 202, correspondentId: 5, matchedDocumentId: 101, similarity: 0.93,
+      tagIds: [1, 2], documentTypeId: 3
+    });
+    assert.strictEqual(ok, true);
+
+    const observations = store.listObservations();
+    assert.strictEqual(observations.length, 1);
+    assert.strictEqual(observations[0].document_id, 202); // Finding 1: das gerade verarbeitete Dokument, nicht der Kandidat
+    assert.strictEqual(observations[0].correspondent_id, 5);
+    assert.strictEqual(observations[0].matched_document_id, 101);
+    assert.strictEqual(observations[0].similarity, 0.93);
+    assert.deepStrictEqual(JSON.parse(observations[0].tag_ids), [1, 2]);
+    assert.strictEqual(observations[0].document_type_id, 3);
+  } finally {
+    store.close();
+  }
+});
+
+test('recordObservation akzeptiert documentTypeId=null', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.recordObservation({
+      correspondentId: 5, matchedDocumentId: 101, similarity: 0.93,
+      tagIds: [1], documentTypeId: null
+    });
+    const observations = store.listObservations();
+    assert.strictEqual(observations[0].document_type_id, null);
+  } finally {
+    store.close();
+  }
+});
+
+test('listObservations liefert die neuesten zuerst, begrenzt auf limit', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    for (let i = 1; i <= 5; i++) {
+      store.recordObservation({ correspondentId: 5, matchedDocumentId: i, similarity: 0.9, tagIds: [1], documentTypeId: null });
+    }
+    const observations = store.listObservations({ limit: 2 });
+    assert.strictEqual(observations.length, 2);
+    assert.strictEqual(observations[0].matched_document_id, 5);
+    assert.strictEqual(observations[1].matched_document_id, 4);
+  } finally {
+    store.close();
+  }
+});
+
+test('listObservations liefert leeres Array ohne gespeicherte Beobachtungen', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    assert.deepStrictEqual(store.listObservations(), []);
+  } finally {
+    store.close();
+  }
+});
+
+test('deleteForDocument entfernt den Fingerprint des angegebenen Dokuments (Finding 4)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+
+    store.deleteForDocument(1);
+
+    assert.strictEqual(store.findCandidates(5).length, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('deleteForDocument laesst Fingerprints anderer Dokumente unberuehrt (Finding 4)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.upsertFingerprint({ documentId: 1, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+    store.upsertFingerprint({ documentId: 2, correspondentId: 5, documentTypeId: 1, tagIds: [1], embedding: [1, 0], model: 'bge-m3' });
+
+    store.deleteForDocument(1);
+
+    const candidates = store.findCandidates(5);
+    assert.strictEqual(candidates.length, 1);
+    assert.strictEqual(candidates[0].documentId, 2);
+  } finally {
+    store.close();
+  }
+});
+
+test('deleteForDocument wirft nicht, wenn die Dokument-ID nicht existiert (Finding 4)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    assert.doesNotThrow(() => store.deleteForDocument(999));
+  } finally {
+    store.close();
+  }
+});
