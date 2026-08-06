@@ -215,63 +215,6 @@ class NavigationManager {
     }
 }
 
-// API Functions
-async function showTagDetails() {
-    modalManager.showModal('Tag Overview');
-    modalManager.showLoader();
-
-    try {
-        const response = await fetch('/api/tags');
-        const tags = await response.json();
-
-        let content = '<div class="detail-list">';
-        tags.forEach(tag => {
-            content += `
-                <div class="detail-item">
-                    <span class="detail-item-name">${tag.name}</span>
-                    <span class="detail-item-info">${tag.document_count || 0} documents</span>
-                </div>
-            `;
-        });
-        content += '</div>';
-
-        modalManager.setContent(content);
-    } catch (error) {
-        console.error('Error loading tags:', error);
-        modalManager.setContent('<div class="text-red-500 p-4">Error loading tags. Please try again later.</div>');
-    } finally {
-        modalManager.hideLoader();
-    }
-}
-
-async function showCorrespondentDetails() {
-    modalManager.showModal('Correspondent Overview');
-    modalManager.showLoader();
-
-    try {
-        const response = await fetch('/api/correspondents');
-        const correspondents = await response.json();
-
-        let content = '<div class="detail-list">';
-        correspondents.forEach(correspondent => {
-            content += `
-                <div class="detail-item">
-                    <span class="detail-item-name">${correspondent.name}</span>
-                    <span class="detail-item-info">${correspondent.document_count || 0} documents</span>
-                </div>
-            `;
-        });
-        content += '</div>';
-
-        modalManager.setContent(content);
-    } catch (error) {
-        console.error('Error loading correspondents:', error);
-        modalManager.setContent('<div class="text-red-500 p-4">Error loading correspondents. Please try again later.</div>');
-    } finally {
-        modalManager.hideLoader();
-    }
-}
-
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.themeManager = new ThemeManager();
