@@ -142,9 +142,19 @@ test('Stufe 4c: Judge sagt unsure -> create_and_queue, ohne Queue-Eintrag zu sch
   ), null);
 });
 
-test('Fehlerverhalten: Judge wirft (nicht erreichbar) -> unsure statt Absturz', async () => {
+test('Fehlerverhalten: Judge wirft (nicht erreichbar) -> unavailable, Kaskade behandelt es wie unsure (1.1.c)', async () => {
   const store = new EntityStore(':memory:');
   const judge = async () => { throw new Error('ECONNREFUSED'); };
+  const resolver = new EntityResolver({ store, judge, config: { autoThreshold: 0.99, judgeMin: 0.1 } });
+
+  const result = await resolver.resolve('document_type', 'Verdienstbescheinigung', [{ id: 4, name: 'Meldebescheinigung' }]);
+  assert.strictEqual(result.action, 'create_and_queue');
+  assert.strictEqual(result.verdict, 'unavailable');
+});
+
+test('Modellantwort mit "unavailable" im verdict-Feld wird weiterhin zu unsure normalisiert (1.1.c: nur der catch-Zweig darf unavailable liefern)', async () => {
+  const store = new EntityStore(':memory:');
+  const judge = async () => ({ verdict: 'unavailable', reason: 'Modell taeuscht einen Infrastrukturzustand vor' });
   const resolver = new EntityResolver({ store, judge, config: { autoThreshold: 0.99, judgeMin: 0.1 } });
 
   const result = await resolver.resolve('document_type', 'Verdienstbescheinigung', [{ id: 4, name: 'Meldebescheinigung' }]);

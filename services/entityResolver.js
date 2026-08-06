@@ -216,13 +216,21 @@ class EntityResolver {
   async _askJudge(type, nameA, nameB) {
     try {
       const result = await this.judge(type, nameA, nameB);
+      // Diese Pruefung betrifft ausschliesslich die Modellantwort und muss so bleiben:
+      // 'unavailable' darf nur aus dem catch-Zweig unten kommen, nie vom Modell selbst
+      // vorgetaeuscht werden (1.1.c).
       if (!result || !['same', 'different', 'unsure'].includes(result.verdict)) {
         return { verdict: 'unsure', reason: 'ungueltige oder leere Judge-Antwort' };
       }
       return result;
     } catch (error) {
-      console.warn(`[WARNING] entityResolver: Judge nicht erreichbar fuer "${nameA}" vs "${nameB}", werte als unsure:`, error.message);
-      return { verdict: 'unsure', reason: `judge nicht erreichbar: ${error.message}` };
+      // 1.1.c: ein ausgefallener Judge ist keine Modellunsicherheit. Beide liefen bisher
+      // unter 'unsure' und waren dadurch ununterscheidbar - genau daran ist der Produktivlauf
+      // vom 2026-08-05 unbemerkt gescheitert (25 von 27 Eintraegen 'unsure'). Die Kaskade in
+      // resolve() behandelt 'unavailable' identisch zu 'unsure' (create_and_queue) - nur die
+      // Beschriftung aendert sich, nicht der Kontrollfluss.
+      console.warn(`[WARNING] entityResolver: Judge nicht erreichbar fuer "${nameA}" vs "${nameB}", werte als unavailable:`, error.message);
+      return { verdict: 'unavailable', reason: `judge nicht erreichbar: ${error.message}` };
     }
   }
 
