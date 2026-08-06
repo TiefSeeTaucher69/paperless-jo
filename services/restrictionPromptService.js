@@ -17,6 +17,7 @@ class RestrictionPromptService {
     existingTags,
     existingCorrespondentList,
     existingDocumentTypes,
+    // eslint-disable-next-line no-unused-vars -- config bleibt fuer Aufruf-Kompatibilitaet mit den vier LLM-Services stehen, siehe JSDoc oben ("unused, kept for compatibility").
     config
   ) {
     let processedPrompt = prompt;
