@@ -16,7 +16,6 @@ const fs = require('fs').promises;
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const cookieParser = require('cookie-parser');
 const { isAuthenticated, getJwtSecret } = require('./auth.js');
 const { csrfProtection } = require('../middleware/csrf');
 const customService = require('../services/customService.js');
@@ -135,8 +134,6 @@ require('dotenv').config({ path: '../data/.env' });
  *           example: "#FF5733"
  */
 
-// API endpoints that should not redirect
-const API_ENDPOINTS = ['/health'];
 // Routes that don't require authentication
 // NOTE: POST /login and POST /setup are also exempt from CSRF protection
 // (there's no session cookie yet to protect for either). This is accepted
@@ -464,7 +461,7 @@ router.get('/sampleData/:id', async (req, res) => {
   try {
     //get all correspondents from one document by id
     const document = await paperlessService.getDocument(req.params.id);
-    const correspondents = await paperlessService.getCorrespondentsFromDocument(document.id);
+    await paperlessService.getCorrespondentsFromDocument(document.id);
 
   } catch (error) {
     console.error('[ERRO] loading sample data:', error);
@@ -607,7 +604,7 @@ router.get('/thumb/:documentId', async (req, res) => {
       res.setHeader('Content-Type', 'image/png');
       return res.sendFile(path.resolve(cachePath));
       
-    } catch (err) {
+    } catch {
       // File existiert nicht im Cache, hole es von Paperless
       console.log('Thumbnail not cached, fetching from Paperless');
       
@@ -1018,7 +1015,6 @@ router.get('/chat/init/:documentId', async (req, res) => {
 router.get('/history', async (req, res) => {
   try {
     const allTags = await paperlessService.getTags();
-    const tagMap = new Map(allTags.map(tag => [tag.id, tag]));
 
     // Get all correspondents for filter dropdown
     const historyDocuments = await documentModel.getAllHistory();
@@ -2525,7 +2521,6 @@ async function processQueue(customPrompt) {
 router.post('/api/webhook/document', async (req, res) => {
   try {
     const { url, prompt } = req.body;
-    let usePrompt = false;
     if (!url) {
       return res.status(400).send('Missing document URL');
     }
@@ -2540,7 +2535,6 @@ router.post('/api/webhook/document', async (req, res) => {
       
       documentQueue.push(document);
       if (prompt) {
-        usePrompt = true;
         console.log('[DEBUG] Using custom prompt:', prompt);
         await processQueue(prompt);
       } else {
@@ -2690,11 +2684,6 @@ router.get('/dashboard', async (req, res) => {
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/settings', async (req, res) => {
-  const processSystemPrompt = (prompt) => {
-    if (!prompt) return '';
-    return prompt.replace(/\\n/g, '\n');
-  };
-
   const normalizeArray = (value) => {
     if (!value) return [];
     if (Array.isArray(value)) return value;
@@ -3065,7 +3054,7 @@ router.get('/debug/correspondents', async (req, res) => {
  */
 router.post('/manual/analyze', express.json(), async (req, res) => {
   try {
-    const { content, existingTags, id } = req.body;
+    const { content, id } = req.body;
     let existingCorrespondentList = await paperlessService.listCorrespondentsNames();
     existingCorrespondentList = existingCorrespondentList.map(correspondent => correspondent.name);
     let existingTagsList = await paperlessService.listTagNames();
@@ -3183,7 +3172,7 @@ router.post('/manual/analyze', express.json(), async (req, res) => {
  */
 router.post('/manual/playground', express.json(), async (req, res) => {
   try {
-    const { content, existingTags, prompt, documentId } = req.body;
+    const { content, prompt, documentId } = req.body;
     
     if (!content || typeof content !== 'string') {
       console.log('Invalid content received:', content);
@@ -3426,8 +3415,8 @@ router.get('/health', async (req, res) => {
     // }
     try {
       await documentModel.isDocumentProcessed(1);
-    } catch (error) {
-      return res.status(503).json({ 
+    } catch {
+      return res.status(503).json({
         status: 'database_error',
         message: 'Database check failed'
       });
@@ -4358,7 +4347,7 @@ router.get('/api/processing-status', async (req, res) => {
   try {
       const status = await documentModel.getCurrentProcessingStatus();
       res.json(status);
-  } catch (error) {
+  } catch {
       res.status(500).json({ error: 'Failed to fetch processing status' });
   }
 });
@@ -4371,7 +4360,7 @@ router.get('/api/rag-test', async (req, res) => {
     }else{
       res.status(500).json({ success: false });
     }    
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Failed to fetch processing status' });
   }
 }
