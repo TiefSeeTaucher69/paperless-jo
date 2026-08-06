@@ -1,5 +1,5 @@
 // service to debug the paperless-ngx api routes
-const env = require('dotenv').config();
+require('dotenv').config();
 const axios = require('axios');
 const paperless_api = process.env.PAPERLESS_API_URL;
 const paperless_token = process.env.PAPERLESS_API_TOKEN;

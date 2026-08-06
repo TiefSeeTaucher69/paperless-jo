@@ -295,3 +295,206 @@ test('pruneOrphanedFingerprints tut nichts ohne documentFingerprintService', () 
 
   assert.doesNotThrow(() => pipeline.pruneOrphanedFingerprints([1, 2, 3]));
 });
+
+test('restoreOriginalData liefert restored:false, wenn kein Original gespeichert ist', async () => {
+  const pipeline = makePipeline({
+    documentModel: { getOriginalData: async () => undefined }
+  });
+
+  const result = await pipeline.restoreOriginalData(42);
+
+  assert.deepStrictEqual(result, { restored: false, reason: 'no_original_data' });
+});
+
+test('restoreOriginalData liefert restored:false, wenn getOriginalData wegen eines internen DB-Fehlers [] statt null liefert (Review-Fix)', async () => {
+  const overwriteCalls = [];
+  const pipeline = makePipeline({
+    documentModel: { getOriginalData: async () => [] },
+    paperlessService: {
+      overwriteDocumentFields: async (documentId, fields) => { overwriteCalls.push({ documentId, fields }); return {}; }
+    }
+  });
+
+  const result = await pipeline.restoreOriginalData(42);
+
+  assert.deepStrictEqual(result, { restored: false, reason: 'no_original_data' });
+  assert.strictEqual(overwriteCalls.length, 0);
+});
+
+test('restoreOriginalData schreibt den gespeicherten Originalzustand ueber overwriteDocumentFields zurueck', async () => {
+  const overwriteCalls = [];
+  const pipeline = makePipeline({
+    documentModel: {
+      getOriginalData: async () => ({ document_id: 42, title: 'Alter Titel', tags: '[1,2]', correspondent: '5' })
+    },
+    paperlessService: {
+      overwriteDocumentFields: async (documentId, fields) => { overwriteCalls.push({ documentId, fields }); return {}; }
+    }
+  });
+
+  const result = await pipeline.restoreOriginalData(42);
+
+  assert.strictEqual(overwriteCalls.length, 1);
+  assert.strictEqual(overwriteCalls[0].documentId, 42);
+  assert.deepStrictEqual(overwriteCalls[0].fields, { title: 'Alter Titel', tags: [1, 2], correspondent: 5 });
+  assert.deepStrictEqual(result, { restored: true, original: { title: 'Alter Titel', tags: [1, 2], correspondent: 5 } });
+});
+
+test('restoreOriginalData behandelt einen null-Korrespondenten korrekt (nicht als 0 oder NaN)', async () => {
+  const overwriteCalls = [];
+  const pipeline = makePipeline({
+    documentModel: {
+      getOriginalData: async () => ({ document_id: 42, title: 'Titel', tags: '[]', correspondent: null })
+    },
+    paperlessService: {
+      overwriteDocumentFields: async (documentId, fields) => { overwriteCalls.push({ documentId, fields }); return {}; }
+    }
+  });
+
+  await pipeline.restoreOriginalData(42);
+
+  assert.strictEqual(overwriteCalls[0].fields.correspondent, null);
+  assert.deepStrictEqual(overwriteCalls[0].fields.tags, []);
+});
+
+test('restoreOriginalData wirft weiter, wenn overwriteDocumentFields fehlschlaegt', async () => {
+  const pipeline = makePipeline({
+    documentModel: {
+      getOriginalData: async () => ({ document_id: 42, title: 'Titel', tags: '[1]', correspondent: '5' })
+    },
+    paperlessService: {
+      overwriteDocumentFields: async () => { throw new Error('PATCH fehlgeschlagen'); }
+    }
+  });
+
+  await assert.rejects(() => pipeline.restoreOriginalData(42), /PATCH fehlgeschlagen/);
+});
+
+test('restoreOriginalData bereinigt den Fingerprint des wiederhergestellten Dokuments (Finding 4)', async () => {
+  const deleteCalls = [];
+  const pipeline = makePipeline({
+    documentModel: {
+      getOriginalData: async () => ({ document_id: 42, title: 'Titel', tags: '[1]', correspondent: '5' })
+    },
+    paperlessService: {
+      overwriteDocumentFields: async () => ({})
+    },
+    documentFingerprintService: {
+      store: { deleteForDocument: (documentId) => { deleteCalls.push(documentId); } }
+    }
+  });
+
+  const result = await pipeline.restoreOriginalData(42);
+
+  assert.deepStrictEqual(deleteCalls, [42]);
+  assert.strictEqual(result.restored, true);
+});
+
+test('restoreOriginalData ruft keine Fingerprint-Bereinigung auf und wirft nicht, wenn documentFingerprintService fehlt (Feature deaktiviert)', async () => {
+  const pipeline = makePipeline({
+    documentModel: {
+      getOriginalData: async () => ({ document_id: 42, title: 'Titel', tags: '[1]', correspondent: '5' })
+    },
+    paperlessService: {
+      overwriteDocumentFields: async () => ({})
+    },
+    documentFingerprintService: null
+  });
+
+  let result;
+  await assert.doesNotReject(async () => { result = await pipeline.restoreOriginalData(42); });
+
+  assert.strictEqual(result.restored, true);
+});
+
+test('restoreOriginalData wirft nicht weiter, wenn deleteForDocument selbst wirft (Fingerprint-Fehler duerfen die Wiederherstellung nicht abbrechen)', async () => {
+  const pipeline = makePipeline({
+    documentModel: {
+      getOriginalData: async () => ({ document_id: 42, title: 'Titel', tags: '[1]', correspondent: '5' })
+    },
+    paperlessService: {
+      overwriteDocumentFields: async () => ({})
+    },
+    documentFingerprintService: {
+      store: { deleteForDocument: () => { throw new Error('DB gesperrt'); } }
+    }
+  });
+
+  let result;
+  await assert.doesNotReject(async () => { result = await pipeline.restoreOriginalData(42); });
+
+  assert.strictEqual(result.restored, true);
+});
+
+test('findFingerprintMatch wendet den Treffer im Modus "apply" an (Default-Verhalten)', async () => {
+  const pipeline = makePipeline({
+    paperlessService: { hasTagId: async () => true, hasDocumentTypeId: async () => true },
+    documentFingerprintService: {
+      findMatch: async () => ({ tagIds: [1], documentTypeId: 2, similarity: 0.95, matchedDocumentId: 101 }),
+      recordFingerprint: async () => {}
+    },
+    config: { documentFingerprint: { enabled: true, mode: 'apply' }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text');
+
+  assert.deepStrictEqual(result, { tagIds: [1], documentTypeId: 2 });
+});
+
+test('findFingerprintMatch protokolliert im Modus "observe" nur, wendet aber nichts an (NACHAUDIT-11)', async () => {
+  const observeCalls = [];
+  const pipeline = makePipeline({
+    paperlessService: { hasTagId: async () => true, hasDocumentTypeId: async () => true },
+    documentFingerprintService: {
+      findMatch: async () => ({ tagIds: [1], documentTypeId: 2, similarity: 0.95, matchedDocumentId: 101 }),
+      recordFingerprint: async () => {},
+      store: { recordObservation: (args) => { observeCalls.push(args); return true; } }
+    },
+    config: { documentFingerprint: { enabled: true, mode: 'observe' }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text', 7);
+
+  assert.strictEqual(result, null);
+  assert.strictEqual(observeCalls.length, 1);
+  assert.deepStrictEqual(observeCalls[0], {
+    documentId: 7, correspondentId: 42, matchedDocumentId: 101, similarity: 0.95, tagIds: [1], documentTypeId: 2
+  });
+});
+
+test('findFingerprintMatch protokolliert im Modus "observe" die validierten (nicht die rohen) IDs (AUDIT-006 bleibt auch im Beobachtungsmodus gueltig)', async () => {
+  const observeCalls = [];
+  const pipeline = makePipeline({
+    paperlessService: {
+      hasTagId: async (id) => id === 1, // Tag 2 existiert nicht mehr
+      hasDocumentTypeId: async () => true
+    },
+    documentFingerprintService: {
+      findMatch: async () => ({ tagIds: [1, 2], documentTypeId: 3, similarity: 0.95, matchedDocumentId: 101 }),
+      recordFingerprint: async () => {},
+      store: { recordObservation: (args) => { observeCalls.push(args); return true; } }
+    },
+    config: { documentFingerprint: { enabled: true, mode: 'observe' }, limitFunctions: {} }
+  });
+
+  await pipeline.findFingerprintMatch(42, 'text', 7);
+
+  assert.deepStrictEqual(observeCalls[0].tagIds, [1]);
+});
+
+test('findFingerprintMatch protokolliert nichts im Modus "observe", wenn kein Treffer existiert', async () => {
+  const observeCalls = [];
+  const pipeline = makePipeline({
+    documentFingerprintService: {
+      findMatch: async () => null,
+      recordFingerprint: async () => {},
+      store: { recordObservation: (args) => { observeCalls.push(args); return true; } }
+    },
+    config: { documentFingerprint: { enabled: true, mode: 'observe' }, limitFunctions: {} }
+  });
+
+  const result = await pipeline.findFingerprintMatch(42, 'text', 7);
+
+  assert.strictEqual(result, null);
+  assert.strictEqual(observeCalls.length, 0);
+});

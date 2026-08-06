@@ -21,7 +21,7 @@ class DocumentProcessingPipeline {
   // Kandidaten-IDs werden gegen den aktuellen Paperless-Bestand geprueft (AUDIT-006) - eine
   // zwischenzeitlich geloeschte/gemergte ID wird verworfen statt ungeprueft in den PATCH zu
   // wandern (der sonst mit HTTP 400 fehlschlaegt und das gesamte Update verwirft).
-  async findFingerprintMatch(correspondentId, content) {
+  async findFingerprintMatch(correspondentId, content, documentId) {
     if (!this.config.documentFingerprint.enabled || !correspondentId || !this.documentFingerprintService) {
       return null;
     }
@@ -46,6 +46,24 @@ class DocumentProcessingPipeline {
       if (validTagIds.length === 0 && documentTypeId === null) {
         return null;
       }
+
+      // NACHAUDIT-11 (Audit Abschnitt 18.6, Bedingung 5): im Beobachtungsmodus wird der
+      // (bereits AUDIT-006-validierte) Treffer protokolliert, aber NICHT zurueckgegeben -
+      // buildUpdateData() faehrt dann exakt wie bei keinem Treffer fort. So laesst sich die
+      // Trefferqualitaet unter echter Last beobachten, ohne dass ein Fehltreffer bereits live
+      // Tags/Dokumentart ueberschreibt.
+      if (this.config.documentFingerprint.mode === 'observe') {
+        this.documentFingerprintService.store.recordObservation({
+          documentId,
+          correspondentId,
+          matchedDocumentId: match.matchedDocumentId,
+          similarity: match.similarity,
+          tagIds: validTagIds,
+          documentTypeId
+        });
+        return null;
+      }
+
       return { tagIds: validTagIds, documentTypeId };
     } catch (error) {
       console.warn('[WARNING] documentProcessingPipeline.findFingerprintMatch: Fingerprint-Check fehlgeschlagen, Klassifikation laeuft ohne ihn weiter:', error.message);
@@ -96,6 +114,49 @@ class DocumentProcessingPipeline {
     }
   }
 
+  // NACHAUDIT-12 (Audit Abschnitt 18.6, Bedingung 6): original_documents speichert bereits den
+  // Vorzustand (Tags, Korrespondent, Titel) vor jeder KI-Aenderung, aber es gab bisher keine
+  // Funktion, die daraus wiederherstellt. Nutzt overwriteDocumentFields (Replace-Semantik) statt
+  // saveDocumentChanges/updateDocument - eine Wiederherstellung muss auch seither hinzugekommene
+  // Tags/einen seither gesetzten Korrespondenten entfernen koennen, nicht nur ergaenzen.
+  async restoreOriginalData(documentId) {
+    const original = await this.documentModel.getOriginalData(documentId);
+    // documentModel.getOriginalData faengt interne DB-Fehler (z.B. SQLITE_BUSY) ab und liefert
+    // in diesem Fehlerfall ein leeres Array [] statt null/undefined zurueck (bestehende
+    // Konvention in models/document.js, nicht Teil dieses Tasks). [] ist truthy - ohne diese
+    // Zusatzpruefung wuerde ein DB-Hickup unbemerkt als "kein Original vorhanden" durchrutschen
+    // und mit undefined-Feldern einen echten PATCH nach Paperless ausloesen, der Tags/
+    // Korrespondent des Dokuments faelschlich leert, waehrend restored:true gemeldet wird.
+    if (!original || Array.isArray(original)) {
+      return { restored: false, reason: 'no_original_data' };
+    }
+
+    const restoredFields = {
+      title: original.title,
+      tags: JSON.parse(original.tags || '[]'),
+      correspondent: original.correspondent ? Number(original.correspondent) : null
+    };
+
+    await this.paperlessService.overwriteDocumentFields(documentId, restoredFields);
+
+    // Review-Fix (Finding 4, Paket 4): ein Fingerprint, der aus der gerade zurueckgerollten
+    // Klassifikation gebaut wurde, darf nicht als lebender Kandidat fuer findCandidates()
+    // bestehen bleiben - sonst propagiert sich der Fehler, den der Operator gerade zurueckgerollt
+    // hat, auf ein drittes Dokument weiter. Gleiche Guard-Bedingung wie
+    // invalidateFingerprintsForMerge/pruneOrphanedFingerprints: restoreOriginalData muss auch
+    // funktionieren, wenn das Fingerprint-Feature deaktiviert ist (documentFingerprintService
+    // dann null).
+    if (this.documentFingerprintService) {
+      try {
+        this.documentFingerprintService.store.deleteForDocument(documentId);
+      } catch (error) {
+        console.warn('[WARNING] documentProcessingPipeline.restoreOriginalData: Fingerprint konnte nicht bereinigt werden:', error.message);
+      }
+    }
+
+    return { restored: true, original: restoredFields };
+  }
+
   // AUDIT-004: der PATCH nach Paperless muss zuerst und fuer sich stehen. updateDocument()
   // wirft jetzt statt still null zurueckzugeben (services/paperlessService.js) - schlaegt er
   // fehl, duerfen addProcessedDocument/addOpenAIMetrics/addToHistory nicht laufen, sonst gilt
@@ -142,6 +203,31 @@ class DocumentProcessingPipeline {
   }
 }
 
+// NACHAUDIT-13: gemeinsame Anwendungslogik fuer server.js/routes/setup.js#buildUpdateData -
+// beide Dateien duplizieren buildUpdateData bereits vollstaendig (AUDIT-014); diese zwei
+// Funktionen verhindern, dass die Entscheidung "wurde der Fingerprint-Treffer tatsaechlich
+// uebernommen" ein zweites Mal dupliziert wird, und machen sie isoliert testbar. Ein Treffer,
+// der wegen activateTagging='no'/activateDocumentType='no' NIE hier ankommt, oder dessen
+// tagIds/documentTypeId leer sind, darf nicht als angewendet gelten - sonst wird er trotzdem
+// als 'inherited' gespeichert und faellt faelschlich als Kandidat fuer ein drittes Dokument
+// weg (source='inherited' wird von findCandidates() ausgeschlossen, siehe
+// models/documentFingerprintStore.js), obwohl er in Paperless nie etwas bewirkt hat.
+function applyFingerprintTags(fingerprintMatch, updateData) {
+  if (fingerprintMatch && fingerprintMatch.tagIds.length > 0) {
+    updateData.tags = fingerprintMatch.tagIds;
+    return true;
+  }
+  return false;
+}
+
+function applyFingerprintDocumentType(fingerprintMatch, updateData) {
+  if (fingerprintMatch && fingerprintMatch.documentTypeId) {
+    updateData.document_type = fingerprintMatch.documentTypeId;
+    return true;
+  }
+  return false;
+}
+
 let instance = null;
 
 // Lazy statt Modul-Top-Level: verhindert, dass jeder Server-Boot data/entities.db oeffnet, auch
@@ -171,4 +257,4 @@ function getInstance() {
   return instance;
 }
 
-module.exports = { DocumentProcessingPipeline, getInstance };
+module.exports = { DocumentProcessingPipeline, getInstance, applyFingerprintTags, applyFingerprintDocumentType };

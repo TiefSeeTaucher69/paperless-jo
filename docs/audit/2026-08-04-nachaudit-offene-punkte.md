@@ -48,13 +48,26 @@ da rein deskriptiv und nicht abarbeitbar).
    [2026-08-05-nachaudit-paket3-review-queue-produktivlauf.md](../superpowers/plans/2026-08-05-nachaudit-paket3-review-queue-produktivlauf.md).
    **Mit Vorbehalt:** 3 von 18 manuell bestätigten Merges waren inhaltlich
    falsch (menschlicher Fehler, durch fehlende Judge-Begründung in der UI
-   begünstigt) und wurden bewusst nicht zurückgerollt — kein Rollback-Pfad
-   vorhanden (siehe NACHAUDIT-12).
+   begünstigt) und wurden bewusst nicht zurückgerollt — zum damaligen
+   Zeitpunkt gab es noch keinen Rollback-Pfad (siehe NACHAUDIT-12, seit
+   Paket 4 durch `restoreOriginalData` geschlossen; nachträglich nicht mehr
+   auf diese 3 Fälle angewendet).
 
-4. [ ] **Fingerprint-Aktivierungsvoraussetzungen schließen** (Abschnitt 18.6,
+4. [~] **Fingerprint-Aktivierungsvoraussetzungen schließen** (Abschnitt 18.6,
    Punkt 1/5/6 aus dem Erstaudit)
-   → Größtes Paket, aber unkritisch für den laufenden Betrieb, da Feature aus.
-   Zeitlich nach hinten stellen, außer das Feature soll bald aktiviert werden.
+   → Code-Teil (NACHAUDIT-11 Infrastruktur, NACHAUDIT-12, NACHAUDIT-13) umgesetzt laut
+   [2026-08-06-nachaudit-paket4-fingerprint-aktivierungsvoraussetzungen.md](../superpowers/plans/2026-08-06-nachaudit-paket4-fingerprint-aktivierungsvoraussetzungen.md).
+   Offen: Beobachtungsmodus-Testlauf (NACHAUDIT-11) und Schwellwertmessung (NACHAUDIT-10) —
+   beide brauchen Zugriff auf die Produktivinstanz, siehe Plan Task 7/8. Feature bleibt aus.
+
+5. [ ] **Lint-Warnungen projektweit aufräumen** (NACHAUDIT-16, Nebenbefund aus
+   der Paket-4-PR-CI)
+   → Risikoarm, unabhängig von allen anderen Paketen, guter Lückenfüller. Die
+   eine Warnung, die das Gate (`--max-warnings=83`) akut hatte scheitern
+   lassen, ist bereits behoben (Paket 4). Offen: die übrigen 83 Alt-Warnungen
+   (`no-unused-vars` quer über `server.js`, `routes/setup.js`, mehrere
+   `services/*.js` und `public/js/*.js`, siehe NACHAUDIT-07/-16) tatsächlich
+   beheben statt nur die Ratsche mitzuziehen.
 
 Info-only bleibt AUDIT-035 (bewusst zurückgestellter Punkt, keine Aktion nötig,
 in der Roadmap bereits korrekt als solcher markiert).
@@ -228,8 +241,9 @@ Mehrere weitere Merges (u. a. „Abschlusszeugnis"→„Zeugnis",
 „Bescheinigung"→„Meldebescheinigung") sind vertretbar, aber verlustbehaftet
 (spezifischere Kategorie geht in generischerer auf) — Geschmacksfrage, kein
 klarer Fehler. Die 3 falschen Merges wurden bewusst **nicht** zurückgerollt
-(Nutzerentscheidung; kein Rollback-Pfad vorhanden, NACHAUDIT-12 bleibt damit
-relevant).
+(Nutzerentscheidung — zum Zeitpunkt dieses Produktivlaufs gab es noch keinen
+Rollback-Pfad; `restoreOriginalData` aus NACHAUDIT-12 kam erst mit Paket 4
+hinzu und wurde nachträglich nicht mehr auf diese 3 Fälle angewendet).
 
 Der automatische Scan selbst legte zusätzlich 3 `auto`- und 1 `llm`-Alias an
 (Trigram ≥ 0.8 bzw. Judge-„same"). Stichprobe: 2 davon plausibel, 2 zeigen
@@ -343,6 +357,23 @@ einführen; im Beobachtungsmodus `findFingerprintMatch`-Treffer loggen statt in
 Trefferquote und Stichprobenqualität dokumentieren, bevor auf `apply`
 umgeschaltet wird.
 
+**Ergebnis (2026-08-06):** `DOCUMENT_FINGERPRINT_MODE=observe|apply` ist
+implementiert (`config/config.js`, `documentProcessingPipeline.js#findFingerprintMatch`):
+im Modus `observe` wird ein validierter Treffer in der neuen Tabelle
+`document_fingerprint_observations` protokolliert (inkl. `document_id` des
+verarbeiteten Dokuments seit dem Review-Fix in diesem Paket) statt in
+`updateData` übernommen zu werden. Ein Auswertungsskript
+(`scripts/fingerprint-observation-report.js`) fasst Trefferquote,
+Ähnlichkeits-Verteilung und die jüngsten Beobachtungen zusammen und
+verweigert sich freundlich statt mit Stack-Trace, wenn die Voraussetzungen
+fehlen. Getestet (`test/documentProcessingPipeline.test.js`,
+`test/documentFingerprintStore.test.js`, `test/fingerprintObservationReport.test.js`),
+committet. **Offen:** Der eigentliche 200-Dokumente-Testlauf im
+Beobachtungsmodus gegen die Produktivinstanz (Trefferquote/Stichprobenqualität
+dokumentieren, bevor auf `apply` umgeschaltet wird) ist eine separate
+Runbook-Aufgabe und wurde in diesem Paket nicht durchgeführt — `DOCUMENT_FINGERPRINT_ENABLED`
+bleibt `no`.
+
 ### NACHAUDIT-12 — Kein Rückabwicklungspfad (Bedingung 6)
 `original_documents` speichert bereits Tags, Korrespondent und Titel vor der
 Änderung (`documentModel.saveOriginalData`), aber es gibt keine Funktion, die
@@ -351,6 +382,22 @@ daraus wiederherstellt.
 die den gespeicherten Vorzustand über die Paperless-API zurückschreibt. Vor
 der Aktivierung eines still schreibenden Features sollte ein Weg zurück
 existieren.
+
+**Ergebnis (2026-08-06):** `restoreOriginalData(documentId)`
+(`services/documentProcessingPipeline.js`) existiert, schreibt den in
+`original_documents` gespeicherten Vorzustand (Titel, Tags, Korrespondent)
+per `overwriteDocumentFields` (Replace-Semantik) zurück nach Paperless und ist
+über eine Route erreichbar. Im selben Review-Fix wurde ergänzt, dass die
+Wiederherstellung auch den zur zurückgerollten Klassifikation gehörenden
+Eintrag in `document_fingerprints` löscht (`deleteForDocument`) — sonst
+bliebe ein aus einer bereits verworfenen Klassifikation gebauter Fingerprint
+als Kandidat für ein drittes Dokument aktiv und würde den Fehler weitertragen.
+Läuft weiterhin unverändert, wenn `DOCUMENT_FINGERPRINT_ENABLED=no` ist
+(kein Zwang, das Feature zu aktivieren). Getestet
+(`test/documentProcessingPipeline.test.js`, `test/documentFingerprintStore.test.js`),
+committet. **Offen:** nichts über den Code-Teil hinaus; die 3 im
+Produktivlauf (NACHAUDIT-08) bereits bestätigten Fehl-Merges wurden weiterhin
+bewusst nicht über diesen Pfad zurückgerollt (Nutzerentscheidung, unverändert).
 
 ### NACHAUDIT-13 — `usedFingerprint` zu konservativ bei deaktiviertem Tagging/Dokumenttyp
 Kleinerer Nebenbefund aus derselben Codestelle: `usedFingerprint` in
@@ -362,6 +409,35 @@ Kandidat für ein drittes Dokument aus — zu konservativ, nicht gefährlich.
 *Maßnahme (niedrige Priorität, im selben Paket miterledigen):*
 `usedFingerprint` nur setzen, wenn der Treffer tatsächlich in `updateData`
 übernommen wurde.
+
+**Ergebnis (2026-08-06):** Behoben. `usedFingerprint` wird jetzt über
+`applyFingerprintTags`/`applyFingerprintDocumentType`
+(`services/documentProcessingPipeline.js`) ermittelt und ist nur noch `true`,
+wenn der Treffer tatsächlich in `updateData` übernommen wurde — nicht mehr
+allein anhand von `!!fingerprintMatch`. Getestet, committet.
+
+### NACHAUDIT-16 — Lint-Gate auf `main` bereits rot, Rest der 83 Warnungen nie aufgeräumt (gefunden bei der Paket-4-PR-CI, 2026-08-06)
+- **Schweregrad:** Low · **Bereich:** CI/Codequalität · **Bezug:** NACHAUDIT-07
+- **Beobachtetes Verhalten:** Die GitHub-Actions-CI der Paket-4-PR scheiterte am
+  Lint-Gate (`eslint . --max-warnings=83`, 84 statt 83 Warnungen). Nachprüfung
+  (jede von Paket 4 berührte Datei einzeln gegen ihren Stand auf `main` per
+  `eslint --stdin` verglichen, siehe PR-Diskussion) zeigt: keine der
+  Paket-4-Änderungen hat eine neue Warnung erzeugt. `gh run list --branch main`
+  bestätigt, dass bereits der Push des Paket-3-Commits (`4772159`, direkter
+  Vorgänger dieses Branches) an derselben CI-Prüfung scheitert — das Gate war
+  auf `main` schon vor Paket 4 rot, nur bisher niemandem aufgefallen. Die
+  restlichen 83 Warnungen sind der in NACHAUDIT-07 bereits beschriebene
+  Alt-Bestand (`no-unused-vars` quer über weite Teile des Projekts:
+  `server.js`, `routes/setup.js`, mehrere `services/*.js`, mehrere
+  `public/js/*.js`, einzelne Testdateien).
+- **Maßnahme (in Paket 4 bereits erledigt):** Eine der 84 Warnungen behoben
+  (`services/debugService.js`: ungenutzte `env`-Zuweisung bei
+  `require('dotenv').config()` entfernt, Seiteneffekt bleibt erhalten) — bringt
+  den Ratschen-Gate zurück auf 83/83, ohne die zugrunde liegende Alt-Warnungen
+  im gesamten Projekt anzufassen.
+- **Maßnahme (offener Folgepunkt, siehe Arbeitsplan Punkt 5):** Die
+  verbleibenden 83 Warnungen sind projektweiter, von Paket 4 unabhängiger
+  Aufräumbedarf — eigenes, separates Vorhaben, nicht Teil dieses Nachaudits.
 
 ---
 

@@ -22,7 +22,7 @@ const { csrfProtection } = require('../middleware/csrf');
 const customService = require('../services/customService.js');
 const config = require('../config/config.js');
 const { mapEntitySimilarityFields } = require('./settingsFormMapping');
-const { getInstance: getDocumentProcessingPipeline } = require('../services/documentProcessingPipeline');
+const { getInstance: getDocumentProcessingPipeline, applyFingerprintTags, applyFingerprintDocumentType } = require('../services/documentProcessingPipeline');
 const scanRunGuard = require('../services/scanRunGuard');
 require('dotenv').config({ path: '../data/.env' });
 
@@ -1271,6 +1271,23 @@ router.get('/api/history', async (req, res) => {
   }
 });
 
+router.post('/api/documents/:id/restore-original', async (req, res) => {
+  const documentId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(documentId) || documentId <= 0) {
+    return res.status(400).json({ error: 'Invalid document id' });
+  }
+  try {
+    const result = await getDocumentProcessingPipeline().restoreOriginalData(documentId);
+    if (!result.restored) {
+      return res.status(404).json({ error: 'No original data recorded for this document' });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error(`[ERROR] restoring original data for document ${documentId}:`, error);
+    res.status(500).json({ error: 'Restore failed' });
+  }
+});
+
 /**
  * @swagger
  * /api/reset-all-documents:
@@ -1643,15 +1660,16 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
   }
 
   const correspondentId = existingCorrespondentId || updateData.correspondent;
-  const fingerprintMatch = await getDocumentProcessingPipeline().findFingerprintMatch(correspondentId, content);
+  const fingerprintMatch = await getDocumentProcessingPipeline().findFingerprintMatch(correspondentId, content, doc.id);
+  let fingerprintApplied = false;
 
   // Only process tags if tagging is activated
   if (config.limitFunctions?.activateTagging !== 'no') {
-    if (fingerprintMatch && fingerprintMatch.tagIds.length > 0) {
+    if (applyFingerprintTags(fingerprintMatch, updateData)) {
       // AUDIT-010: a fingerprint hit reuses the matched document's tags outright - running
       // processTags here would create new tag entities in Paperless that are immediately
       // discarded, leaving them orphaned and never attached to any document.
-      updateData.tags = fingerprintMatch.tagIds;
+      fingerprintApplied = true;
     } else {
       const { tagIds, errors } = await paperlessService.processTags(analysis.document.tags, options);
       if (errors.length > 0) {
@@ -1682,8 +1700,8 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
 
   // Only process document type if document type classification is activated
   if (config.limitFunctions?.activateDocumentType !== 'no') {
-    if (fingerprintMatch && fingerprintMatch.documentTypeId) {
-      updateData.document_type = fingerprintMatch.documentTypeId;
+    if (applyFingerprintDocumentType(fingerprintMatch, updateData)) {
+      fingerprintApplied = true;
     } else if (analysis.document.document_type) {
       try {
         const documentType = await paperlessService.getOrCreateDocumentType(analysis.document.document_type, options);
@@ -1744,7 +1762,7 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
     updateData.language = analysis.document.language;
   }
 
-  return { updateData, usedFingerprint: !!fingerprintMatch };
+  return { updateData, usedFingerprint: fingerprintApplied };
 }
 
 /**
