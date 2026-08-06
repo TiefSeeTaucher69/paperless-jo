@@ -69,6 +69,12 @@ directly via `data/.env` (see `.env.example` for the full list with
 descriptions — useful for Docker Compose deployments that skip the setup
 wizard):
 
+- **`USE_EXISTING_DATA`** (default `yes`) — includes the current tag, correspondent,
+  and **document type** inventory in the classification prompt so the model reuses
+  what already exists instead of inventing near-duplicates. This is the single most
+  effective consistency lever measured so far (2026-08-06 A/B test: document-type
+  stability 1-of-3 → 3-of-3 across repeated runs) and is a prerequisite for the
+  EntityResolver cascade below to have anything meaningful to match against.
 - **EntityResolver** (`ENTITY_RESOLVER_ENABLED`, default `no`) — fuzzy-matches
   AI-suggested tags/correspondents/document types against what already exists
   in Paperless-ngx (trigram similarity) instead of always creating a new
