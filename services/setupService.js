@@ -297,17 +297,6 @@ class SetupService {
         await this.validateConfig(config);
       }
 
-      const JSON_STANDARD_PROMPT = `
-        Return the result EXCLUSIVELY as a JSON object. The Tags and Title MUST be in the language that is used in the document.:
-        
-        {
-          "title": "xxxxx",
-          "correspondent": "xxxxxxxx",
-          "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
-          "document_date": "YYYY-MM-DD",
-          "language": "en/de/es/..."
-        }`;
-
       // Ensure data directory exists
       const dataDir = path.dirname(this.envPath);
       await fs.mkdir(dataDir, { recursive: true });
@@ -347,7 +336,7 @@ class SetupService {
       // Check if .env file exists
       try {
         await fs.access(this.envPath, fs.constants.F_OK);
-      } catch (err) {
+      } catch {
         console.log('No .env file found. Starting setup process...');
         this.configured = false;
         return false;
@@ -372,7 +361,7 @@ class SetupService {
         const dataDir = path.dirname(this.envPath);
         try {
           await fs.access(dataDir, fs.constants.F_OK);
-        } catch (err) {
+        } catch {
           console.log('Creating data directory...');
           await fs.mkdir(dataDir, { recursive: true });
         }

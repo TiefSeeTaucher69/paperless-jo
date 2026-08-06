@@ -38,13 +38,13 @@ export default [
     },
   },
   {
-    // AUDIT-024: no-unused-vars ist ueberwiegend Altlast (83 Fundstellen ueber ~20 Dateien)
-    // ohne Laufzeitrisiko - als Warnung sichtbar, aber kein CI-Blocker. no-undef/
-    // no-const-assign/no-dupe-class-members bleiben 'error' (Standard aus
-    // pluginJs.configs.recommended) und blockieren die CI, weil sie echte Bugs waeren
-    // (siehe AUDIT-023, wo genau diese drei Regeln reale Fehler markiert hatten).
+    // AUDIT-024/NACHAUDIT-16: alle projektweiten no-unused-vars-Altlasten sind behoben
+    // (Nachaudit 2026-08-04, Arbeitsplan Punkt 5) - die Regel ist jetzt 'error' statt 'warn',
+    // damit ein lokales `eslint .` denselben Befund liefert wie die CI (`npm run lint`,
+    // --max-warnings=0). no-undef/no-const-assign/no-dupe-class-members waren bereits 'error'
+    // (Standard aus pluginJs.configs.recommended), siehe AUDIT-023.
     rules: {
-      "no-unused-vars": "warn",
+      "no-unused-vars": "error",
     },
   },
   prettier, // Prettier integriert

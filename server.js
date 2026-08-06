@@ -20,18 +20,17 @@ process.env.RAG_SERVICE_ENABLED = process.env.RAG_SERVICE_ENABLED || 'true';
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const Logger = require('./services/loggerService');
-const { max } = require('date-fns');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
 
-const htmlLogger = new Logger({
+new Logger({
   logFile: 'logs.html',
   format: 'html',
   timestamp: true,
   maxFileSize: 1024 * 1024 * 10
 });
 
-const txtLogger = new Logger({
+new Logger({
   logFile: 'logs.txt',
   format: 'txt',
   timestamp: true,
@@ -179,7 +178,7 @@ async function saveOpenApiSpec() {
 }
 
 // Document processing functions
-async function processDocument(doc, existingTags, existingCorrespondentList, existingDocumentTypesList, ownUserId) {
+async function processDocument(doc, existingTags, existingCorrespondentList, existingDocumentTypesList) {
   const isProcessed = await documentModel.isDocumentProcessed(doc.id);
   if (isProcessed) return null;
   await documentModel.setProcessingStatus(doc.id, doc.title, 'processing');
@@ -470,7 +469,6 @@ async function scanDocuments() {
 // Routes
 app.use('/', setupRoutes);
 app.use('/', reviewRoutes);
-const authRoutes = require('./routes/auth');
 const ragRoutes = require('./routes/rag');
 
 // Mount RAG routes if enabled
@@ -587,6 +585,9 @@ app.get('/health', async (req, res) => {
 });
 
 // Error handler
+// Express erkennt Error-Handling-Middleware an der Arity (4 deklarierte Parameter); next
+// muss stehen bleiben, auch wenn er hier nicht aufgerufen wird.
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send('Something broke!');

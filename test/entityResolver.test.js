@@ -99,7 +99,7 @@ test('Stufe 4b: rejected Paar wird auch bei Gross-/Kleinschreibungs-/Whitespace-
 
 test('Stufe 4c: JUDGE_MIN <= Aehnlichkeit < AUTO_THRESHOLD, Judge sagt same -> map, Alias source=llm', async () => {
   const store = new EntityStore(':memory:');
-  const judge = async (type, a, b) => ({ verdict: 'same', reason: 'gleiche Sache, andere Schreibweise' });
+  const judge = async () => ({ verdict: 'same', reason: 'gleiche Sache, andere Schreibweise' });
   const resolver = new EntityResolver({ store, judge, config: { autoThreshold: 0.99, judgeMin: 0.1 } });
 
   const result = await resolver.resolve('document_type', 'Meldebeschreibung', [{ id: 4, name: 'Meldebescheinigung' }]);

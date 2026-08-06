@@ -127,7 +127,7 @@ function addMessage(message, isUser = true) {
                 const jsonResponse = JSON.parse(message);
                 messageContent = jsonResponse.reply || jsonResponse.message || message;
             }
-        } catch (e) {
+        } catch {
             console.log('Message is not JSON, using as is');
         }
         
@@ -161,12 +161,6 @@ function escapeHtml(unsafe) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-}
-
-function toggleTheme() {
-    const currentTheme = document.body.getAttribute('data-theme');
-    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
 }
 
 function setTheme(theme) {
@@ -219,7 +213,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 });
 
-document.getElementById('messageForm').querySelector('.send-button').addEventListener('click', async (e) => {
+document.getElementById('messageForm').querySelector('.send-button').addEventListener('click', async () => {
     await submitForm();
 })
 
