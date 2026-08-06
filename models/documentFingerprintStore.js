@@ -73,6 +73,12 @@ class DocumentFingerprintStore {
     // zirkulaere Vererbungskette eines einzelnen Fehltreffers, die sich sonst unbegrenzt durch
     // eine ganze Dokumentserie fortpflanzt.
     this._ensureColumn('document_fingerprints', 'source', "TEXT NOT NULL DEFAULT 'llm'");
+
+    // Review-Fix (Finding 1, Paket 4): eine Beobachtung protokollierte bisher nur die
+    // matched_document_id (den historischen Kandidaten), nie die ID des Dokuments, das gerade
+    // verarbeitet wurde. Ohne diese ID laesst sich bei einer spaeteren Stichprobenpruefung nicht
+    // feststellen, welche zwei Dokumente tatsaechlich verglichen werden muessen.
+    this._ensureColumn('document_fingerprint_observations', 'document_id', 'INTEGER');
   }
 
   // Additive Spalten-Migration: CREATE TABLE IF NOT EXISTS legt bei einer bereits
@@ -187,13 +193,25 @@ class DocumentFingerprintStore {
     }
   }
 
-  recordObservation({ correspondentId, matchedDocumentId, similarity, tagIds, documentTypeId }) {
+  // Review-Fix (Finding 4, Paket 4): restoreOriginalData (documentProcessingPipeline.js) rollt
+  // eine abgelehnte KI-Klassifikation zurueck, liess den daraus gebauten Fingerprint bisher aber
+  // unangetastet - der blieb dadurch ein lebender Kandidat fuer findCandidates() und haette den
+  // gerade zurueckgerollten Fehler auf ein drittes Dokument weitervererben koennen.
+  deleteForDocument(documentId) {
+    try {
+      this.db.prepare(`DELETE FROM document_fingerprints WHERE document_id = ?`).run(documentId);
+    } catch (error) {
+      console.error('[ERROR] documentFingerprintStore.deleteForDocument:', error.message);
+    }
+  }
+
+  recordObservation({ documentId, correspondentId, matchedDocumentId, similarity, tagIds, documentTypeId }) {
     try {
       this.db.prepare(`
         INSERT INTO document_fingerprint_observations
-          (correspondent_id, matched_document_id, similarity, tag_ids, document_type_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(correspondentId, matchedDocumentId, similarity, JSON.stringify(tagIds), documentTypeId ?? null, new Date().toISOString());
+          (document_id, correspondent_id, matched_document_id, similarity, tag_ids, document_type_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(documentId ?? null, correspondentId, matchedDocumentId, similarity, JSON.stringify(tagIds), documentTypeId ?? null, new Date().toISOString());
       return true;
     } catch (error) {
       console.error('[ERROR] documentFingerprintStore.recordObservation:', error.message);
