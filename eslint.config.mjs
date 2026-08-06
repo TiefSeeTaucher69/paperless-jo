@@ -5,6 +5,14 @@ import prettier from "eslint-config-prettier";
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   {
+    // .claude/worktrees/*: isolated git worktrees created during agent-driven
+    // development, cleaned up after merge but not always immediately - their
+    // contents are a separate checkout, not this project's source (A-10).
+    // data/**: runtime state (SQLite DBs, cached thumbnails, eval output),
+    // never source.
+    ignores: ['.claude/**', 'data/**'],
+  },
+  {
     files: ["**/*.js"],
     languageOptions: {
       sourceType: "commonjs",
