@@ -295,3 +295,62 @@ test('pruneOrphanedFingerprints tut nichts ohne documentFingerprintService', () 
 
   assert.doesNotThrow(() => pipeline.pruneOrphanedFingerprints([1, 2, 3]));
 });
+
+test('restoreOriginalData liefert restored:false, wenn kein Original gespeichert ist', async () => {
+  const pipeline = makePipeline({
+    documentModel: { getOriginalData: async () => undefined }
+  });
+
+  const result = await pipeline.restoreOriginalData(42);
+
+  assert.deepStrictEqual(result, { restored: false, reason: 'no_original_data' });
+});
+
+test('restoreOriginalData schreibt den gespeicherten Originalzustand ueber overwriteDocumentFields zurueck', async () => {
+  const overwriteCalls = [];
+  const pipeline = makePipeline({
+    documentModel: {
+      getOriginalData: async () => ({ document_id: 42, title: 'Alter Titel', tags: '[1,2]', correspondent: '5' })
+    },
+    paperlessService: {
+      overwriteDocumentFields: async (documentId, fields) => { overwriteCalls.push({ documentId, fields }); return {}; }
+    }
+  });
+
+  const result = await pipeline.restoreOriginalData(42);
+
+  assert.strictEqual(overwriteCalls.length, 1);
+  assert.strictEqual(overwriteCalls[0].documentId, 42);
+  assert.deepStrictEqual(overwriteCalls[0].fields, { title: 'Alter Titel', tags: [1, 2], correspondent: 5 });
+  assert.deepStrictEqual(result, { restored: true, original: { title: 'Alter Titel', tags: [1, 2], correspondent: 5 } });
+});
+
+test('restoreOriginalData behandelt einen null-Korrespondenten korrekt (nicht als 0 oder NaN)', async () => {
+  const overwriteCalls = [];
+  const pipeline = makePipeline({
+    documentModel: {
+      getOriginalData: async () => ({ document_id: 42, title: 'Titel', tags: '[]', correspondent: null })
+    },
+    paperlessService: {
+      overwriteDocumentFields: async (documentId, fields) => { overwriteCalls.push({ documentId, fields }); return {}; }
+    }
+  });
+
+  await pipeline.restoreOriginalData(42);
+
+  assert.strictEqual(overwriteCalls[0].fields.correspondent, null);
+  assert.deepStrictEqual(overwriteCalls[0].fields.tags, []);
+});
+
+test('restoreOriginalData wirft weiter, wenn overwriteDocumentFields fehlschlaegt', async () => {
+  const pipeline = makePipeline({
+    documentModel: {
+      getOriginalData: async () => ({ document_id: 42, title: 'Titel', tags: '[1]', correspondent: '5' })
+    },
+    paperlessService: {
+      overwriteDocumentFields: async () => { throw new Error('PATCH fehlgeschlagen'); }
+    }
+  });
+
+  await assert.rejects(() => pipeline.restoreOriginalData(42), /PATCH fehlgeschlagen/);
+});
