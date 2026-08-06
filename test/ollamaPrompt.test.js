@@ -99,3 +99,26 @@ test('externe API-Daten landen als Text im system-Teil, nicht als Promise', () =
   assert.ok(!system.includes('[object Promise]'));
   assert.ok(system.includes('Muster'));
 });
+
+test('mustHavePrompt enthaelt keine Beispielwerte, die das Modell woertlich uebernehmen koennte (1.2.a)', () => {
+  const forbidden = ['Invoice', 'Contract', 'Tag1', 'en/de/es'];
+  forbidden.forEach(value => {
+    assert.ok(!config.mustHavePrompt.includes(value), `mustHavePrompt sollte "${value}" nicht mehr enthalten`);
+  });
+});
+
+test('_buildPrompt enthaelt in beiden useExistingData-Zweigen keine Prompt-Platzhalter (1.2.a)', () => {
+  const forbidden = ['Invoice', 'Contract', 'Tag1', 'en/de/es'];
+
+  config.useExistingData = 'no';
+  const withoutExisting = ollamaService._buildPrompt('Text', [], [], [], {});
+  forbidden.forEach(value => assert.ok(!withoutExisting.system.includes(value), `useExistingData=no: "${value}" sollte nicht vorkommen`));
+
+  config.useExistingData = 'yes';
+  config.restrictToExistingTags = 'no';
+  config.restrictToExistingCorrespondents = 'no';
+  const withExisting = ollamaService._buildPrompt('Text', ['Rechnung'], ['Finanzamt'], ['Bescheid'], {});
+  forbidden.forEach(value => assert.ok(!withExisting.system.includes(value), `useExistingData=yes: "${value}" sollte nicht vorkommen`));
+
+  config.useExistingData = 'no';
+});

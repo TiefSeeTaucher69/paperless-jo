@@ -281,12 +281,12 @@ module.exports = {
   IMPORTANT: The custom_fields are optional and can be left out if not needed, only try to fill out the values if you find a matching information in the document.
   Do not change the value of field_name, only fill out the values. If the field is about money only add the number without currency and always use a . for decimal places.
   {
-    "title": "xxxxx",
-    "correspondent": "xxxxxxxx",
-    "tags": ["Tag1", "Tag2", "Tag3", "Tag4"],
-    "document_type": "Invoice/Contract/...",
+    "title": "<short, concise title>",
+    "correspondent": "<sender/institution, not the recipient>",
+    "tags": ["<tag>", "<tag>", "..."],
+    "document_type": "<the document's category, in the document's language>",
     "document_date": "YYYY-MM-DD",
-    "language": "en/de/es/...",
+    "language": "<ISO 639-1 code, e.g. de>",
     %CUSTOMFIELDS%
   }`,
 };
