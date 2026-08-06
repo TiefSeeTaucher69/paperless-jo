@@ -1110,14 +1110,20 @@ durch:
 (`<button id="themeToggle" class="theme-toggle">`), aber **kein** `onclick`-Attribut darauf, und
 `public/js/chat.js` selbst enthält an keiner Stelle ein `getElementById('themeToggle')` oder
 einen darauf registrierten `addEventListener` (verifiziert per `grep -n "themeToggle"
-public/js/chat.js` — keine Treffer). Der Button ist damit aktuell unverdrahtet/funktionslos, und
-`toggleTheme()` ist entsprechend unerreichbarer Code — anders als in jeder anderen Datei dieses
-Projekts (`dashboard.js`, `manual.js`, `settings.js`, `setup.js`, `history.js`, `playground.js`,
-`review.js`), die alle eine `ThemeManager`-Klasse mit `this.themeToggle.addEventListener(...)`
-verwenden. **Dies ist ein separater, vorbestehender UI-Bug** (der Theme-Umschalter auf der
-Chat-Seite tut nichts), der in Task 11 als eigener Fund (NACHAUDIT-17, zusammen mit dem
-`/sampleData/:id`-Fund aus Task 6) dokumentiert wird — diese Löschung entfernt nur den toten
-Code, behebt den Button nicht (das wäre eine Funktionsänderung, kein Lint-Cleanup).
+public/js/chat.js` — keine Treffer). `toggleTheme()` ist damit als globale Top-Level-Funktion in
+dieser Datei unerreichbarer Code — sicher zu löschen, unabhängig davon, ob der Button anderweitig
+funktioniert (siehe Korrektur unten).
+
+**Korrektur (Task-7-Review, 2026-08-06):** Die ursprüngliche Annahme, der Button sei „aktuell
+unverdrahtet/funktionslos", war **falsch** — `views/chat.ejs` lädt zusätzlich `js/dashboard.js`
+(`grep -n "script src" views/chat.ejs`), dessen `ThemeManager`-Klasse denselben
+`#themeToggle`-Button bereits über `this.themeToggle.addEventListener('click', () =>
+this.toggleTheme())` verdrahtet — nur eben `dashboard.js`s eigene Klassenmethode `toggleTheme()`,
+nicht die gleichnamige, aber unabhängige globale Funktion aus `chat.js`. Der Button funktioniert
+also. Das ändert nichts an der Löschung selbst: die globale `toggleTheme()`-Funktion in `chat.js`
+bleibt unerreichbarer Code (nichts ruft sie auf, weder `chat.js` selbst noch `dashboard.js`, das
+seine eigene, unabhängige Methode gleichen Namens nutzt) und ist weiterhin sicher zu entfernen —
+nur die Einordnung als „separater UI-Bug" für NACHAUDIT-17 (Task 11) entfällt.
 
 Ersetze:
 ```js
@@ -1794,19 +1800,28 @@ Anzahl behobener Warnungen (83), Aufteilung nach Fund-Typ (tote Imports, optiona
 Catch-Bindings, zwei tatsächlich tote Funktionen mit Beleg, drei gezielte Unterdrückungen mit
 Begründung), `--max-warnings` jetzt `0`.
 
-- [ ] **Step 5: neue Funde als NACHAUDIT-17 dokumentieren (nicht beheben)**
+- [ ] **Step 5: neuen Fund als NACHAUDIT-17 dokumentieren (nicht beheben)**
 
-Im selben Dokument, nach dem NACHAUDIT-16-Abschnitt, einen neuen Abschnitt „NACHAUDIT-17 — Zwei
-bei der Lint-Bereinigung gefundene, unabhängige Bugs (gefunden, nicht behoben, 2026-08-06)"
-ergänzen mit exakt zwei Punkten:
+Im selben Dokument, nach dem NACHAUDIT-16-Abschnitt, einen neuen Abschnitt „NACHAUDIT-17 — bei
+der Lint-Bereinigung gefundener, unabhängiger Bug (gefunden, nicht behoben, 2026-08-06)" ergänzen
+mit genau einem Punkt:
 1. `routes/setup.js`, `GET /sampleData/:id` sendet im Erfolgsfall keine HTTP-Antwort (Task 6,
    Step 3 dieses Plans) — Funktionsbug, unabhängig vom Lint-Cleanup.
-2. `public/js/chat.js`, der Theme-Toggle-Button (`#themeToggle` in `views/chat.ejs`) ist nicht
-   mit einem Klick-Handler verdrahtet (Task 7, Step 2 dieses Plans) — UI-Bug, unabhängig vom
-   Lint-Cleanup.
 
-Beide als „Low, kein eigenes Paket wert, bei Gelegenheit mitnehmen" einordnen (gleiche Formulierung
-wie bei vergleichbaren Nebenbefunden in diesem Dokument, z. B. NACHAUDIT-07).
+Als „Low, kein eigenes Paket wert, bei Gelegenheit mitnehmen" einordnen (gleiche Formulierung wie
+bei vergleichbaren Nebenbefunden in diesem Dokument, z. B. NACHAUDIT-07).
+
+**Korrektur während der Umsetzung (Task-7-Review, 2026-08-06):** Der ursprüngliche Plan-Entwurf
+vermutete hier einen zweiten Bug — einen unverdrahteten Theme-Toggle-Button auf der Chat-Seite,
+als Begründung für das Löschen von `toggleTheme()` in `public/js/chat.js` (Task 7). Der
+Task-7-Reviewer hat das widerlegt: `views/chat.ejs` lädt zusätzlich `js/dashboard.js`
+(`grep -n "script src" views/chat.ejs`, Zeile 181), dessen `ThemeManager`-Klasse genau diesen
+`#themeToggle`-Button bereits verdrahtet (`public/js/dashboard.js`, Konstruktor). Der Button
+funktioniert also — nur eben über `dashboard.js`s Klassenmethode `toggleTheme()`, nicht über die
+gleichnamige, aber unabhängige globale Funktion, die in `chat.js` verwaist war. Die Löschung in
+Task 7 bleibt dadurch korrekt (die gelöschte Funktion war tatsächlich unerreichbar), nur die
+Begründung „Button ist kaputt" war falsch — dieser zweite Punkt entfällt deshalb aus
+NACHAUDIT-17, es wird nur der eine echte Fund (Punkt 1 oben) dokumentiert.
 
 - [ ] **Step 6: Arbeitsplan-Punkt 5 auf `[x]` setzen**
 
@@ -1827,8 +1842,8 @@ durch:
    der Paket-4-PR-CI)
    → Umgesetzt laut
    [2026-08-06-nachaudit16-lint-warnungen-aufraeumen.md](../superpowers/plans/2026-08-06-nachaudit16-lint-warnungen-aufraeumen.md).
-   Alle 83 Warnungen behoben, `--max-warnings` auf `0` gesenkt. Zwei dabei
-   gefundene, unabhängige Bugs als NACHAUDIT-17 festgehalten (nicht behoben,
+   Alle 83 Warnungen behoben, `--max-warnings` auf `0` gesenkt. Ein dabei
+   gefundener, unabhängiger Bug als NACHAUDIT-17 festgehalten (nicht behoben,
    außerhalb des Lint-Scopes).
 ```
 
@@ -1841,10 +1856,9 @@ chore: Lint-Ratsche auf 0 gesenkt, NACHAUDIT-16 abgeschlossen, NACHAUDIT-17 doku
 
 eslint . liefert jetzt 0 Warnungen (vorher 83), package.json max-warnings
 von 83 auf 0 gesenkt - echte Ratsche statt Ist-Stand-Deckel (behebt die in
-NACHAUDIT-07 beschriebene Reibung). Zwei beim Cleanup gefundene, unabhaengige
-Bugs (GET /sampleData/:id ohne Erfolgsantwort, unverdrahteter Theme-Toggle
-auf der Chat-Seite) als NACHAUDIT-17 dokumentiert, bewusst nicht behoben
-(ausserhalb des Lint-Scopes dieses Plans).
+NACHAUDIT-07 beschriebene Reibung). Ein beim Cleanup gefundener, unabhaengiger
+Bug (GET /sampleData/:id ohne Erfolgsantwort) als NACHAUDIT-17 dokumentiert,
+bewusst nicht behoben (ausserhalb des Lint-Scopes dieses Plans).
 
 Nachaudit 2026-08-04, Arbeitsplan Punkt 5 (NACHAUDIT-16, 11/11) - Paket abgeschlossen.
 
@@ -1866,9 +1880,12 @@ EOF
   erkennbar (Task 5), `removeCustomField`/`getCsrfToken` bleiben aus HTML/anderen Skripten
   aufrufbar (Task 9), die aktive `window.showTagDetails`/`window.showCorrespondentDetails`-Version
   bleibt unverändert (Task 8).
-- Zwei bei der Bereinigung gefundene, unabhängige Bugs (`GET /sampleData/:id` ohne
-  Erfolgsantwort, unverdrahteter Chat-Theme-Toggle) sind **nicht** in diesem Plan behoben, sondern
-  als NACHAUDIT-17 dokumentiert (Task 11) — kein stillschweigendes Scope-Creep in einen
-  Funktionsbug-Fix.
+- Ein bei der Bereinigung gefundener, unabhängiger Bug (`GET /sampleData/:id` ohne
+  Erfolgsantwort) ist **nicht** in diesem Plan behoben, sondern als NACHAUDIT-17 dokumentiert
+  (Task 11) — kein stillschweigendes Scope-Creep in einen Funktionsbug-Fix. Ein zweiter, während
+  der Planung vermuteter Bug (angeblich unverdrahteter Chat-Theme-Toggle) erwies sich beim
+  Task-7-Review als falsch — `views/chat.ejs` lädt zusätzlich `js/dashboard.js`, dessen
+  `ThemeManager` den Button bereits verdrahtet — und wurde deshalb aus NACHAUDIT-17 entfernt
+  (siehe Korrektur-Hinweis in Task 11, Step 5).
 - `docs/audit/2026-08-04-nachaudit-offene-punkte.md` spiegelt den tatsächlichen
   Umsetzungsstand wider (Arbeitsplan-Punkt 5 auf `[x]` nur nach Beleg, siehe Task 11).
