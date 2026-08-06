@@ -60,6 +60,15 @@ da rein deskriptiv und nicht abarbeitbar).
    Offen: Beobachtungsmodus-Testlauf (NACHAUDIT-11) und Schwellwertmessung (NACHAUDIT-10) —
    beide brauchen Zugriff auf die Produktivinstanz, siehe Plan Task 7/8. Feature bleibt aus.
 
+5. [ ] **Lint-Warnungen projektweit aufräumen** (NACHAUDIT-16, Nebenbefund aus
+   der Paket-4-PR-CI)
+   → Risikoarm, unabhängig von allen anderen Paketen, guter Lückenfüller. Die
+   eine Warnung, die das Gate (`--max-warnings=83`) akut hatte scheitern
+   lassen, ist bereits behoben (Paket 4). Offen: die übrigen 83 Alt-Warnungen
+   (`no-unused-vars` quer über `server.js`, `routes/setup.js`, mehrere
+   `services/*.js` und `public/js/*.js`, siehe NACHAUDIT-07/-16) tatsächlich
+   beheben statt nur die Ratsche mitzuziehen.
+
 Info-only bleibt AUDIT-035 (bewusst zurückgestellter Punkt, keine Aktion nötig,
 in der Roadmap bereits korrekt als solcher markiert).
 
@@ -406,6 +415,29 @@ Kandidat für ein drittes Dokument aus — zu konservativ, nicht gefährlich.
 (`services/documentProcessingPipeline.js`) ermittelt und ist nur noch `true`,
 wenn der Treffer tatsächlich in `updateData` übernommen wurde — nicht mehr
 allein anhand von `!!fingerprintMatch`. Getestet, committet.
+
+### NACHAUDIT-16 — Lint-Gate auf `main` bereits rot, Rest der 83 Warnungen nie aufgeräumt (gefunden bei der Paket-4-PR-CI, 2026-08-06)
+- **Schweregrad:** Low · **Bereich:** CI/Codequalität · **Bezug:** NACHAUDIT-07
+- **Beobachtetes Verhalten:** Die GitHub-Actions-CI der Paket-4-PR scheiterte am
+  Lint-Gate (`eslint . --max-warnings=83`, 84 statt 83 Warnungen). Nachprüfung
+  (jede von Paket 4 berührte Datei einzeln gegen ihren Stand auf `main` per
+  `eslint --stdin` verglichen, siehe PR-Diskussion) zeigt: keine der
+  Paket-4-Änderungen hat eine neue Warnung erzeugt. `gh run list --branch main`
+  bestätigt, dass bereits der Push des Paket-3-Commits (`4772159`, direkter
+  Vorgänger dieses Branches) an derselben CI-Prüfung scheitert — das Gate war
+  auf `main` schon vor Paket 4 rot, nur bisher niemandem aufgefallen. Die
+  restlichen 83 Warnungen sind der in NACHAUDIT-07 bereits beschriebene
+  Alt-Bestand (`no-unused-vars` quer über weite Teile des Projekts:
+  `server.js`, `routes/setup.js`, mehrere `services/*.js`, mehrere
+  `public/js/*.js`, einzelne Testdateien).
+- **Maßnahme (in Paket 4 bereits erledigt):** Eine der 84 Warnungen behoben
+  (`services/debugService.js`: ungenutzte `env`-Zuweisung bei
+  `require('dotenv').config()` entfernt, Seiteneffekt bleibt erhalten) — bringt
+  den Ratschen-Gate zurück auf 83/83, ohne die zugrunde liegende Alt-Warnungen
+  im gesamten Projekt anzufassen.
+- **Maßnahme (offener Folgepunkt, siehe Arbeitsplan Punkt 5):** Die
+  verbleibenden 83 Warnungen sind projektweiter, von Paket 4 unabhängiger
+  Aufräumbedarf — eigenes, separates Vorhaben, nicht Teil dieses Nachaudits.
 
 ---
 
