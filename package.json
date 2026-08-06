@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "test": "node --test test/*.test.js",
-    "lint": "eslint . --max-warnings=83",
+    "lint": "eslint . --max-warnings=0",
     "dev": "nodemon server.js",
     "start": "node server.js"
   },
