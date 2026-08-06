@@ -395,6 +395,27 @@ Tuning-Lauf nötig, damit `FINGERPRINT_SIMILARITY_THRESHOLD` (aktuell ein
 ungemessener Platzhalter, `0.90`) gegen gelabelte Dokumentpaare gemessen statt
 geschätzt ist — genau wie schon bei den Schwellwerten aus Phase 2 und 4.
 
+## Gemessene Betriebswerte
+
+Diese Tabelle ist die Versionierung, die A-4 gefehlt hat: die eigentliche
+Ursache war nicht ein umgelegter Schalter, sondern dass gemessene Werte
+nirgends außerhalb von `data/.env` festgehalten waren und beim Neuaufsetzen
+am 2026-08-05 verloren gingen. `.env.example` kann das nicht leisten — es ist
+der ausgelieferte Default für fremde Installationen, nicht die Konfiguration
+dieser Instanz. Werte gehören hierher, nicht ins Beispiel.
+
+| Variable | gemessener Wert | Quelle |
+|---|---|---|
+| `ENTITY_RESOLVER_AUTO_THRESHOLD` | 0.8 | Phase-2-Tuning; im Test 2026-08-06 bestätigt (5 von 5 Auto-Merges korrekt, höchster Wert 0.848 — 0.90 hätte alle fünf verhindert) |
+| `ENTITY_RESOLVER_JUDGE_MIN` | 0.5 | Phase-2-Tuning |
+| `EMBEDDING_EXCLUDED_TYPES` | `tag` | Phase-5-Messung 2026-08-02 |
+| `EMBED_AUTO_THRESHOLD` / `EMBED_JUDGE_MIN` | offen | siehe [Fixplan, "Vertagte Entscheidungen", V-1](../audit/2026-08-06-fixplan-konsistenz-und-review-ui.md#vertagte-entscheidungen) |
+| `FINGERPRINT_SIMILARITY_THRESHOLD` | ungemessen | NACHAUDIT-10, weiterhin offen |
+| `ENTITY_JUDGE_TIMEOUT_MS` | 60000 | Messung E-1, 2026-08-06 (siehe Fixplan Paket 1, Abschnitt 1.1.a) |
+
+Bei jeder künftigen Neu- oder Nachmessung diese Tabelle aktualisieren, bevor
+der Wert in `data/.env` geändert wird — nicht danach.
+
 ## Offene Risiken
 
 - **Schwellwerte sind bis zur Messung geraten.** Größte Unsicherheit des
