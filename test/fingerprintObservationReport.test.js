@@ -1,7 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const Database = require('better-sqlite3');
 const DocumentFingerprintStore = require('../models/documentFingerprintStore');
-const { buildReport } = require('../scripts/fingerprint-observation-report');
+const { buildReport, tableExists } = require('../scripts/fingerprint-observation-report');
 
 test('buildReport liefert total=0 und leere Listen ohne gespeicherte Beobachtungen', () => {
   const store = new DocumentFingerprintStore(':memory:');
@@ -49,5 +50,36 @@ test('buildReport liefert die juengsten Beobachtungen zuerst, begrenzt auf 20', 
     assert.strictEqual(report.recent[0].matched_document_id, 25);
   } finally {
     store.close();
+  }
+});
+
+test('buildReport enthaelt document_id in den juengsten Beobachtungen (Finding 1)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    store.recordObservation({ documentId: 77, correspondentId: 5, matchedDocumentId: 101, similarity: 0.93, tagIds: [1], documentTypeId: null });
+    const report = buildReport(store.db);
+    assert.strictEqual(report.recent[0].document_id, 77);
+  } finally {
+    store.close();
+  }
+});
+
+test('tableExists liefert true fuer eine vorhandene Tabelle (Finding 2)', () => {
+  const store = new DocumentFingerprintStore(':memory:');
+  try {
+    assert.strictEqual(tableExists(store.db, 'document_fingerprint_observations'), true);
+  } finally {
+    store.close();
+  }
+});
+
+test('tableExists liefert false fuer eine Datenbank ohne die Beobachtungstabelle (Finding 2)', () => {
+  // Simuliert eine Instanz, auf der DOCUMENT_FINGERPRINT_ENABLED nie aktiviert war: die Tabelle
+  // wurde nie angelegt, weil DocumentFingerprintStore nie instanziiert wurde.
+  const db = new Database(':memory:');
+  try {
+    assert.strictEqual(tableExists(db, 'document_fingerprint_observations'), false);
+  } finally {
+    db.close();
   }
 });
