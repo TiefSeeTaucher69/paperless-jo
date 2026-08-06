@@ -196,6 +196,12 @@ module.exports = {
     judgeMin: entityResolverJudgeMin,
     dbPath: process.env.ENTITY_RESOLVER_DB_PATH || path.join(process.cwd(), 'data', 'entities.db')
   },
+  entityJudge: {
+    // 1.1.a: gemessenes Maximum 32021 ms, Token-Rate schwankt um Faktor 4.6
+    // unabhaengig von der Antwortlaenge (Fixplan E-1) - ein knapper Timeout
+    // wiederholt denselben Fehler nur in kleinerem Massstab.
+    timeoutMs: parseEnvNumber(process.env.ENTITY_JUDGE_TIMEOUT_MS, 60000)
+  },
   embedding: {
     enabled: parseEnvBoolean(process.env.EMBEDDING_SIMILARITY_ENABLED, 'no') === 'yes',
     apiUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',

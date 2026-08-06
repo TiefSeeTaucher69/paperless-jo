@@ -3,6 +3,12 @@ const assert = require('node:assert');
 const entityJudge = require('../services/entityJudge');
 const config = require('../config/config');
 
+test('Client-Timeout kommt aus config.entityJudge.timeoutMs (1.1.a)', () => {
+  delete require.cache[require.resolve('../services/entityJudge')];
+  const freshJudge = require('../services/entityJudge');
+  assert.strictEqual(freshJudge.client.defaults.timeout, config.entityJudge.timeoutMs);
+});
+
 function captureRequest(responseData) {
   const captured = {};
   entityJudge.client = {

@@ -44,7 +44,7 @@ function isTransientError(error) {
 
 class EntityJudge {
   constructor() {
-    this.client = axios.create({ timeout: 15000 });
+    this.client = axios.create({ timeout: config.entityJudge.timeoutMs });
   }
 
   async judge(entityType, nameA, nameB) {
