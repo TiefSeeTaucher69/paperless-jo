@@ -1660,7 +1660,7 @@ async function buildUpdateData(analysis, doc, content, existingCorrespondentId) 
   }
 
   const correspondentId = existingCorrespondentId || updateData.correspondent;
-  const fingerprintMatch = await getDocumentProcessingPipeline().findFingerprintMatch(correspondentId, content);
+  const fingerprintMatch = await getDocumentProcessingPipeline().findFingerprintMatch(correspondentId, content, doc.id);
   let fingerprintApplied = false;
 
   // Only process tags if tagging is activated

@@ -21,7 +21,7 @@ class DocumentProcessingPipeline {
   // Kandidaten-IDs werden gegen den aktuellen Paperless-Bestand geprueft (AUDIT-006) - eine
   // zwischenzeitlich geloeschte/gemergte ID wird verworfen statt ungeprueft in den PATCH zu
   // wandern (der sonst mit HTTP 400 fehlschlaegt und das gesamte Update verwirft).
-  async findFingerprintMatch(correspondentId, content) {
+  async findFingerprintMatch(correspondentId, content, documentId) {
     if (!this.config.documentFingerprint.enabled || !correspondentId || !this.documentFingerprintService) {
       return null;
     }
@@ -54,6 +54,7 @@ class DocumentProcessingPipeline {
       // Tags/Dokumentart ueberschreibt.
       if (this.config.documentFingerprint.mode === 'observe') {
         this.documentFingerprintService.store.recordObservation({
+          documentId,
           correspondentId,
           matchedDocumentId: match.matchedDocumentId,
           similarity: match.similarity,
@@ -137,6 +138,21 @@ class DocumentProcessingPipeline {
     };
 
     await this.paperlessService.overwriteDocumentFields(documentId, restoredFields);
+
+    // Review-Fix (Finding 4, Paket 4): ein Fingerprint, der aus der gerade zurueckgerollten
+    // Klassifikation gebaut wurde, darf nicht als lebender Kandidat fuer findCandidates()
+    // bestehen bleiben - sonst propagiert sich der Fehler, den der Operator gerade zurueckgerollt
+    // hat, auf ein drittes Dokument weiter. Gleiche Guard-Bedingung wie
+    // invalidateFingerprintsForMerge/pruneOrphanedFingerprints: restoreOriginalData muss auch
+    // funktionieren, wenn das Fingerprint-Feature deaktiviert ist (documentFingerprintService
+    // dann null).
+    if (this.documentFingerprintService) {
+      try {
+        this.documentFingerprintService.store.deleteForDocument(documentId);
+      } catch (error) {
+        console.warn('[WARNING] documentProcessingPipeline.restoreOriginalData: Fingerprint konnte nicht bereinigt werden:', error.message);
+      }
+    }
 
     return { restored: true, original: restoredFields };
   }
