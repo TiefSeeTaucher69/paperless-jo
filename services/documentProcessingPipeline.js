@@ -103,7 +103,13 @@ class DocumentProcessingPipeline {
   // Tags/einen seither gesetzten Korrespondenten entfernen koennen, nicht nur ergaenzen.
   async restoreOriginalData(documentId) {
     const original = await this.documentModel.getOriginalData(documentId);
-    if (!original) {
+    // documentModel.getOriginalData faengt interne DB-Fehler (z.B. SQLITE_BUSY) ab und liefert
+    // in diesem Fehlerfall ein leeres Array [] statt null/undefined zurueck (bestehende
+    // Konvention in models/document.js, nicht Teil dieses Tasks). [] ist truthy - ohne diese
+    // Zusatzpruefung wuerde ein DB-Hickup unbemerkt als "kein Original vorhanden" durchrutschen
+    // und mit undefined-Feldern einen echten PATCH nach Paperless ausloesen, der Tags/
+    // Korrespondent des Dokuments faelschlich leert, waehrend restored:true gemeldet wird.
+    if (!original || Array.isArray(original)) {
       return { restored: false, reason: 'no_original_data' };
     }
 
