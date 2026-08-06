@@ -457,15 +457,29 @@ festgestellt, siehe Korrekturhinweis oben) sowie je ein verwaistes,
 nie erreichtes `showTagDetails`/`showCorrespondentDetails`-Duplikat in
 `public/js/dashboard.js` und `public/js/manual.js` (die per `window.X`
 verdrahtete, aus den Views aufgerufene aktive Version blieb jeweils
-unverändert). Drei weitere Warnungen waren echte ESLint-Fehltreffer und
+unverändert). Rund zwölf weitere Warnungen waren echte ESLint-Fehltreffer und
 wurden gezielt per `eslint-disable`-Kommentar statt durch Löschen
-unterdrückt, mit Begründung im jeweiligen Commit: der laut JSDoc bewusst
+unterdrückt, mit Begründung im jeweiligen Commit: fünf einzelne
+`eslint-disable-next-line no-unused-vars` — der laut JSDoc bewusst
 ungenutzte, zur Kompatibilität gehaltene Parameter in
 `services/restrictionPromptService.js`, `getCsrfToken` in `public/js/csrf.js`
 (nur aus einem HTML-`onclick`-Attribut aufgerufen, für ESLint statisch nicht
-sichtbar) sowie `removeCustomField` in `public/js/settings.js`/`setup.js`
-(derselbe Fall, in beiden Dateien). Details je Datei siehe die zehn
-Einzel-Commits „NACHAUDIT-16, 1/11" bis „10/11".
+sichtbar), `removeCustomField` in `public/js/settings.js`/`setup.js`
+(derselbe Fall, in beiden Dateien) sowie — vermutlich der wichtigste
+Einzelfund der ganzen Branch — der ungenutzte `next`-Parameter von
+Express' globaler Error-Handling-Middleware in `server.js`
+(`app.use((err, req, res, next) => {...})`) — Express erkennt eine
+Middleware nur anhand der Vier-Parameter-Arity als Error-Handler, ein
+Entfernen von `next` hätte das globale Error-Handling still und leise
+gebrochen. Hinzu kommen zwei Block-Bereiche mit
+`/* eslint-disable no-unused-vars */`/`/* eslint-enable no-unused-vars */`
+in `public/js/settings.js` (fünf bzw. zwei ungenutzte Bindungen für
+Manager-Klassen wie `themeManager`/`formManager`/`tagsManager`/
+`promptTagsManager`/`promptManager` bzw. `urlValidator`/`tooltipManager`,
+deren `new X()`-Aufruf allein wegen der Konstruktor-Nebenwirkung
+[DOM-Event-Listener verdrahten] stehen bleiben musste), nach demselben,
+bereits vorher in `public/js/setup.js` verwendeten Muster. Details je
+Datei siehe die zehn Einzel-Commits „NACHAUDIT-16, 1/11" bis „10/11".
 
 ### NACHAUDIT-17 — bei der Lint-Bereinigung gefundener, unabhängiger Bug (gefunden, nicht behoben, 2026-08-06)
 - **Schweregrad:** Low · **Bereich:** Korrektheit · **Gefunden bei:** NACHAUDIT-16-Umsetzung, Task 6
