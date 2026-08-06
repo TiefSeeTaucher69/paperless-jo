@@ -65,7 +65,15 @@ class DocumentFingerprintService {
     }
 
     console.log(`[INFO] documentFingerprintService: Treffer fuer correspondent=${correspondentId}, similarity=${best.similarity.toFixed(3)}, document_id=${best.candidate.documentId}`);
-    return { tagIds: best.candidate.tagIds, documentTypeId: best.candidate.documentTypeId };
+    // NACHAUDIT-11: similarity/matchedDocumentId werden durchgereicht, damit der Aufrufer
+    // (documentProcessingPipeline.findFingerprintMatch) im Beobachtungsmodus protokollieren kann,
+    // WAS angewendet worden waere, nicht nur DASS ein Treffer existierte.
+    return {
+      tagIds: best.candidate.tagIds,
+      documentTypeId: best.candidate.documentTypeId,
+      similarity: best.similarity,
+      matchedDocumentId: best.candidate.documentId
+    };
   }
 
   async recordFingerprint({ documentId, correspondentId, documentTypeId, tagIds, content, source = 'llm' }) {

@@ -44,6 +44,28 @@ class DocumentFingerprintStore {
       ON document_fingerprints(correspondent_id)
     `).run();
 
+    // NACHAUDIT-11 (Audit Abschnitt 18.6, Bedingung 5): Beobachtungsmodus - protokolliert einen
+    // Treffer, der im Modus 'observe' NICHT auf updateData angewendet wurde, damit die
+    // Trefferqualitaet vor einer Aktivierungsentscheidung stichprobenartig geprueft werden kann.
+    // Eigene Tabelle statt Wiederverwendung von document_fingerprints: eine Beobachtung ist kein
+    // gespeicherter Fingerprint-Kandidat und darf nicht in findCandidates() auftauchen.
+    this.db.prepare(`
+      CREATE TABLE IF NOT EXISTS document_fingerprint_observations (
+        id INTEGER PRIMARY KEY,
+        correspondent_id INTEGER NOT NULL,
+        matched_document_id INTEGER NOT NULL,
+        similarity REAL NOT NULL,
+        tag_ids TEXT NOT NULL,
+        document_type_id INTEGER,
+        created_at TEXT NOT NULL
+      )
+    `).run();
+
+    this.db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_document_fingerprint_observations_created_at
+      ON document_fingerprint_observations(created_at)
+    `).run();
+
     this._ensureColumn('document_fingerprints', 'model', 'TEXT');
     // AUDIT-003: 'llm' = direkt aus einer eigenen KI-Klassifikation, 'inherited' = von einem
     // Fingerprint-Treffer uebernommen. inherited-Eintraege duerfen selbst nicht mehr als
@@ -162,6 +184,31 @@ class DocumentFingerprintStore {
     } catch (error) {
       console.error('[ERROR] documentFingerprintStore.pruneOrphaned:', error.message);
       return 0;
+    }
+  }
+
+  recordObservation({ correspondentId, matchedDocumentId, similarity, tagIds, documentTypeId }) {
+    try {
+      this.db.prepare(`
+        INSERT INTO document_fingerprint_observations
+          (correspondent_id, matched_document_id, similarity, tag_ids, document_type_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(correspondentId, matchedDocumentId, similarity, JSON.stringify(tagIds), documentTypeId ?? null, new Date().toISOString());
+      return true;
+    } catch (error) {
+      console.error('[ERROR] documentFingerprintStore.recordObservation:', error.message);
+      return false;
+    }
+  }
+
+  listObservations({ limit = 500 } = {}) {
+    try {
+      return this.db.prepare(`
+        SELECT * FROM document_fingerprint_observations ORDER BY created_at DESC, id DESC LIMIT ?
+      `).all(limit);
+    } catch (error) {
+      console.error('[ERROR] documentFingerprintStore.listObservations:', error.message);
+      return [];
     }
   }
 

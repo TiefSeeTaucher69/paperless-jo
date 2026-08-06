@@ -206,6 +206,11 @@ module.exports = {
   },
   documentFingerprint: {
     enabled: parseEnvBoolean(process.env.DOCUMENT_FINGERPRINT_ENABLED, 'no') === 'yes',
+    // NACHAUDIT-11 (Audit Abschnitt 18.6, Bedingung 5): 'observe' ist bewusst der Default, nicht
+    // 'apply' - ein DOCUMENT_FINGERPRINT_ENABLED=yes ohne weitere Konfiguration protokolliert
+    // Treffer nur, statt sie live auf Tags/Dokumentart anzuwenden. Ein unbekannter Wert (Tippfehler)
+    // faellt auf den sicheren Default zurueck statt den Rest der Konfiguration zu verwerfen.
+    mode: ['observe', 'apply'].includes(process.env.DOCUMENT_FINGERPRINT_MODE) ? process.env.DOCUMENT_FINGERPRINT_MODE : 'observe',
     similarityThreshold: documentFingerprintSimilarityThreshold
   },
   // AUDIT-018: full document text, correspondent names, and the LLM response

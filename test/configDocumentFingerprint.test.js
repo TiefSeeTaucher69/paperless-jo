@@ -60,3 +60,45 @@ test('FINGERPRINT_SIMILARITY_THRESHOLD ausserhalb [0,1] wird geklemmt und warnt'
     delete require.cache[require.resolve('../config/config')];
   }
 });
+
+test('documentFingerprint.mode ist standardmaessig "observe" (NACHAUDIT-11: sicherer Default)', () => {
+  const saved = process.env.DOCUMENT_FINGERPRINT_MODE;
+  try {
+    delete process.env.DOCUMENT_FINGERPRINT_MODE;
+    delete require.cache[require.resolve('../config/config')];
+    const config = require('../config/config');
+    assert.strictEqual(config.documentFingerprint.mode, 'observe');
+  } finally {
+    if (saved === undefined) delete process.env.DOCUMENT_FINGERPRINT_MODE;
+    else process.env.DOCUMENT_FINGERPRINT_MODE = saved;
+    delete require.cache[require.resolve('../config/config')];
+  }
+});
+
+test('DOCUMENT_FINGERPRINT_MODE=apply wird uebernommen', () => {
+  const saved = process.env.DOCUMENT_FINGERPRINT_MODE;
+  try {
+    process.env.DOCUMENT_FINGERPRINT_MODE = 'apply';
+    delete require.cache[require.resolve('../config/config')];
+    const config = require('../config/config');
+    assert.strictEqual(config.documentFingerprint.mode, 'apply');
+  } finally {
+    if (saved === undefined) delete process.env.DOCUMENT_FINGERPRINT_MODE;
+    else process.env.DOCUMENT_FINGERPRINT_MODE = saved;
+    delete require.cache[require.resolve('../config/config')];
+  }
+});
+
+test('ein unbekannter DOCUMENT_FINGERPRINT_MODE-Wert faellt auf "observe" zurueck', () => {
+  const saved = process.env.DOCUMENT_FINGERPRINT_MODE;
+  try {
+    process.env.DOCUMENT_FINGERPRINT_MODE = 'apply_all_the_things';
+    delete require.cache[require.resolve('../config/config')];
+    const config = require('../config/config');
+    assert.strictEqual(config.documentFingerprint.mode, 'observe');
+  } finally {
+    if (saved === undefined) delete process.env.DOCUMENT_FINGERPRINT_MODE;
+    else process.env.DOCUMENT_FINGERPRINT_MODE = saved;
+    delete require.cache[require.resolve('../config/config')];
+  }
+});

@@ -46,6 +46,23 @@ class DocumentProcessingPipeline {
       if (validTagIds.length === 0 && documentTypeId === null) {
         return null;
       }
+
+      // NACHAUDIT-11 (Audit Abschnitt 18.6, Bedingung 5): im Beobachtungsmodus wird der
+      // (bereits AUDIT-006-validierte) Treffer protokolliert, aber NICHT zurueckgegeben -
+      // buildUpdateData() faehrt dann exakt wie bei keinem Treffer fort. So laesst sich die
+      // Trefferqualitaet unter echter Last beobachten, ohne dass ein Fehltreffer bereits live
+      // Tags/Dokumentart ueberschreibt.
+      if (this.config.documentFingerprint.mode === 'observe') {
+        this.documentFingerprintService.store.recordObservation({
+          correspondentId,
+          matchedDocumentId: match.matchedDocumentId,
+          similarity: match.similarity,
+          tagIds: validTagIds,
+          documentTypeId
+        });
+        return null;
+      }
+
       return { tagIds: validTagIds, documentTypeId };
     } catch (error) {
       console.warn('[WARNING] documentProcessingPipeline.findFingerprintMatch: Fingerprint-Check fehlgeschlagen, Klassifikation laeuft ohne ihn weiter:', error.message);
