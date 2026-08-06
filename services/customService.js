@@ -1,12 +1,10 @@
 const {
   calculateTokens,
   calculateTotalPromptTokens,
-  truncateToTokenLimit,
-  writePromptToFile
+  truncateToTokenLimit
 } = require('./serviceUtils');
 const OpenAI = require('openai');
 const config = require('../config/config');
-const tiktoken = require('tiktoken');
 const paperlessService = require('./paperlessService');
 const fs = require('fs').promises;
 const path = require('path');
@@ -43,7 +41,7 @@ class CustomOpenAIService {
         try {
           await fs.access(cachePath);
           console.log('[DEBUG] Thumbnail already cached');
-        } catch (err) {
+        } catch {
           console.log('Thumbnail not cached, fetching from Paperless');
 
           const thumbnailData = await paperlessService.getThumbnailImage(id);

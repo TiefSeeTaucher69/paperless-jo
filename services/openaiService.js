@@ -9,7 +9,6 @@ const config = require('../config/config');
 const paperlessService = require('./paperlessService');
 const fs = require('fs').promises;
 const path = require('path');
-const { model } = require('./ollamaService');
 const RestrictionPromptService = require('./restrictionPromptService');
 
 class OpenAIService {
@@ -53,7 +52,7 @@ class OpenAIService {
         try {
           await fs.access(cachePath);
           console.log('[DEBUG] Thumbnail already cached');
-        } catch (err) {
+        } catch {
           console.log('Thumbnail not cached, fetching from Paperless');
 
           const thumbnailData = await paperlessService.getThumbnailImage(id);
