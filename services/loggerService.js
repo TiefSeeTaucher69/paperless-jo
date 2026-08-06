@@ -36,7 +36,7 @@ class Logger {
             // Lösche die alte Datei
             try {
                 fs.unlinkSync(this.logPath);
-            } catch (error) {
+            } catch {
                 // Ignoriere Fehler wenn Datei nicht existiert
             }
         }
