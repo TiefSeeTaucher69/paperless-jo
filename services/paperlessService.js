@@ -1372,6 +1372,25 @@ async getOrCreateDocumentType(name, options = {}) {
     }
   }
 
+  // NACHAUDIT-12: replace- statt union-semantischer PATCH. updateDocument() vereinigt
+  // updates.tags mit den bereits vorhandenen Tags und verwirft updates.correspondent, wenn das
+  // Dokument schon einen hat (richtig fuer die normale KI-Klassifikation, die nichts wegnehmen
+  // soll). Eine Rueckabwicklung auf einen frueheren Zustand muss dagegen auch Tags/einen
+  // Korrespondenten entfernen koennen, die seit der gespeicherten Momentaufnahme hinzukamen -
+  // sonst waere "restore" nur ein Teil-Merge, kein echtes Zuruecksetzen.
+  async overwriteDocumentFields(documentId, { title, tags, correspondent }) {
+    this.initialize();
+    if (!this.client) return;
+    try {
+      const updateData = { title, tags, correspondent };
+      await this.client.patch(`/documents/${documentId}/`, updateData);
+      return await this.getDocument(documentId);
+    } catch (error) {
+      console.error(`[ERROR] paperlessService.overwriteDocumentFields: Wiederherstellung fuer Dokument ${documentId} fehlgeschlagen:`, error.message);
+      throw error;
+    }
+  }
+
   async _entityExists(type, id) {
     const endpointMap = { tag: 'tags', correspondent: 'correspondents', document_type: 'document_types' };
     const endpoint = endpointMap[type];
