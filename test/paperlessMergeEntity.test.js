@@ -286,7 +286,7 @@ test('mergeEntity wirft eine klare Meldung, wenn das Merge-Ziel bereits geloesch
 
 test('mergeEntity wirft dieselbe klare Meldung schon im Preview (dryRun=true), bevor Dokumente gesucht werden', async () => {
   const mockClient = {
-    get: async (url) => {
+    get: async () => {
       const error = new Error('Request failed with status code 404');
       error.response = { status: 404 };
       throw error;
