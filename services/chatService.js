@@ -1,7 +1,6 @@
 // services/chatService.js
 const OpenAIService = require('./openaiService');
 const PaperlessService = require('./paperlessService');
-const config = require('../config/config');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');

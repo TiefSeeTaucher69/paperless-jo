@@ -4,7 +4,6 @@ const {
   truncateToTokenLimit,
   writePromptToFile
 } = require('./serviceUtils');
-const OpenAI = require('openai');
 const AzureOpenAI = require('openai').AzureOpenAI;
 const config = require('../config/config');
 const paperlessService = require('./paperlessService');
@@ -44,7 +43,7 @@ class AzureOpenAIService {
         try {
           await fs.access(cachePath);
           console.log('[DEBUG] Thumbnail already cached');
-        } catch (err) {
+        } catch {
           console.log('Thumbnail not cached, fetching from Paperless');
 
           const thumbnailData = await paperlessService.getThumbnailImage(id);

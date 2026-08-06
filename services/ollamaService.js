@@ -1,6 +1,4 @@
 const {
-    calculateTotalPromptTokens,
-    truncateToTokenLimit,
     writePromptToFile
 } = require('./serviceUtils');
 const axios = require('axios');
@@ -9,7 +7,6 @@ const fs = require('fs').promises;
 const path = require('path');
 const paperlessService = require('./paperlessService');
 const os = require('os');
-const OpenAI = require('openai');
 const RestrictionPromptService = require('./restrictionPromptService');
 
 /**
@@ -446,7 +443,7 @@ The custom_fields are optional; only fill in values you actually find in the doc
         try {
             await fs.access(cachePath);
             console.log('[DEBUG] Thumbnail already cached');
-        } catch (err) {
+        } catch {
             console.log('Thumbnail not cached, fetching from Paperless');
             const thumbnailData = await paperlessService.getThumbnailImage(id);
             if (!thumbnailData) {
@@ -637,7 +634,7 @@ The custom_fields are optional; only fill in values you actually find in the doc
                         document_date: sanitizedResult.document_date || null,
                         language: sanitizedResult.language || null
                     };
-                } catch (finalError) {
+                } catch {
                     console.error('Final JSON parsing failed after sanitization. This happens when the JSON structure is too complex or invalid. That indicates an issue with the generated JSON string by Ollama. Switch to OpenAI for better results or fine tune your prompt.');
                     return { tags: [], correspondent: null };
                 }
