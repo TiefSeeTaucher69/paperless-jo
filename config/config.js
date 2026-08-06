@@ -148,6 +148,24 @@ console.log('Loaded environment variables:', {
   EXTERNAL_API: externalApiConfig.enabled === 'yes' ? 'enabled' : 'disabled'
 });
 
+const useExistingData = process.env.USE_EXISTING_DATA || 'no';
+
+// 1.3.b: SYSTEM_PROMPT can instruct the model to check "Pre-existing tags / correspondents /
+// document types" first, but _buildPrompt only inserts those lists when useExistingData is
+// 'yes' (see services/ollamaService.js:_buildPrompt) - otherwise the rule refers to lists the
+// model never sees, silently and without any signal in normal operation.
+function hasPreExistingPromptMismatch(systemPrompt, useExistingDataValue) {
+  return (systemPrompt || '').includes('Pre-existing') && useExistingDataValue !== 'yes';
+}
+
+if (hasPreExistingPromptMismatch(process.env.SYSTEM_PROMPT, useExistingData)) {
+  console.warn(
+    '[WARNING] SYSTEM_PROMPT erwaehnt "Pre-existing tags/correspondents/document types", aber '
+    + 'USE_EXISTING_DATA ist nicht "yes" - die Bestandslisten werden dem Modell nie gezeigt, '
+    + 'die Regel im Prompt laeuft ins Leere. Siehe .env.example.'
+  );
+}
+
 module.exports = {
   PAPERLESS_AI_VERSION: '3.0.9',
   // Exported for unit tests
@@ -248,7 +266,9 @@ module.exports = {
   customFields: process.env.CUSTOM_FIELDS || '',
   aiProvider: process.env.AI_PROVIDER || 'openai',
   scanInterval: process.env.SCAN_INTERVAL || '*/30 * * * *',
-  useExistingData: process.env.USE_EXISTING_DATA || 'no',
+  useExistingData,
+  // Exported for unit tests (same pattern as _parseEnvNumber/_maskUrl)
+  _hasPreExistingPromptMismatch: hasPreExistingPromptMismatch,
   // AUDIT-018: thumbnails used to be cached under public/images/, a directory
   // express.static serves to anyone without authentication. data/ is not
   // statically served, so the only way to fetch a thumbnail is the
