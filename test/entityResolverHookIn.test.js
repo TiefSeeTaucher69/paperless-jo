@@ -104,6 +104,8 @@ test('processTags: bei deaktiviertem Resolver unveraendertes Verhalten', async (
 });
 
 test('processTags: map-Entscheidung verwendet existierende Entity statt neu anzulegen', async () => {
+  const savedAddAiTag = process.env.ADD_AI_PROCESSED_TAG;
+  process.env.ADD_AI_PROCESSED_TAG = 'no';
   config.entityResolver.enabled = true;
   paperlessService.findExistingTag = async () => null;
   paperlessService.ensureTagCache = async () => {};
@@ -119,10 +121,14 @@ test('processTags: map-Entscheidung verwendet existierende Entity statt neu anzu
   } finally {
     config.entityResolver.enabled = false;
     paperlessService._entityResolverInstance = null;
+    if (savedAddAiTag === undefined) delete process.env.ADD_AI_PROCESSED_TAG;
+    else process.env.ADD_AI_PROCESSED_TAG = savedAddAiTag;
   }
 });
 
 test('processTags: skip-Entscheidung ueberspringt den Tag und vermerkt einen Fehler', async () => {
+  const savedAddAiTag = process.env.ADD_AI_PROCESSED_TAG;
+  process.env.ADD_AI_PROCESSED_TAG = 'no';
   config.entityResolver.enabled = true;
   paperlessService.findExistingTag = async () => null;
   paperlessService.ensureTagCache = async () => {};
@@ -139,6 +145,8 @@ test('processTags: skip-Entscheidung ueberspringt den Tag und vermerkt einen Feh
   } finally {
     config.entityResolver.enabled = false;
     paperlessService._entityResolverInstance = null;
+    if (savedAddAiTag === undefined) delete process.env.ADD_AI_PROCESSED_TAG;
+    else process.env.ADD_AI_PROCESSED_TAG = savedAddAiTag;
   }
 });
 
