@@ -449,10 +449,11 @@ optionale `catch`-Binding umgestellt, quer über `server.js`,
 `public/js/*.js`-Dateien und drei Testdateien. Rund 6 Warnungen betrafen
 zwei tatsächlich tote Funktionen(-paare), beide vor dem Löschen per
 Cross-File-Grep verifiziert statt vermutet: `toggleTheme()` in
-`public/js/chat.js` (unerreichbarer globaler Code — der zugehörige
-Theme-Toggle-Button ist zwar tatsächlich unverdrahtet, wird aber, wie beim
-Task-7-Review festgestellt, bereits über `dashboard.js`s `ThemeManager`
-bedient, siehe Korrekturhinweis oben) sowie je ein verwaistes,
+`public/js/chat.js` (unerreichbarer globaler Code — die *globale Funktion*
+war unverdrahtet/verwaist, weder von `chat.js` selbst noch von
+`dashboard.js` aufgerufen; der Button selbst wurde die ganze Zeit über
+bereits über `dashboard.js`s `ThemeManager` bedient, wie beim Task-7-Review
+festgestellt, siehe Korrekturhinweis oben) sowie je ein verwaistes,
 nie erreichtes `showTagDetails`/`showCorrespondentDetails`-Duplikat in
 `public/js/dashboard.js` und `public/js/manual.js` (die per `window.X`
 verdrahtete, aus den Views aufgerufene aktive Version blieb jeweils
