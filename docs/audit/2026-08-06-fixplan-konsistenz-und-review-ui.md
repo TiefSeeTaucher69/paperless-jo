@@ -33,9 +33,44 @@ und bessere** Einträge, und erst dann lohnt der Umbau der Oberfläche.
 
 ## Arbeitsplan
 
-1. [ ] **Paket 1 — Kette reparieren** (A-9, A-10, A-3, A-2, A-1, A-6-Teil,
+1. [x] **Paket 1 — Kette reparieren** (A-9, A-10, A-3, A-2, A-1, A-6-Teil,
    plus Versionierung der gemessenen Betriebswerte)
    → Muss zuerst. Alles Weitere baut darauf auf.
+   **Abgenommen am 2026-08-06.** Implementierungsplan:
+   [docs/superpowers/plans/2026-08-06-paket1-kette-reparieren.md](../superpowers/plans/2026-08-06-paket1-kette-reparieren.md).
+   Alle fünf Abnahmekriterien erfüllt:
+   1. `npm test` 486/486 grün, `npm run lint` 0 problems.
+   2. Judge-Messung über 27 reale Namenspaare (aus `entity_review_queue` dieser
+      Instanz): **0 Timeouts**, Median 7606 ms, Max 14552 ms (Budget < 15 000 ms).
+      Ein Aufruf (19223 ms) scheiterte nicht am Timeout, sondern an einem
+      JSON-Parse-Fehler auf einem Korrespondenten-Vorschlag, der einen
+      eingebetteten Zeilenumbruch enthielt (`"Winning Plastics Druckdatum
+      . . : 16.02.2024\nDiepersdorf GmbH Erster Versand : 29.01.2024"` — klar
+      Extraktionsmüll, kein echter Name). Die Resolver-Kaskade fängt genau
+      diesen Fall bereits korrekt als `unavailable` ab (1.1.c) statt
+      abzustürzen — kein neuer Befund an der Kette, aber ein Hinweis auf
+      unsaubere Altdaten für Paket 2.
+   3. Dry-Run über Dokumente 127, 129, 147 mit `--repeat 2`: **3 von 3
+      stabil**, Dokumentart durchgehend „Entgeltabrechnung" (kein
+      Platzhalter-Artefakt).
+   4. `entity_aliases` enthält keine der drei falschen Zuordnungen mehr
+      (geprüft nach Löschung, 0 verbleibend).
+   5. Der Abschnitt „Gemessene Betriebswerte" existiert in
+      [docs/planning/klassifikations-konsistenz-roadmap.md](../planning/klassifikations-konsistenz-roadmap.md)
+      und ist committet (`4ab1003`, ergänzt um `USE_EXISTING_DATA` in `944656d`).
+
+   **Zusätzlich bei der Abnahme erledigt:** `USE_EXISTING_DATA=yes` in
+   `data/.env` gesetzt (1.3.a); die drei falschen Aliase per SQL entfernt,
+   Sicherung von `data/entities.db` außerhalb des Projektverzeichnisses
+   angelegt (1.4).
+
+   **Für Paket 2 vorgemerkt (aus der Durchsicht der übrigen 19 Aliase,
+   1.4-Zusatzschritt):** `invoice contract` → Dokumentart `contract` (durch
+   1.2.a an der Quelle geschlossen, Alias besteht aber fort); `personal nr
+   <Nr>` → Korrespondent „Personal-Nr. <Nr>" (`auto`-Quelle, 0 Dok); **zwei**
+   `herrn <inhaber>`-Aliase (`auto`- und `user`-Quelle) → Korrespondent „Herr
+   <Inhaber>" — beide zeigen auf den Empfänger statt den Absender, wie im
+   Fixplan vorhergesagt.
 
 2. [ ] **Paket 2 — Altdaten bereinigen** (Folge von A-1/A-2, plus FIX-01)
    → Setzt Paket 1 voraus: vor der Reparatur aufzuräumen wäre verlorene Arbeit.
