@@ -123,3 +123,10 @@ test('Retry BEI 429 und 408 (AUDIT-028: Rate-Limit und Proxy-Timeout sind transi
   assert.strictEqual(calls, 2);
   assert.deepStrictEqual(result, { verdict: 'same', reason: 'nach Rate-Limit-Retry' });
 });
+
+test('num_predict ist 60 und der Prompt verlangt eine kurze Begruendung (1.1.b)', async () => {
+  const captured = captureRequest({ response: { verdict: 'same', reason: 'kurz' } });
+  await entityJudge.judge('tag', 'A', 'B');
+  assert.strictEqual(captured.body.options.num_predict, 60);
+  assert.ok(captured.body.prompt.includes('hoechstens 8 Woerter'));
+});

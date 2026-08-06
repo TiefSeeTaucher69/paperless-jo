@@ -60,7 +60,8 @@ class EntityJudge {
       + 'das vorgegebene JSON-Schema.';
 
     const prompt = `Typ: ${entityType}\nName A: ${truncatedA}\nName B: ${truncatedB}\n\n`
-      + 'Bezeichnen A und B dieselbe Sache? "same", "different" oder "unsure", falls unklar.';
+      + 'Bezeichnen A und B dieselbe Sache? "same", "different" oder "unsure", falls unklar.'
+      + '\nBegruendung: hoechstens 8 Woerter.';
 
     const requestBody = {
       model: config.ollama.model,
@@ -72,7 +73,7 @@ class EntityJudge {
         temperature: 0, // bewusst fest, unabhaengig von config.ollama.temperature
         seed: config.ollama.seed, // AUDIT-028: Determinismus wie bei den anderen Ollama-Aufrufen (AUDIT-008)
         num_ctx: 1024,
-        num_predict: 200
+        num_predict: 60
       }
     };
 
