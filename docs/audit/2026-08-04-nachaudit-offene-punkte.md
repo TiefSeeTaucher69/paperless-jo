@@ -51,10 +51,12 @@ da rein deskriptiv und nicht abarbeitbar).
    begünstigt) und wurden bewusst nicht zurückgerollt — kein Rollback-Pfad
    vorhanden (siehe NACHAUDIT-12).
 
-4. [ ] **Fingerprint-Aktivierungsvoraussetzungen schließen** (Abschnitt 18.6,
+4. [~] **Fingerprint-Aktivierungsvoraussetzungen schließen** (Abschnitt 18.6,
    Punkt 1/5/6 aus dem Erstaudit)
-   → Größtes Paket, aber unkritisch für den laufenden Betrieb, da Feature aus.
-   Zeitlich nach hinten stellen, außer das Feature soll bald aktiviert werden.
+   → Code-Teil (NACHAUDIT-11 Infrastruktur, NACHAUDIT-12, NACHAUDIT-13) umgesetzt laut
+   [2026-08-06-nachaudit-paket4-fingerprint-aktivierungsvoraussetzungen.md](../superpowers/plans/2026-08-06-nachaudit-paket4-fingerprint-aktivierungsvoraussetzungen.md).
+   Offen: Beobachtungsmodus-Testlauf (NACHAUDIT-11) und Schwellwertmessung (NACHAUDIT-10) —
+   beide brauchen Zugriff auf die Produktivinstanz, siehe Plan Task 7/8. Feature bleibt aus.
 
 Info-only bleibt AUDIT-035 (bewusst zurückgestellter Punkt, keine Aktion nötig,
 in der Roadmap bereits korrekt als solcher markiert).
