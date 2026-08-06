@@ -1,6 +1,5 @@
 // services/ragService.js
 const axios = require('axios');
-const config = require('../config/config');
 const AIServiceFactory = require('./aiServiceFactory');
 const paperlessService = require('./paperlessService');
 

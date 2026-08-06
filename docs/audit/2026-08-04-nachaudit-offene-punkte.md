@@ -60,14 +60,13 @@ da rein deskriptiv und nicht abarbeitbar).
    Offen: Beobachtungsmodus-Testlauf (NACHAUDIT-11) und Schwellwertmessung (NACHAUDIT-10) —
    beide brauchen Zugriff auf die Produktivinstanz, siehe Plan Task 7/8. Feature bleibt aus.
 
-5. [ ] **Lint-Warnungen projektweit aufräumen** (NACHAUDIT-16, Nebenbefund aus
+5. [x] **Lint-Warnungen projektweit aufräumen** (NACHAUDIT-16, Nebenbefund aus
    der Paket-4-PR-CI)
-   → Risikoarm, unabhängig von allen anderen Paketen, guter Lückenfüller. Die
-   eine Warnung, die das Gate (`--max-warnings=83`) akut hatte scheitern
-   lassen, ist bereits behoben (Paket 4). Offen: die übrigen 83 Alt-Warnungen
-   (`no-unused-vars` quer über `server.js`, `routes/setup.js`, mehrere
-   `services/*.js` und `public/js/*.js`, siehe NACHAUDIT-07/-16) tatsächlich
-   beheben statt nur die Ratsche mitzuziehen.
+   → Umgesetzt laut
+   [2026-08-06-nachaudit16-lint-warnungen-aufraeumen.md](../superpowers/plans/2026-08-06-nachaudit16-lint-warnungen-aufraeumen.md).
+   Alle 83 Warnungen behoben, `--max-warnings` auf `0` gesenkt. Ein dabei
+   gefundener, unabhängiger Bug als NACHAUDIT-17 festgehalten (nicht behoben,
+   außerhalb des Lint-Scopes).
 
 Info-only bleibt AUDIT-035 (bewusst zurückgestellter Punkt, keine Aktion nötig,
 in der Roadmap bereits korrekt als solcher markiert).
@@ -438,6 +437,62 @@ allein anhand von `!!fingerprintMatch`. Getestet, committet.
 - **Maßnahme (offener Folgepunkt, siehe Arbeitsplan Punkt 5):** Die
   verbleibenden 83 Warnungen sind projektweiter, von Paket 4 unabhängiger
   Aufräumbedarf — eigenes, separates Vorhaben, nicht Teil dieses Nachaudits.
+
+**Ergebnis (2026-08-06):** Alle 83 Warnungen behoben, `npx eslint .` liefert
+jetzt `0 problems`; `--max-warnings` in `package.json` von 83 auf 0 gesenkt —
+echte Ratsche statt Ist-Stand-Deckel (behebt die in NACHAUDIT-07 beschriebene
+Reibung). Aufteilung nach Fund-Typ: der überwiegende Teil war totes Gepäck
+ohne Verhaltensrisiko — ungenutzte Imports/Konstanten/Variablen entfernt und
+`catch (error)`-Bindungen ohne Verwendung der Fehlervariable auf das
+optionale `catch`-Binding umgestellt, quer über `server.js`,
+`routes/setup.js`, mehrere `services/*.js`-Dateien, mehrere
+`public/js/*.js`-Dateien und drei Testdateien. Rund 6 Warnungen betrafen
+zwei tatsächlich tote Funktionen(-paare), beide vor dem Löschen per
+Cross-File-Grep verifiziert statt vermutet: `toggleTheme()` in
+`public/js/chat.js` (unerreichbarer globaler Code — die *globale Funktion*
+war unverdrahtet/verwaist, weder von `chat.js` selbst noch von
+`dashboard.js` aufgerufen; der Button selbst wurde die ganze Zeit über
+bereits über `dashboard.js`s `ThemeManager` bedient, wie beim Task-7-Review
+festgestellt, siehe Korrekturhinweis oben) sowie je ein verwaistes,
+nie erreichtes `showTagDetails`/`showCorrespondentDetails`-Duplikat in
+`public/js/dashboard.js` und `public/js/manual.js` (die per `window.X`
+verdrahtete, aus den Views aufgerufene aktive Version blieb jeweils
+unverändert). Rund zwölf weitere Warnungen waren echte ESLint-Fehltreffer und
+wurden gezielt per `eslint-disable`-Kommentar statt durch Löschen
+unterdrückt, mit Begründung im jeweiligen Commit: fünf einzelne
+`eslint-disable-next-line no-unused-vars` — der laut JSDoc bewusst
+ungenutzte, zur Kompatibilität gehaltene Parameter in
+`services/restrictionPromptService.js`, `getCsrfToken` in `public/js/csrf.js`
+(nur aus einem HTML-`onclick`-Attribut aufgerufen, für ESLint statisch nicht
+sichtbar), `removeCustomField` in `public/js/settings.js`/`setup.js`
+(derselbe Fall, in beiden Dateien) sowie — vermutlich der wichtigste
+Einzelfund der ganzen Branch — der ungenutzte `next`-Parameter von
+Express' globaler Error-Handling-Middleware in `server.js`
+(`app.use((err, req, res, next) => {...})`) — Express erkennt eine
+Middleware nur anhand der Vier-Parameter-Arity als Error-Handler, ein
+Entfernen von `next` hätte das globale Error-Handling still und leise
+gebrochen. Hinzu kommen zwei Block-Bereiche mit
+`/* eslint-disable no-unused-vars */`/`/* eslint-enable no-unused-vars */`
+in `public/js/settings.js` (fünf bzw. zwei ungenutzte Bindungen für
+Manager-Klassen wie `themeManager`/`formManager`/`tagsManager`/
+`promptTagsManager`/`promptManager` bzw. `urlValidator`/`tooltipManager`,
+deren `new X()`-Aufruf allein wegen der Konstruktor-Nebenwirkung
+[DOM-Event-Listener verdrahten] stehen bleiben musste), nach demselben,
+bereits vorher in `public/js/setup.js` verwendeten Muster. Details je
+Datei siehe die zehn Einzel-Commits „NACHAUDIT-16, 1/11" bis „10/11".
+
+### NACHAUDIT-17 — bei der Lint-Bereinigung gefundener, unabhängiger Bug (gefunden, nicht behoben, 2026-08-06)
+- **Schweregrad:** Low · **Bereich:** Korrektheit · **Gefunden bei:** NACHAUDIT-16-Umsetzung, Task 6
+
+1. `routes/setup.js`, `GET /sampleData/:id` sendet im Erfolgsfall keine HTTP-Antwort (Task 6,
+   Step 3 dieses Plans) — Funktionsbug, unabhängig vom Lint-Cleanup. Der Handler ruft im
+   Erfolgspfad `paperlessService.getDocument`/`getCorrespondentsFromDocument` auf, aber weder
+   `res.send` noch `res.json`; nur der `catch`-Zweig antwortet (mit 500). Eine erfolgreiche
+   Anfrage bleibt dadurch ohne Antwort hängen. Beim Entfernen der dadurch verwaisten
+   `correspondents`-Variable in Task 6 aufgefallen, bewusst nicht mitbehoben (Scope dieses Plans:
+   Lint-Cleanup, kein Funktionsbug-Fix).
+
+*Einordnung:* Low, kein eigenes Paket wert, bei Gelegenheit mitnehmen.
 
 ---
 
