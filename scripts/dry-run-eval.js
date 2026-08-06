@@ -34,12 +34,13 @@ const OUT_DIR = path.join(process.cwd(), 'data', 'eval');
 // ---------------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const args = { limit: null, repeat: 1, label: 'run' };
+  const args = { limit: null, repeat: 1, label: 'run', ids: null };
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--limit') args.limit = parseInt(argv[++i], 10);
     else if (argv[i] === '--repeat') args.repeat = parseInt(argv[++i], 10);
     else if (argv[i] === '--label') args.label = argv[++i];
+    else if (argv[i] === '--ids') args.ids = argv[++i].split(',').map(id => parseInt(id.trim(), 10));
   }
 
   return args;
@@ -242,7 +243,9 @@ async function main() {
   const existingCorrespondentNames = (correspondentObjects || []).map(c => c.name);
   const existingDocumentTypeNames = (documentTypeObjects || []).map(d => d.name);
 
-  const selected = args.limit ? documents.slice(0, args.limit) : documents;
+  const selected = args.ids
+    ? documents.filter(d => args.ids.includes(d.id))
+    : (args.limit ? documents.slice(0, args.limit) : documents);
   console.log(`Dokumente: ${selected.length} von ${documents.length}\n`);
 
   const aiService = AIServiceFactory.getService();
