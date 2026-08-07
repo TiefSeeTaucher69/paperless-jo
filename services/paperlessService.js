@@ -728,9 +728,41 @@ class PaperlessService {
       }
   
       return allDocumentTypes;
-  
+
     } catch (error) {
       console.error('[ERROR] fetching document type names:', error.message);
+      return [];
+    }
+  }
+
+  // 2.1.2 (Fixplan Paket 2): listDocumentTypesNames() liefert bewusst kein
+  // document_count (bestehender Test test/paperlessListOrdering.test.js:28 prueft die
+  // exakte Form) - fuer die Erkennung leerer Dokumentarten braucht es aber genau
+  // dieses Feld. Eigene Methode statt die bestehende zu erweitern.
+  async listDocumentTypesWithCounts() {
+    this.initialize();
+    let allDocumentTypes = [];
+    let page = 1;
+    let hasNextPage = true;
+
+    try {
+      while (hasNextPage) {
+        const response = await this.client.get('/document_types/', {
+          params: { page, page_size: 100, ordering: 'name' }
+        });
+
+        const { results, next } = response.data;
+        allDocumentTypes = allDocumentTypes.concat(
+          results.map(docType => ({ id: docType.id, name: docType.name, document_count: docType.document_count }))
+        );
+
+        hasNextPage = next !== null;
+        page++;
+      }
+
+      return allDocumentTypes;
+    } catch (error) {
+      console.error('[ERROR] fetching document types with counts:', error.message);
       return [];
     }
   }
@@ -1546,6 +1578,70 @@ async getOrCreateDocumentType(name, options = {}) {
     }
 
     return { affectedCount: affected.length, documentIds: affected.map(d => d.id), deleted: true, ...bulkResult };
+  }
+
+  // 2.1.2 (Fixplan Paket 2): sieben Dokumentarten ohne Dokumente sind reine
+  // Merge-Rueckstaende vom 2026-08-05 - kein Reassignment noetig, nur eine verifizierte
+  // Loeschung. Die Leer-Pruefung laeuft live gegen den Bestand (nicht gegen einen
+  // zwischenzeitlich veralteten document_count-Wert), sonst koennte ein Dokument
+  // mitgeloescht werden, das seither hinzukam.
+  async deleteEmptyEntity(type, id) {
+    this.initialize();
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new Error(`deleteEmptyEntity: ungueltige id (${id})`);
+    }
+
+    const remaining = await this._findDocumentsWithEntity(type, id);
+    if (remaining.length > 0) {
+      throw new Error(`deleteEmptyEntity: ${type} ${id} hat noch ${remaining.length} Dokument(e), keine Leerloeschung moeglich`);
+    }
+
+    try {
+      await this.client.delete(`/${type}s/${id}/`);
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        throw error;
+      }
+      // bereits geloescht (z.B. durch einen frueheren Lauf) - kein Fehler.
+    }
+
+    return { deleted: true };
+  }
+
+  // 2.1.5 (Fixplan Paket 2): diese Korrespondenten-Varianten sollen entfernt werden,
+  // nicht auf einen anderen Korrespondenten zusammengefuehrt - es gibt keinen
+  // "richtigen" Zielwert, auf den die betroffenen Dokumente zeigen sollten (E-5,
+  // Fixplan Zeile 490-494). type='tag' wird bewusst abgelehnt: _bulkReassignDocuments
+  // haette dafuer add_tags:[null] gebaut, was kein "Tag entfernen" bedeutet.
+  async clearAndDeleteEntity(type, id) {
+    this.initialize();
+    if (type !== 'correspondent' && type !== 'document_type') {
+      throw new Error(`clearAndDeleteEntity: nicht unterstuetzter Typ "${type}" (nur correspondent/document_type)`);
+    }
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new Error(`clearAndDeleteEntity: ungueltige id (${id})`);
+    }
+
+    const affected = await this._findDocumentsWithEntity(type, id);
+
+    if (affected.length > 0) {
+      await this._bulkReassignDocuments(type, affected.map(d => d.id), id, null);
+    }
+
+    const remaining = await this._findDocumentsWithEntity(type, id);
+    if (remaining.length > 0) {
+      throw new Error(`clearAndDeleteEntity: ${type} ${id} hat nach dem Leeren noch ${remaining.length} Dokument(e)`);
+    }
+
+    try {
+      await this.client.delete(`/${type}s/${id}/`);
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        throw error;
+      }
+    }
+
+    return { affectedCount: affected.length, deleted: true };
   }
 
   async getExampleDocumentsForEntity(type, id, limit = 3) {

@@ -405,6 +405,147 @@ test('mergeEntity ruft die Fingerprint-Invalidierung bei dryRun=true NICHT auf',
   }
 });
 
+test('deleteEmptyEntity loescht eine Entitaet ohne Dokumente', async () => {
+  const calls = [];
+  const mockClient = {
+    get: async (url) => {
+      calls.push(url);
+      return { data: { results: [], next: null } };
+    },
+    delete: async (url) => { calls.push('DELETE ' + url); return { data: {} }; }
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.deleteEmptyEntity('document_type', 42)
+  );
+
+  assert.deepStrictEqual(result, { deleted: true });
+  assert.deepStrictEqual(calls, ['/documents/', 'DELETE /document_types/42/']);
+});
+
+test('deleteEmptyEntity wirft, wenn die Entitaet noch Dokumente hat, und loescht nicht', async () => {
+  const mockClient = {
+    get: async () => ({ data: { results: [{ id: 1 }], next: null } }),
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () => paperlessService.deleteEmptyEntity('tag', 7)),
+    /hat noch 1 Dokument/
+  );
+});
+
+test('deleteEmptyEntity behandelt 404 beim Loeschen als bereits erledigt', async () => {
+  const mockClient = {
+    get: async () => ({ data: { results: [], next: null } }),
+    delete: async () => {
+      const error = new Error('Request failed with status code 404');
+      error.response = { status: 404 };
+      throw error;
+    }
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.deleteEmptyEntity('correspondent', 99)
+  );
+  assert.deepStrictEqual(result, { deleted: true });
+});
+
+test('deleteEmptyEntity wirft bei ungueltiger id, ohne HTTP-Request', async () => {
+  const mockClient = {
+    get: async () => { throw new Error('get haette nicht aufgerufen werden duerfen'); },
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () => paperlessService.deleteEmptyEntity('tag', 0)),
+    /ungueltige id/
+  );
+});
+
+test('clearAndDeleteEntity setzt den Korrespondenten der betroffenen Dokumente auf null und loescht ihn danach', async () => {
+  let getCallCount = 0;
+  const bulkEditCalls = [];
+  const mockClient = {
+    get: async () => {
+      getCallCount++;
+      return getCallCount === 1
+        ? { data: { results: [{ id: 20 }], next: null } }
+        : { data: { results: [], next: null } };
+    },
+    post: async (url, body) => { bulkEditCalls.push({ url, body }); return { data: {} }; },
+    delete: async (url) => ({ data: {}, url })
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.clearAndDeleteEntity('correspondent', 15)
+  );
+
+  assert.deepStrictEqual(result, { affectedCount: 1, deleted: true });
+  assert.strictEqual(bulkEditCalls.length, 1);
+  assert.strictEqual(bulkEditCalls[0].url, '/documents/bulk_edit/');
+  assert.deepStrictEqual(bulkEditCalls[0].body, {
+    documents: [20],
+    method: 'set_correspondent',
+    parameters: { correspondent: null }
+  });
+});
+
+test('clearAndDeleteEntity loescht ohne bulk_edit, wenn die Entitaet schon keine Dokumente hat', async () => {
+  const mockClient = {
+    get: async () => ({ data: { results: [], next: null } }),
+    post: async () => { throw new Error('post haette nicht aufgerufen werden duerfen'); },
+    delete: async () => ({ data: {} })
+  };
+
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.clearAndDeleteEntity('correspondent', 16)
+  );
+  assert.deepStrictEqual(result, { affectedCount: 0, deleted: true });
+});
+
+test('clearAndDeleteEntity wirft, wenn nach dem Leeren noch Dokumente uebrig sind', async () => {
+  const mockClient = {
+    get: async () => ({ data: { results: [{ id: 30 }], next: null } }), // bleibt bei jedem Aufruf gleich
+    post: async () => ({ data: {} }),
+    delete: async () => { throw new Error('delete haette nicht aufgerufen werden duerfen'); }
+  };
+
+  await assert.rejects(
+    () => withMockClient(mockClient, () => paperlessService.clearAndDeleteEntity('correspondent', 17)),
+    /noch 1 Dokument/
+  );
+});
+
+test('clearAndDeleteEntity behandelt 404 beim Loeschen als bereits erledigt', async () => {
+  const mockClient = {
+    get: async () => ({ data: { results: [], next: null } }),
+    delete: async () => {
+      const error = new Error('Request failed with status code 404');
+      error.response = { status: 404 };
+      throw error;
+    }
+  };
+  const result = await withMockClient(mockClient, () =>
+    paperlessService.clearAndDeleteEntity('correspondent', 18)
+  );
+  assert.deepStrictEqual(result, { affectedCount: 0, deleted: true });
+});
+
+test('clearAndDeleteEntity wirft bei nicht unterstuetztem Typ "tag"', async () => {
+  await assert.rejects(
+    () => paperlessService.clearAndDeleteEntity('tag', 5),
+    /nicht unterstuetzter Typ/
+  );
+});
+
+test('clearAndDeleteEntity wirft bei ungueltiger id', async () => {
+  await assert.rejects(
+    () => paperlessService.clearAndDeleteEntity('correspondent', -1),
+    /ungueltige id/
+  );
+});
+
 test('getOpenReviewQueueCount liefert die Anzahl offener Queue-Eintraege', () => {
   const originalInstance = paperlessService._entityResolverInstance;
   const originalEnabled = config.entityResolver.enabled;
