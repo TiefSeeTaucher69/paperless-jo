@@ -72,7 +72,7 @@ und bessere** Einträge, und erst dann lohnt der Umbau der Oberfläche.
    <Inhaber>" — beide zeigen auf den Empfänger statt den Absender, wie im
    Fixplan vorhergesagt.
 
-2. [ ] **Paket 2 — Altdaten bereinigen** (Folge von A-1/A-2, plus FIX-01)
+2. [x] **Paket 2 — Altdaten bereinigen** (Folge von A-1/A-2, plus FIX-01)
    → Setzt Paket 1 voraus: vor der Reparatur aufzuräumen wäre verlorene Arbeit.
 
 3. [ ] **Paket 3 — Review-/Merge-UI** (B-1 bis B-13, A-6-Rest)
@@ -509,6 +509,23 @@ werden müssen — mit der Review-UI im Zustand vor Paket 3.
 
 **Wenn ja, dann so:** Reset ausschließlich per SQL (siehe FIX-01), Scan bewusst
 auslösen, danach die verwaisten Entitäten in Paperless löschen.
+
+**Entscheidung (nachgetragen nach Ausführung von 2.1, 2026-08-07):** Nein, kein
+Rescan — die Zahlen nach 2.1 bestätigen die Prognose der Planungsrunde: Tags
+83 statt 85 (2 durch diesen Paket-Lauf zusammengeführt), davon weiterhin
+**57 genau einmal benutzt** (Baseline: 59) — die Vokabularbereinigung allein
+senkt die Einmal-Tag-Zahl kaum, weil diese 57 aus 64 unabhängigen
+KI-Klassifikationen ohne Bestandskenntnis stammen, nicht aus
+Vokabular-Duplikaten, die dieses Paket fassen konnte. Dokumentarten stehen bei
+14 (vorher 28), keine mit 0 Dokumenten. Die ~1 h Laufzeit, die einmalige
+Archiv-Umschreibung und die neue Review-Last, die ein Rescan erzeugt,
+überwiegen den Nutzen gerade jetzt — zumal Paket 3 (die Review-/Merge-UI)
+noch nicht gebaut ist: die Durchsicht der frischen Resolver-Ausgabe fände in
+genau der rauen Review-UI statt, vor der das „Dagegen"-Argument oben (Zeile
+505–508) warnt. Die 57 verbleibenden Einmal-Tags sind real, gemessen und
+dokumentiert — Material für einen späteren Rescan, sobald Paket 3 die
+Durchsicht sicher und angenehm statt riskant macht, keine Entscheidung gegen
+einen Rescan für immer.
 
 ### Abnahmekriterium Paket 2
 
