@@ -9,9 +9,11 @@
  *   node scripts/cleanup-legacy-vocabulary.js          (Vorschau, aendert nichts)
  *   node scripts/cleanup-legacy-vocabulary.js --apply  (fuehrt aus)
  *
- * Die vier Konstanten unten sind teils schon aus dem Fixplan bekannt, teils erst nach
- * einer Bestandsdurchsicht befuellbar (siehe Implementierungsplan-Task 4). Ein leerer
- * Eintrag fuehrt zu keiner Aktion, nicht zu einem Fehler.
+ * Die zwei Konstanten unten (DOCUMENT_TYPE_MERGES, TAG_MERGES) stehen fest im Skript.
+ * Zwei weitere Listen (Korrespondenten-Entfernungen, Tag-Korrekturen an
+ * Einzeldokumenten) leben aus PII-Gruenden nicht hier, sondern in der gitignoreten
+ * data/cleanup-config.json (siehe loadCleanupConfig() unten). Ein leerer Eintrag fuehrt
+ * zu keiner Aktion, nicht zu einem Fehler.
  */
 const fs = require('fs');
 const path = require('path');
@@ -44,11 +46,10 @@ const DOCUMENT_TYPE_MERGES = [
 const TAG_MERGES = [
   { from: 'Personal Data', to: 'Persönliche Daten' },
   { from: 'Electronic Document', to: 'elektronisch' }
-  // Task 4 Schritt 2: fuer 'Tax Document', 'Invoice', 'Curriculum Vitae' existiert im
-  // Live-Bestand (85 Tags, siehe Bestandsdurchsicht) noch kein deutsches Aequivalent
-  // ('Steuerdokument', 'Rechnung', 'Lebenslauf' kommen nicht vor) - laut Override 2 des
-  // Implementierungsplans deshalb hier bewusst kein Merge-Eintrag. Dokumentierte Luecke,
-  // keine Erfindung eines Merge-Ziels; siehe task-4-report.md.
+  // Fuer 'Tax Document', 'Invoice', 'Curriculum Vitae' existiert im Live-Bestand
+  // (85 Tags) noch kein deutsches Aequivalent ('Steuerdokument', 'Rechnung', 'Lebenslauf'
+  // kommen nicht vor) - deshalb hier bewusst kein Merge-Eintrag. Dokumentierte Luecke,
+  // keine Erfindung eines Merge-Ziels (siehe Fixplan Abschnitt 2.1.3).
 ];
 
 // PII-Schutz: dieses Repository ist oeffentlich (Fixplan-Namenskonvention, Zeile 11-13:
@@ -69,10 +70,14 @@ function loadCleanupConfig() {
   };
 }
 
-// 2.1.5 (Fixplan Paket 2): vier Empfaenger-Varianten, die entfernt (nicht gemergt) werden
-// sollen. 2.1.4: je ein Dokument fuer die drei in Paket 1 Paket-1 §1.4 geloeschten
-// Fehl-Aliase. Beide Listen kommen aus data/cleanup-config.json (siehe oben) statt
-// hartcodiert zu sein.
+// 2.1.5 (Fixplan Paket 2): Korrespondenten-Namensvarianten, die entfernt (nicht gemergt)
+// werden sollen - hier die vier urspruenglich geplanten. Drei weitere ausserhalb dieses
+// Skripts gefundene Varianten wurden separat direkt in Paperless bereinigt (siehe Fixplan
+// Abschnitt "Abnahmekriterium Paket 2", Kriterium 3). 2.1.4: Tag-Korrekturen fuer
+// Dokumente, die durch die in Paket 1 §1.4 geloeschten Fehl-Aliase falsch getaggt wurden -
+// von den drei urspruenglich vermuteten Faellen war nur einer sicher korrigierbar, die
+// beiden anderen brauchen zuerst neu angelegte Zieltags (siehe Fixplan Abschnitt 2.1.4).
+// Beide Listen kommen aus data/cleanup-config.json (siehe oben) statt hartcodiert zu sein.
 const { correspondentNamesToRemove: CORRESPONDENT_NAMES_TO_REMOVE, mistaggedDocumentFixes: MISTAGGED_DOCUMENT_FIXES } = loadCleanupConfig();
 
 function parseArgs(argv) {

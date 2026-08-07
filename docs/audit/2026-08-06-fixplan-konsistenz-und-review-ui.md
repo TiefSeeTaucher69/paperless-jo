@@ -483,15 +483,52 @@ Review-UI und ohne Rescan:
    `Notification` → `Mitteilung`/`Bescheid`. Ebenso bei den Tags:
    `Personal Data` → `Persönliche Daten`, `Electronic Document` /
    `elektronisch`, `Tax Document`, `Invoice`, `Curriculum Vitae`.
+
+   **Nachgetragen nach Ausführung (2026-08-07):** So nicht umgesetzt.
+   `Notification` — plus zwei weitere, erst bei der Durchsicht gefundene
+   Schreibvarianten desselben Sachverhalts, `Meldebescheid` und
+   `Meldebeschreibung` — wurden auf die bereits bestehende Dokumentart
+   `Meldebescheinigung` gemergt, nicht auf ein neues `Mitteilung`, das im
+   Bestand nie existierte. `Bescheid` wurde nicht als Merge-Ziel verwendet,
+   sondern als eine der 7 leeren Dokumentarten ganz gelöscht (Punkt 2). Für
+   die drei Tags `Tax Document`, `Invoice`, `Curriculum Vitae` wurde bewusst
+   **kein** Merge durchgeführt: im live geprüften 85-Tag-Bestand existiert
+   kein deutsches Äquivalent, und eines zu erfinden wurde ausdrücklich
+   vermieden. Diese Lücke bleibt offen.
 4. **Die drei fehlerhaft gemergten Tags korrigieren** (Gegenstück zu 1.4):
    die Dokumente, die durch die Fehl-Merges vom 2026-08-05 falsche Tags
    tragen, in Paperless zurückstellen. Betroffen sind laut `entity_merge_log`
    je ein Dokument pro Fall.
+
+   **Nachgetragen nach Ausführung (2026-08-07):** Nur einer der drei Fälle
+   war tatsächlich korrigierbar. Dokument 158 (fehlende
+   `Urlaubsgeld`-Markierung) wurde korrigiert. Die anderen beiden — Dokument
+   170 (bräuchte `Austrittsdatum`) und Dokument 185 (bräuchte
+   `September 2025`) — ließen sich nicht beheben: in beiden Fällen war der
+   korrekte Tag durch den ursprünglichen Fehl-Merge selbst gelöscht worden,
+   und nichts im live geprüften Tag-Bestand ersetzt ihn. Beide Tags müssen
+   zuerst neu angelegt werden, bevor die beiden Dokumente in einem künftigen
+   Durchgang korrigiert werden können.
 5. **Die Empfänger-Korrespondenten bereinigen.** Vier Varianten des
    Dokumentinhabers stehen als Korrespondent im Bestand, einer davon mit
    Wohnanschrift im Namen. Sie sind laut System-Prompt gar keine gültigen
    Korrespondenten und gehören entfernt, nicht zusammengeführt — sonst bietet
    der Prompt sie ab 1.3.a aktiv zur Wiederverwendung an.
+
+**Nachgetragen — Alias-Rückstand aus Paket 1 (2026-08-07):** Die vier in
+Paket 1 vorgemerkten Alias-Zeilen (`invoice contract` → Dokumentart
+`contract`; `personal nr <Nr>` → Korrespondent „Personal-Nr. <Nr>"; zwei
+`herrn <inhaber>`-Aliase → Korrespondent „Herr <Inhaber>", siehe Zeile 67–73)
+wurden in diesem Paket **nicht** angefasst — `data/entities.db`s
+Alias-Tabelle blieb unberührt. Ihre Ziele wurden während 2.1 und dem
+Task-6b-Nachlauf gelöscht (die Dokumentart `contract` gemergt, die
+Korrespondenten „Personal-Nr. …" und „Herr <Inhaber>" entfernt); die vier
+Aliase zeigen jetzt also ins Leere. Das ist kein Korrektheitsrisiko:
+`services/entityResolver.js:26-35` erkennt einen Alias, dessen `canonical_id`
+nicht mehr existiert, verwirft ihn mit einer Warnung und lässt die Kaskade
+die Entscheidung frisch neu treffen, statt fehlzuschlagen. Das Aufräumen der
+toten Alias-Zeilen selbst ist auf Paket 3 vertagt, das laut Abschnitt 3.3
+ohnehin eine Alias-Ansicht mit Löschfunktion bringt.
 
 ### 2.2 — Rescan: Entscheidung, keine Zusage
 
