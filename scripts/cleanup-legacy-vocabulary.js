@@ -24,19 +24,28 @@ const DOCUMENT_TYPE_MERGES = [
   { from: 'contract', to: 'Entgeltabrechnung' },
   { from: 'Payroll Statement', to: 'Entgeltabrechnung' },
   { from: 'salary tax certificate', to: 'Lohnsteuerbescheinigung' },
-  { from: 'Practicum Confirmation', to: 'Praktikumsbestätigung' }
-  // 'Notification' -> 'Mitteilung' ODER 'Bescheid': im Fixplan (Zeile 483) bewusst
-  // offen gelassen, dokumentinhaltsabhaengig. Wird in Task 4 anhand der betroffenen
-  // Dokumente aufgeloest und hier ergaenzt.
+  { from: 'Practicum Confirmation', to: 'Praktikumsbestätigung' },
+  // Task 4 Schritt 1: beide 'Notification'-Dokumente (id 52, Dok. 143 und 135) sind
+  // "Meldebescheinigung zur Sozialversicherung" - eine Mitteilung des Arbeitgebers
+  // ueber An-/Abmeldevorgaenge, kein rechtsverbindlicher Verwaltungsakt einer Behoerde
+  // (das waere ein "Bescheid", z.B. Steuerbescheid/Rentenbescheid). Beide Dokumente
+  // sind inhaltlich gleich gelagert, keine Aufspaltung noetig.
+  // ACHTUNG (Bestandsdurchsicht): die Dokumentart "Mitteilung" existiert im Live-Bestand
+  // noch nicht (anders als "Bescheid", das leer ist und in der 7er-Loeschliste steht).
+  // resolveMergeRow ueberspringt diese Zeile deshalb bis "Mitteilung" angelegt wurde
+  // (Vorschau bereits getestet: "UEBERSPRUNGEN: Ziel 'Mitteilung' nicht gefunden").
+  { from: 'Notification', to: 'Mitteilung' }
 ];
 
 // Fixplan Zeile 484-485.
 const TAG_MERGES = [
   { from: 'Personal Data', to: 'Persönliche Daten' },
   { from: 'Electronic Document', to: 'elektronisch' }
-  // Tax Document, Invoice, Curriculum Vitae: deutsches Ziel-Tag wird in Task 4 anhand
-  // des tatsaechlichen Bestands ermittelt (moeglicherweise existiert noch keins) und
-  // hier ergaenzt.
+  // Task 4 Schritt 2: fuer 'Tax Document', 'Invoice', 'Curriculum Vitae' existiert im
+  // Live-Bestand (85 Tags, siehe Bestandsdurchsicht) noch kein deutsches Aequivalent
+  // ('Steuerdokument', 'Rechnung', 'Lebenslauf' kommen nicht vor) - laut Override 2 des
+  // Implementierungsplans deshalb hier bewusst kein Merge-Eintrag. Dokumentierte Luecke,
+  // keine Erfindung eines Merge-Ziels; siehe task-4-report.md.
 ];
 
 // PII-Schutz: dieses Repository ist oeffentlich (Fixplan-Namenskonvention, Zeile 11-13:
