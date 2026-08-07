@@ -25,16 +25,19 @@ const DOCUMENT_TYPE_MERGES = [
   { from: 'Payroll Statement', to: 'Entgeltabrechnung' },
   { from: 'salary tax certificate', to: 'Lohnsteuerbescheinigung' },
   { from: 'Practicum Confirmation', to: 'Praktikumsbestätigung' },
-  // Task 4 Schritt 1: beide 'Notification'-Dokumente (id 52, Dok. 143 und 135) sind
-  // "Meldebescheinigung zur Sozialversicherung" - eine Mitteilung des Arbeitgebers
-  // ueber An-/Abmeldevorgaenge, kein rechtsverbindlicher Verwaltungsakt einer Behoerde
-  // (das waere ein "Bescheid", z.B. Steuerbescheid/Rentenbescheid). Beide Dokumente
-  // sind inhaltlich gleich gelagert, keine Aufspaltung noetig.
-  // ACHTUNG (Bestandsdurchsicht): die Dokumentart "Mitteilung" existiert im Live-Bestand
-  // noch nicht (anders als "Bescheid", das leer ist und in der 7er-Loeschliste steht).
-  // resolveMergeRow ueberspringt diese Zeile deshalb bis "Mitteilung" angelegt wurde
-  // (Vorschau bereits getestet: "UEBERSPRUNGEN: Ziel 'Mitteilung' nicht gefunden").
-  { from: 'Notification', to: 'Mitteilung' }
+  // Task 4 Schritt 1 (Korrektur nach Koordinator-Gegenpruefung): beide
+  // 'Notification'-Dokumente (id 52, Dok. 143 und 135) sind "Meldebescheinigung zur
+  // Sozialversicherung" - eine Mitteilung des Arbeitgebers ueber An-/Abmeldevorgaenge.
+  // Statt einer neuen, im Bestand nicht existierenden Dokumentart 'Mitteilung' gibt es
+  // bereits drei Schreibvarianten desselben Sachverhalts im Live-Bestand:
+  // 'Meldebescheid' (id 31, 1 Dok., z.B. "Meldebeweis fuer Arbeitnehmer nach § 25 DEUEV"),
+  // 'Meldebeschreibung' (id 32, 3 Dok., "Meldebescheinigung zur Sozialversicherung") und
+  // die korrekt geschriebene, bereits bestehende 'Meldebescheinigung' (id 30, 3 Dok.).
+  // Alle vier Schreibvarianten werden auf 'Meldebescheinigung' zusammengefuehrt, statt
+  // eine neue Dokumentart anzulegen.
+  { from: 'Notification', to: 'Meldebescheinigung' },
+  { from: 'Meldebescheid', to: 'Meldebescheinigung' },
+  { from: 'Meldebeschreibung', to: 'Meldebescheinigung' }
 ];
 
 // Fixplan Zeile 484-485.
