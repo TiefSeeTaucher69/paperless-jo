@@ -13,6 +13,8 @@
  * einer Bestandsdurchsicht befuellbar (siehe Implementierungsplan-Task 4). Ein leerer
  * Eintrag fuehrt zu keiner Aktion, nicht zu einem Fehler.
  */
+const fs = require('fs');
+const path = require('path');
 const paperlessService = require('../services/paperlessService');
 
 // Fixplan Zeile 473-474: contract ist der Prompt-Platzhalter aus A-2 (mit 1.2.a an der
@@ -37,14 +39,29 @@ const TAG_MERGES = [
   // hier ergaenzt.
 ];
 
-// Fixplan Zeile 490-494: vier Empfaenger-Varianten, die entfernt (nicht gemergt) werden
-// sollen. Namen werden in Task 4 aus dem Bestand ermittelt.
-const CORRESPONDENT_NAMES_TO_REMOVE = [];
+// PII-Schutz: dieses Repository ist oeffentlich (Fixplan-Namenskonvention, Zeile 11-13:
+// "Der Fork ist oeffentlich"). Echte Korrespondentennamen/-adressen und die betroffenen
+// Dokument-IDs duerfen deshalb nicht als Literal in diesem versionierten Skript stehen -
+// sie leben stattdessen in data/cleanup-config.json (data/ ist bereits gitignored, siehe
+// .gitignore:4, derselbe Ort wie data/.env).
+const CLEANUP_CONFIG_PATH = path.join(__dirname, '..', 'data', 'cleanup-config.json');
 
-// Fixplan Zeile 486-489 (2.1.4): je ein Dokument fuer die drei in Paket 1 §1.4
-// geloeschten Fehl-Aliase. Wird in Task 4 ueber entity_merge_log + entity_review_queue
-// ermittelt und hier ergaenzt: { documentId, removeTagId, removeTagName, addTagId, addTagName }.
-const MISTAGGED_DOCUMENT_FIXES = [];
+function loadCleanupConfig() {
+  if (!fs.existsSync(CLEANUP_CONFIG_PATH)) {
+    return { correspondentNamesToRemove: [], mistaggedDocumentFixes: [] };
+  }
+  const raw = JSON.parse(fs.readFileSync(CLEANUP_CONFIG_PATH, 'utf8'));
+  return {
+    correspondentNamesToRemove: raw.correspondentNamesToRemove || [],
+    mistaggedDocumentFixes: raw.mistaggedDocumentFixes || []
+  };
+}
+
+// 2.1.5 (Fixplan Paket 2): vier Empfaenger-Varianten, die entfernt (nicht gemergt) werden
+// sollen. 2.1.4: je ein Dokument fuer die drei in Paket 1 Paket-1 §1.4 geloeschten
+// Fehl-Aliase. Beide Listen kommen aus data/cleanup-config.json (siehe oben) statt
+// hartcodiert zu sein.
+const { correspondentNamesToRemove: CORRESPONDENT_NAMES_TO_REMOVE, mistaggedDocumentFixes: MISTAGGED_DOCUMENT_FIXES } = loadCleanupConfig();
 
 function parseArgs(argv) {
   return { apply: argv.includes('--apply') };
