@@ -538,6 +538,29 @@ einen Rescan für immer.
    Projektverzeichnisses abgelegt.
 5. Die Entscheidung zu 2.2 ist mit Begründung in diesem Dokument nachgetragen.
 
+**Status (nachgetragen nach Ausführung, 2026-08-07):**
+
+1. **Bestanden.** 14 Dokumentarten (vorher 28), keine mit 0 Dokumenten.
+2. **Bestanden.** `contract` existiert nicht mehr; die 20 betroffenen
+   Dokumente tragen `Entgeltabrechnung` — das Merge-Ziel war bereits deutsch.
+3. **Bestanden, mit Einschränkung.** Der ursprünglich geplante Umfang (die
+   vier Empfänger-Varianten aus 2.1 Punkt 5) hat für sich allein **nicht**
+   gereicht. Eine vollständige manuelle Durchsicht nach der Ausführung fand
+   drei weitere Korrespondenten außerhalb dieses geplanten Umfangs, die das
+   Kriterium noch immer verletzten. Ein Nachlauf hat die Lücke geschlossen:
+   zwei Korrespondenten ohne ein einziges Dokument wurden gelöscht, ein
+   dritter — eine echte, eigenständige Person, ein Familienmitglied von
+   `<Inhaber>` mit derselben Anschrift im Namen — wurde umbenannt, um die
+   Anschrift aus dem Namen zu entfernen, statt gelöscht zu werden. Erst mit
+   diesem Nachlauf ist das Kriterium über den gesamten Korrespondentenbestand
+   hinweg erfüllt.
+4. **Bestanden.** Sicherungen beider Datenbanken bestätigt unter
+   `paperless-jo-backups\2026-08-06\` außerhalb des Projektverzeichnisses,
+   Größen passend zu `data/documents.db`/`data/entities.db`.
+5. **Bestanden.** Die Entscheidung zu 2.2 ist oben mit Begründung
+   nachgetragen (siehe „Entscheidung (nachgetragen nach Ausführung von 2.1,
+   2026-08-07)" unter 2.2).
+
 ---
 
 ## Paket 3 — Review-/Merge-UI
