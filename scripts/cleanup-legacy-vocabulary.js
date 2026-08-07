@@ -75,10 +75,18 @@ async function buildPlan() {
   const rows = [];
 
   for (const { from, to } of DOCUMENT_TYPE_MERGES) {
-    rows.push(await resolveMergeRow('document_type', from, to, documentTypes));
+    try {
+      rows.push(await resolveMergeRow('document_type', from, to, documentTypes));
+    } catch (error) {
+      rows.push({ action: 'merge', type: 'document_type', from, to, skip: `Fehler bei der Vorschau: ${error.message}` });
+    }
   }
   for (const { from, to } of TAG_MERGES) {
-    rows.push(await resolveMergeRow('tag', from, to, tags));
+    try {
+      rows.push(await resolveMergeRow('tag', from, to, tags));
+    } catch (error) {
+      rows.push({ action: 'merge', type: 'tag', from, to, skip: `Fehler bei der Vorschau: ${error.message}` });
+    }
   }
 
   for (const t of documentTypes.filter(dt => dt.document_count === 0)) {
