@@ -122,7 +122,10 @@
                                     <td><%= entry.candidate_name %></td>
                                     <td><%= entry.trigram_similarity != null ? entry.trigram_similarity.toFixed(2) : (entry.embedding_similarity == null ? entry.similarity.toFixed(2) : '-') %></td>
                                     <td><%= entry.embedding_similarity != null ? entry.embedding_similarity.toFixed(2) : '-' %></td>
-                                    <td<% if (entry.llm_reason) { %> title="<%= entry.llm_reason %>" class="cursor-help underline decoration-dotted"<% } %>><%= entry.llm_verdict || '-' %></td>
+                                    <td>
+                                        <div class="judge-verdict"><%= entry.llm_verdict || '-' %></div>
+                                        <% if (entry.llm_reason) { %><div class="judge-reason text-xs text-gray-400"><%= entry.llm_reason %></div><% } %>
+                                    </td>
                                     <td>
                                         <% if (entry.documentLink) { %>
                                             <a href="<%= entry.documentLink %>" target="_blank" class="text-blue-500 hover:underline">View</a>

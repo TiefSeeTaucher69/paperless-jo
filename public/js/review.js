@@ -169,6 +169,11 @@ class ReviewManager {
         this.previewText.textContent = `"${fromSide.name}" (${fromSide.documentCount} document(s)) will be deleted. `
             + `${preview.affectedCount} document(s) will be reassigned to "${toSide.name}" (${toSide.documentCount} document(s)). Continue?`;
 
+        this.previewExamples.replaceChildren(
+            this.buildPreviewSection(`Deleted: "${fromSide.name}"`, fromSide),
+            this.buildPreviewSection(`Kept: "${toSide.name}"`, toSide)
+        );
+
         if (this.reverseToggle) this.reverseToggle.checked = this.pendingReverse;
     }
 
