@@ -369,6 +369,18 @@ class EntityStore {
     }
   }
 
+  updateQueueJudgment(id, { verdict, reason }) {
+    try {
+      const result = this.db.prepare(`
+        UPDATE entity_review_queue SET llm_verdict = ?, llm_reason = ? WHERE id = ?
+      `).run(verdict, reason, id);
+      return result.changes > 0;
+    } catch (error) {
+      console.error('[ERROR] entityStore.updateQueueJudgment:', error.message);
+      return false;
+    }
+  }
+
   countOpenQueueEntries({ entityType = null, status = 'open' } = {}) {
     try {
       const params = [status];

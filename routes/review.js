@@ -7,6 +7,7 @@ const EntityStore = require('../models/entityStore');
 const ReviewQueueService = require('../services/reviewQueueService');
 const EntityBackfillService = require('../services/entityBackfillService');
 const entityEmbeddingService = require('../services/entityEmbeddingService');
+const entityJudge = require('../services/entityJudge');
 
 let store = null;
 let reviewQueueService = null;
@@ -42,7 +43,7 @@ const QUEUE_SORTS = ['created_at_asc', 'created_at_desc', 'similarity_asc', 'sim
 const QUEUE_STATUSES = ['open', 'merged', 'rejected'];
 const REVIEW_PAGE_SIZE = 25;
 
-router.get('/review', isAuthenticated, (req, res) => {
+router.get('/review', isAuthenticated, async (req, res) => {
   const { reviewQueueService } = getServices();
 
   const entityType = ENTITY_TYPES.includes(req.query.entityType) ? req.query.entityType : null;
@@ -55,12 +56,20 @@ router.get('/review', isAuthenticated, (req, res) => {
   const currentPage = Math.min(requestedPage, totalPages);
 
   const baseURL = (process.env.PAPERLESS_API_URL || '').replace(/\/api$/, '');
-  const queue = reviewQueueService.listOpen({
+  const rawQueue = reviewQueueService.listOpen({
     entityType, status, sort, limit: REVIEW_PAGE_SIZE, offset: (currentPage - 1) * REVIEW_PAGE_SIZE
-  }).map(entry => ({
+  });
+  // Ein Live-Aufruf pro Seite und Entitaet (bis zu 2 * REVIEW_PAGE_SIZE Paperless-Requests) -
+  // bei der aktuellen Bestandsgroesse (siehe Fixplan, 64 Dokumente) unkritisch. Sollte die
+  // Instanz deutlich wachsen, ist das der erste Ort, an dem sich ein Cache lohnt.
+  const queue = await Promise.all(rawQueue.map(async entry => ({
     ...entry,
-    documentLink: entry.document_id ? `${baseURL}/documents/${entry.document_id}/` : null
-  }));
+    documentLink: entry.document_id ? `${baseURL}/documents/${entry.document_id}/` : null,
+    proposedDocumentCount: entry.proposed_id
+      ? await paperlessService.getDocumentCountForEntity(entry.entity_type, entry.proposed_id).catch(() => null)
+      : 0,
+    candidateDocumentCount: await paperlessService.getDocumentCountForEntity(entry.entity_type, entry.candidate_id).catch(() => null)
+  })));
 
   const pageUrl = (targetPage) => {
     const params = new URLSearchParams();
@@ -76,7 +85,13 @@ router.get('/review', isAuthenticated, (req, res) => {
     entityType, status, sort, entityTypes: ENTITY_TYPES, statuses: QUEUE_STATUSES,
     currentPage, totalPages, total,
     prevPageUrl: pageUrl(Math.max(1, currentPage - 1)),
-    nextPageUrl: pageUrl(Math.min(totalPages, currentPage + 1))
+    nextPageUrl: pageUrl(Math.min(totalPages, currentPage + 1)),
+    thresholds: {
+      autoThreshold: config.entityResolver.autoThreshold,
+      judgeMin: config.entityResolver.judgeMin,
+      embedJudgeMin: config.embedding.judgeMin
+    },
+    embeddingEnabled: config.embedding.enabled
   });
 });
 
@@ -146,6 +161,33 @@ router.post('/api/review/:id/reject', authenticateJWT, (req, res) => {
     console.error(`[ERROR] Reject fuer Queue-Eintrag ${id} fehlgeschlagen:`, error.message);
     res.status(400).json({ message: error.message });
   }
+});
+
+router.post('/api/review/:id/ask-judge', authenticateJWT, async (req, res) => {
+  const { store } = getServices();
+  const id = Number(req.params.id);
+  const entry = store.getQueueEntryById(id);
+  if (!entry) {
+    return res.status(404).json({ message: `No queue entry with id=${id}` });
+  }
+
+  // Dieselbe Fehler-zu-'unavailable'-Abbildung wie entityResolver._askJudge (1.1.c) - ein
+  // ausgefallener Judge ist keine Modellunsicherheit.
+  let verdict;
+  try {
+    const result = await entityJudge.judge(entry.entity_type, entry.proposed_name, entry.candidate_name);
+    verdict = (result && ['same', 'different', 'unsure'].includes(result.verdict))
+      ? result
+      : { verdict: 'unsure', reason: 'ungueltige oder leere Judge-Antwort' };
+  } catch (error) {
+    verdict = { verdict: 'unavailable', reason: `judge nicht erreichbar: ${error.message}` };
+  }
+
+  const updated = store.updateQueueJudgment(id, verdict);
+  if (!updated) {
+    return res.status(500).json({ message: 'Judge verdict could not be saved' });
+  }
+  res.json({ id, ...verdict });
 });
 
 router.post('/api/review/backfill/:entityType', authenticateJWT, async (req, res) => {

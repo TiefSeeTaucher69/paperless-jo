@@ -54,6 +54,9 @@ class ReviewManager {
         document.querySelectorAll('.backfill-btn').forEach(btn => {
             btn.addEventListener('click', () => this.backfill(btn.dataset.entityType, btn));
         });
+        document.querySelectorAll('.ask-judge-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.askJudge(btn.dataset.id, btn));
+        });
         document.getElementById('bulkRejectBtn')?.addEventListener('click', () => this.bulkReject());
 
         this.modal?.querySelector('.modal-overlay')?.addEventListener('click', () => this.hideModal());
@@ -222,6 +225,29 @@ class ReviewManager {
             console.error('Backfill scan failed:', error);
             alert('Backfill scan failed. Please try again.');
         } finally {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    }
+
+    async askJudge(id, button) {
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Asking...';
+        try {
+            const response = await fetch(`/api/review/${id}/ask-judge`, { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() } });
+            if (!response.ok) throw new Error(await extractErrorMessage(response, 'Ask judge failed'));
+            const result = await response.json();
+
+            const row = document.querySelector(`tr[data-queue-id="${id}"]`);
+            const verdictCell = row?.querySelector('.judge-verdict');
+            const reasonCell = row?.querySelector('.judge-reason');
+            if (verdictCell) verdictCell.textContent = result.verdict;
+            if (reasonCell) reasonCell.textContent = result.reason || '';
+            button.remove();
+        } catch (error) {
+            console.error('Ask judge failed:', error);
+            alert(error.message || 'Ask judge failed. Please try again.');
             button.disabled = false;
             button.textContent = originalText;
         }

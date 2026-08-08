@@ -216,6 +216,24 @@ test('updateQueueStatus liefert false, wenn die id nicht existiert', () => {
   assert.strictEqual(store.updateQueueStatus(999999, 'merged'), false);
 });
 
+test('updateQueueJudgment schreibt verdict und reason und liefert true', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'A', proposedId: 1, candidateName: 'B', candidateId: 2, similarity: 0.9, status: 'open' });
+  const [entry] = store.listOpenQueueEntries();
+
+  const ok = store.updateQueueJudgment(entry.id, { verdict: 'different', reason: 'unterschiedliche Begriffe' });
+
+  assert.strictEqual(ok, true);
+  const updated = store.getQueueEntryById(entry.id);
+  assert.strictEqual(updated.llm_verdict, 'different');
+  assert.strictEqual(updated.llm_reason, 'unterschiedliche Begriffe');
+});
+
+test('updateQueueJudgment liefert false fuer eine unbekannte id', () => {
+  const store = freshStore();
+  assert.strictEqual(store.updateQueueJudgment(9999, { verdict: 'same', reason: 'x' }), false);
+});
+
 test('findQueueEntryPair findet Eintraege unabhaengig vom status, null wenn keiner existiert', () => {
   const store = freshStore();
   const proposedNormalized = normalizeForType('Mahnung', 'tag');
