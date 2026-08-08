@@ -42,6 +42,43 @@ test('deleteAlias entfernt den Eintrag', () => {
   assert.strictEqual(store.findAlias('tag', 'rechnung'), null);
 });
 
+test('listAliases liefert alle Aliase sortiert nach Typ und Name', () => {
+  const store = freshStore();
+  store.insertAlias({ entityType: 'tag', aliasNormalized: 'zeugniss', canonicalName: 'Zeugnis', canonicalId: 20, source: 'user' });
+  store.insertAlias({ entityType: 'correspondent', aliasNormalized: 'herrn inhaber', canonicalName: 'Herr Inhaber', canonicalId: 5, source: 'auto' });
+
+  const result = store.listAliases();
+  assert.strictEqual(result.length, 2);
+  assert.strictEqual(result[0].entity_type, 'correspondent');
+  assert.strictEqual(result[1].entity_type, 'tag');
+});
+
+test('listAliases filtert nach entityType', () => {
+  const store = freshStore();
+  store.insertAlias({ entityType: 'tag', aliasNormalized: 'zeugniss', canonicalName: 'Zeugnis', canonicalId: 20, source: 'user' });
+  store.insertAlias({ entityType: 'correspondent', aliasNormalized: 'herrn inhaber', canonicalName: 'Herr Inhaber', canonicalId: 5, source: 'auto' });
+
+  const result = store.listAliases({ entityType: 'tag' });
+  assert.strictEqual(result.length, 1);
+  assert.strictEqual(result[0].alias_normalized, 'zeugniss');
+});
+
+test('deleteAliasById entfernt genau die passende Zeile und liefert true', () => {
+  const store = freshStore();
+  store.insertAlias({ entityType: 'tag', aliasNormalized: 'zeugniss', canonicalName: 'Zeugnis', canonicalId: 20, source: 'user' });
+  const [row] = store.listAliases();
+
+  const deleted = store.deleteAliasById(row.id);
+
+  assert.strictEqual(deleted, true);
+  assert.strictEqual(store.listAliases().length, 0);
+});
+
+test('deleteAliasById liefert false fuer eine unbekannte id', () => {
+  const store = freshStore();
+  assert.strictEqual(store.deleteAliasById(9999), false);
+});
+
 test('findRejectedPair liefert null ohne Eintrag, gefunden nach insertQueueEntry mit status rejected', () => {
   const store = freshStore();
   const proposedNormalized = normalizeForType('Verdienstbescheinigung', 'document_type');
@@ -313,6 +350,34 @@ test('countOpenQueueEntries filtert nach entityType (AUDIT-030)', () => {
 
   assert.strictEqual(store.countOpenQueueEntries({ entityType: 'tag' }), 1);
   assert.strictEqual(store.countOpenQueueEntries(), 2);
+});
+
+test('listOpenQueueEntries mit status="merged" liefert nur merged-Eintraege', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'A', proposedId: 1, candidateName: 'B', candidateId: 2, similarity: 0.9, status: 'open' });
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'C', proposedId: 3, candidateName: 'D', candidateId: 4, similarity: 0.9, status: 'merged' });
+
+  const result = store.listOpenQueueEntries({ status: 'merged' });
+  assert.strictEqual(result.length, 1);
+  assert.strictEqual(result[0].proposed_name, 'C');
+});
+
+test('listOpenQueueEntries ohne status-Option verhaelt sich wie bisher (nur open)', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'A', proposedId: 1, candidateName: 'B', candidateId: 2, similarity: 0.9, status: 'open' });
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'C', proposedId: 3, candidateName: 'D', candidateId: 4, similarity: 0.9, status: 'rejected' });
+
+  const result = store.listOpenQueueEntries();
+  assert.strictEqual(result.length, 1);
+  assert.strictEqual(result[0].proposed_name, 'A');
+});
+
+test('countOpenQueueEntries mit status="rejected" zaehlt nur rejected-Eintraege', () => {
+  const store = freshStore();
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'A', proposedId: 1, candidateName: 'B', candidateId: 2, similarity: 0.9, status: 'open' });
+  store.insertQueueEntry({ entityType: 'tag', proposedName: 'C', proposedId: 3, candidateName: 'D', candidateId: 4, similarity: 0.9, status: 'rejected' });
+
+  assert.strictEqual(store.countOpenQueueEntries({ status: 'rejected' }), 1);
 });
 
 test('bulkRejectBelowSimilarity lehnt nur offene Eintraege unterhalb der Schwelle ab, optional gefiltert nach entityType (AUDIT-030)', () => {

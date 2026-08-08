@@ -157,6 +157,32 @@ class EntityStore {
     }
   }
 
+  listAliases({ entityType = null } = {}) {
+    try {
+      const params = [];
+      let sql = `SELECT * FROM entity_aliases`;
+      if (entityType) {
+        sql += ` WHERE entity_type = ?`;
+        params.push(entityType);
+      }
+      sql += ` ORDER BY entity_type ASC, alias_normalized ASC`;
+      return this.db.prepare(sql).all(...params);
+    } catch (error) {
+      console.error('[ERROR] entityStore.listAliases:', error.message);
+      return [];
+    }
+  }
+
+  deleteAliasById(id) {
+    try {
+      const result = this.db.prepare(`DELETE FROM entity_aliases WHERE id = ?`).run(id);
+      return result.changes > 0;
+    } catch (error) {
+      console.error('[ERROR] entityStore.deleteAliasById:', error.message);
+      return false;
+    }
+  }
+
   getEmbedding(entityType, entityId) {
     try {
       const row = this.db.prepare(
@@ -294,11 +320,14 @@ class EntityStore {
     }
   }
 
-  listOpenQueueEntries({ entityType = null, sort = 'created_at_asc', limit = null, offset = 0 } = {}) {
+  // Der Name ist historisch (urspruenglich nur fuer status='open') - die Methode filtert seit
+  // 3.3 nach einem beliebigen, vom Aufrufer als Whitelist geprueften Status (siehe QUEUE_STATUSES
+  // in routes/review.js), der Default bleibt aus Kompatibilitaetsgruenden 'open'.
+  listOpenQueueEntries({ entityType = null, status = 'open', sort = 'created_at_asc', limit = null, offset = 0 } = {}) {
     try {
       const orderBy = QUEUE_SORT_COLUMNS[sort] || QUEUE_SORT_COLUMNS.created_at_asc;
-      const params = [];
-      let sql = `SELECT * FROM entity_review_queue WHERE status = 'open'`;
+      const params = [status];
+      let sql = `SELECT * FROM entity_review_queue WHERE status = ?`;
       if (entityType) {
         sql += ` AND entity_type = ?`;
         params.push(entityType);
@@ -340,10 +369,10 @@ class EntityStore {
     }
   }
 
-  countOpenQueueEntries({ entityType = null } = {}) {
+  countOpenQueueEntries({ entityType = null, status = 'open' } = {}) {
     try {
-      const params = [];
-      let sql = `SELECT COUNT(*) as count FROM entity_review_queue WHERE status = 'open'`;
+      const params = [status];
+      let sql = `SELECT COUNT(*) as count FROM entity_review_queue WHERE status = ?`;
       if (entityType) {
         sql += ` AND entity_type = ?`;
         params.push(entityType);

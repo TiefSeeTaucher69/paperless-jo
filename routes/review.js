@@ -39,22 +39,24 @@ const ENTITY_LISTERS = {
 // AUDIT-030: feste Whitelists statt Query-Werte ungeprueft weiterzureichen.
 const ENTITY_TYPES = Object.keys(ENTITY_LISTERS);
 const QUEUE_SORTS = ['created_at_asc', 'created_at_desc', 'similarity_asc', 'similarity_desc'];
+const QUEUE_STATUSES = ['open', 'merged', 'rejected'];
 const REVIEW_PAGE_SIZE = 25;
 
 router.get('/review', isAuthenticated, (req, res) => {
   const { reviewQueueService } = getServices();
 
   const entityType = ENTITY_TYPES.includes(req.query.entityType) ? req.query.entityType : null;
+  const status = QUEUE_STATUSES.includes(req.query.status) ? req.query.status : 'open';
   const sort = QUEUE_SORTS.includes(req.query.sort) ? req.query.sort : 'created_at_asc';
   const requestedPage = Math.max(1, parseInt(req.query.page, 10) || 1);
 
-  const total = reviewQueueService.countOpen({ entityType });
+  const total = reviewQueueService.countOpen({ entityType, status });
   const totalPages = Math.max(1, Math.ceil(total / REVIEW_PAGE_SIZE));
   const currentPage = Math.min(requestedPage, totalPages);
 
   const baseURL = (process.env.PAPERLESS_API_URL || '').replace(/\/api$/, '');
   const queue = reviewQueueService.listOpen({
-    entityType, sort, limit: REVIEW_PAGE_SIZE, offset: (currentPage - 1) * REVIEW_PAGE_SIZE
+    entityType, status, sort, limit: REVIEW_PAGE_SIZE, offset: (currentPage - 1) * REVIEW_PAGE_SIZE
   }).map(entry => ({
     ...entry,
     documentLink: entry.document_id ? `${baseURL}/documents/${entry.document_id}/` : null
@@ -63,6 +65,7 @@ router.get('/review', isAuthenticated, (req, res) => {
   const pageUrl = (targetPage) => {
     const params = new URLSearchParams();
     if (entityType) params.set('entityType', entityType);
+    if (status !== 'open') params.set('status', status);
     if (sort !== 'created_at_asc') params.set('sort', sort);
     params.set('page', targetPage);
     return `/review?${params.toString()}`;
@@ -70,7 +73,7 @@ router.get('/review', isAuthenticated, (req, res) => {
 
   res.render('review', {
     queue, version: config.PAPERLESS_AI_VERSION || ' ',
-    entityType, sort, entityTypes: ENTITY_TYPES,
+    entityType, status, sort, entityTypes: ENTITY_TYPES, statuses: QUEUE_STATUSES,
     currentPage, totalPages, total,
     prevPageUrl: pageUrl(Math.max(1, currentPage - 1)),
     nextPageUrl: pageUrl(Math.min(totalPages, currentPage + 1))
@@ -180,6 +183,31 @@ router.post('/api/review/bulk-reject', authenticateJWT, (req, res) => {
     console.error('[ERROR] Massen-Ablehnung fehlgeschlagen:', error.message);
     res.status(400).json({ message: error.message });
   }
+});
+
+router.get('/review/aliases', isAuthenticated, async (req, res) => {
+  const { store } = getServices();
+  const aliases = store.listAliases();
+
+  const counts = await Promise.all(
+    aliases.map(alias => paperlessService.getDocumentCountForEntity(alias.entity_type, alias.canonical_id).catch(() => null))
+  );
+
+  res.render('review-aliases', {
+    version: config.PAPERLESS_AI_VERSION || ' ',
+    aliases: aliases.map((alias, i) => ({ ...alias, targetDocumentCount: counts[i] }))
+  });
+});
+
+router.delete('/api/review/aliases/:id', authenticateJWT, (req, res) => {
+  const { store } = getServices();
+  const id = Number(req.params.id);
+
+  const deleted = store.deleteAliasById(id);
+  if (!deleted) {
+    return res.status(404).json({ message: `No alias with id=${id}` });
+  }
+  res.json({ id, deleted: true });
 });
 
 module.exports = router;

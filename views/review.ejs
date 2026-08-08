@@ -46,6 +46,7 @@
                     <li><a href="/chat" class="sidebar-link"><i class="fa-solid fa-comment"></i><span>Chat</span></a></li>
                     <li><a href="/history" class="sidebar-link"><i class="fa-solid fa-clock-rotate-left"></i><span>History</span></a></li>
                     <li><a href="/review" class="sidebar-link active"><i class="fa-solid fa-code-compare"></i><span>Review Queue</span></a></li>
+                    <li><a href="/review/aliases" class="sidebar-link"><i class="fa-solid fa-link"></i><span>Aliases</span></a></li>
                     <li><a href="/settings" class="sidebar-link"><i class="fas fa-cog"></i><span>Settings</span></a></li>
                     <li><a href="/logout" class="sidebar-link"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a></li>
                 </ul>
@@ -76,6 +77,14 @@
                             </select>
                         </div>
                         <div>
+                            <label class="block text-sm mb-1" for="status">Status</label>
+                            <select name="status" id="status" class="border rounded px-2 py-1">
+                                <% statuses.forEach(function(s) { %>
+                                <option value="<%= s %>" <%= status === s ? 'selected' : '' %>><%= s %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+                        <div>
                             <label class="block text-sm mb-1" for="sort">Sort</label>
                             <select name="sort" id="sort" class="border rounded px-2 py-1">
                                 <option value="created_at_asc" <%= sort === 'created_at_asc' ? 'selected' : '' %>>Oldest first</option>
@@ -85,7 +94,7 @@
                             </select>
                         </div>
                         <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">Apply</button>
-                        <span class="text-sm text-gray-400"><%= total %> open entries</span>
+                        <span id="openEntriesCount" class="text-sm text-gray-400" data-status="<%= status %>"><%= total %> <%= status %> entries</span>
                     </form>
                 </div>
 
@@ -134,6 +143,7 @@
                                         <% } %>
                                     </td>
                                     <td>
+                                        <% if (entry.status === 'open') { %>
                                         <div class="flex gap-2">
                                             <button class="preview-btn px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors" data-id="<%= entry.id %>" title="Preview">
                                                 <i class="fa-solid fa-eye"></i>
@@ -142,6 +152,9 @@
                                             <button class="merge-btn px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" data-id="<%= entry.id %>">Merge</button>
                                             <button class="reject-btn px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors" data-id="<%= entry.id %>">Not a duplicate</button>
                                         </div>
+                                        <% } else { %>
+                                        <span class="text-gray-400 text-sm"><%= entry.status %><% if (entry.resolved_at) { %> (<%= entry.resolved_at.slice(0, 10) %>)<% } %></span>
+                                        <% } %>
                                     </td>
                                 </tr>
                                 <% }); %>
