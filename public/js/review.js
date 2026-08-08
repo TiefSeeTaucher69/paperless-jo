@@ -182,6 +182,9 @@ class ReviewManager {
 
     async confirmMerge() {
         if (!this.pendingMergeId) return;
+        const originalText = this.confirmBtn.textContent;
+        this.confirmBtn.disabled = true;
+        this.confirmBtn.textContent = 'Merging...';
         try {
             const response = await fetch(`/api/review/${this.pendingMergeId}/merge`, {
                 method: 'POST',
@@ -191,28 +194,36 @@ class ReviewManager {
             if (!response.ok) throw new Error(await extractErrorMessage(response, 'Merge failed'));
 
             document.querySelector(`tr[data-queue-id="${this.pendingMergeId}"]`)?.remove();
+            this.decrementCounter();
             this.hideModal();
         } catch (error) {
             console.error('Merge failed:', error);
             alert(error.message || 'Merge failed. Please try again.');
             this.hideModal();
+        } finally {
+            this.confirmBtn.disabled = false;
+            this.confirmBtn.textContent = originalText;
         }
     }
 
-    async reject(id, button) { // eslint-disable-line no-unused-vars
-        // B-5: heute keine Rueckfrage, obwohl die Ablehnung dauerhaft wirkt (Negativ-Cache) -
-        // Bulk-Reject fragt bereits nach, die Einzelablehnung bisher nicht.
+    async reject(id, button) {
         if (!confirm('Mark this pair as "not a duplicate"? This is remembered permanently and will not be suggested again.')) {
             return;
         }
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Rejecting...';
         try {
             const response = await fetch(`/api/review/${id}/reject`, { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() } });
             if (!response.ok) throw new Error(await extractErrorMessage(response, 'Reject failed'));
 
             document.querySelector(`tr[data-queue-id="${id}"]`)?.remove();
+            this.decrementCounter();
         } catch (error) {
             console.error('Reject failed:', error);
             alert(error.message || 'Reject failed. Please try again.');
+            button.disabled = false;
+            button.textContent = originalText;
         }
     }
 
@@ -306,6 +317,17 @@ class ReviewManager {
         this.pendingDocumentIds = null;
         this.pendingReverse = false;
         this.pendingInfo = null;
+    }
+
+    decrementCounter() {
+        // Nur der offene Zaehler ist nach einem Merge/Reject noch gueltig - bei einem anderen
+        // Statusfilter (3.3) veraendert eine dieser Aktionen die angezeigte Menge gar nicht.
+        const counter = document.getElementById('openEntriesCount');
+        if (!counter || counter.dataset.status !== 'open') return;
+        const match = counter.textContent.match(/^(\d+)/);
+        if (!match) return;
+        const remaining = Math.max(0, parseInt(match[1], 10) - 1);
+        counter.textContent = counter.textContent.replace(/^\d+/, String(remaining));
     }
 }
 
