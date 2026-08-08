@@ -49,7 +49,7 @@ class ReviewManager {
             btn.addEventListener('click', () => this.previewMerge(btn));
         });
         document.querySelectorAll('.reject-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.reject(btn.dataset.id));
+            btn.addEventListener('click', () => this.reject(btn.dataset.id, btn));
         });
         document.querySelectorAll('.backfill-btn').forEach(btn => {
             btn.addEventListener('click', () => this.backfill(btn.dataset.entityType, btn));
@@ -199,25 +199,35 @@ class ReviewManager {
         }
     }
 
-    async reject(id) {
+    async reject(id, button) { // eslint-disable-line no-unused-vars
+        // B-5: heute keine Rueckfrage, obwohl die Ablehnung dauerhaft wirkt (Negativ-Cache) -
+        // Bulk-Reject fragt bereits nach, die Einzelablehnung bisher nicht.
+        if (!confirm('Mark this pair as "not a duplicate"? This is remembered permanently and will not be suggested again.')) {
+            return;
+        }
         try {
             const response = await fetch(`/api/review/${id}/reject`, { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() } });
-            if (!response.ok) throw new Error('Reject failed');
+            if (!response.ok) throw new Error(await extractErrorMessage(response, 'Reject failed'));
 
             document.querySelector(`tr[data-queue-id="${id}"]`)?.remove();
         } catch (error) {
             console.error('Reject failed:', error);
-            alert('Reject failed. Please try again.');
+            alert(error.message || 'Reject failed. Please try again.');
         }
     }
 
     async backfill(entityType, button) {
+        // B-9: der Knopf erklaert heute nicht, dass er alle Paare vergleicht (quadratisch in
+        // der Entitaetenzahl) und im Test 16 Eintraege auf einmal erzeugt hat.
+        if (!confirm(`Compare every existing ${entityType} pair for near-duplicates? This checks all pairs (quadratic in the entity count) and can add many entries to the review queue.`)) {
+            return;
+        }
         const originalText = button.textContent;
         button.disabled = true;
         button.textContent = 'Running...';
         try {
             const response = await fetch(`/api/review/backfill/${entityType}`, { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() } });
-            if (!response.ok) throw new Error('Backfill scan failed');
+            if (!response.ok) throw new Error(await extractErrorMessage(response, 'Backfill scan failed'));
             const result = await response.json();
             alert(`${result.inserted} new entries found.`);
             if (result.inserted > 0) window.location.reload();
