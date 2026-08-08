@@ -33,7 +33,7 @@ function getServices() {
 const ENTITY_LISTERS = {
   tag: () => paperlessService.getTags(),
   correspondent: () => paperlessService.listCorrespondentsNames(),
-  document_type: () => paperlessService.listDocumentTypesNames()
+  document_type: () => paperlessService.listDocumentTypesWithCounts()
 };
 
 // AUDIT-030: feste Whitelists statt Query-Werte ungeprueft weiterzureichen.
@@ -93,15 +93,20 @@ router.get('/api/review/:id/documents', authenticateJWT, async (req, res) => {
     const fetchDocs = (entityId) => entityId
       ? paperlessService.getExampleDocumentsForEntity(entry.entity_type, entityId, 3)
       : Promise.resolve([]);
+    const fetchCount = (entityId) => entityId
+      ? paperlessService.getDocumentCountForEntity(entry.entity_type, entityId)
+      : Promise.resolve(0);
 
-    const [proposedDocs, candidateDocs] = await Promise.all([
+    const [proposedDocs, candidateDocs, proposedCount, candidateCount] = await Promise.all([
       fetchDocs(entry.proposed_id),
-      fetchDocs(entry.candidate_id)
+      fetchDocs(entry.candidate_id),
+      fetchCount(entry.proposed_id),
+      fetchCount(entry.candidate_id)
     ]);
 
     res.json({
-      proposed: { name: entry.proposed_name, documents: withLinks(proposedDocs) },
-      candidate: { name: entry.candidate_name, documents: withLinks(candidateDocs) }
+      proposed: { name: entry.proposed_name, documentCount: proposedCount, documents: withLinks(proposedDocs) },
+      candidate: { name: entry.candidate_name, documentCount: candidateCount, documents: withLinks(candidateDocs) }
     });
   } catch (error) {
     console.error(`[ERROR] Example documents for queue entry ${id} failed:`, error.message);
@@ -113,12 +118,13 @@ router.post('/api/review/:id/merge', authenticateJWT, async (req, res) => {
   const id = Number(req.params.id);
   const dryRun = req.body?.dryRun !== false;
   const documentIds = Array.isArray(req.body?.documentIds) ? req.body.documentIds : null;
+  const reverse = req.body?.reverse === true;
 
   try {
     const { reviewQueueService } = getServices();
     const result = dryRun
-      ? await reviewQueueService.previewMerge(id)
-      : await reviewQueueService.merge(id, { expectedDocumentIds: documentIds });
+      ? await reviewQueueService.previewMerge(id, { reverse })
+      : await reviewQueueService.merge(id, { expectedDocumentIds: documentIds, reverse });
     res.json(result);
   } catch (error) {
     console.error(`[ERROR] Merge fuer Queue-Eintrag ${id} fehlgeschlagen:`, error.message);

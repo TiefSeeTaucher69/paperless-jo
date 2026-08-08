@@ -1,3 +1,8 @@
+async function extractErrorMessage(response, fallback) {
+    const body = await response.json().catch(() => ({}));
+    return body.message || fallback;
+}
+
 class ThemeManager {
     constructor() {
         this.themeToggle = document.getElementById('themeToggle');
@@ -24,9 +29,13 @@ class ReviewManager {
     constructor() {
         this.modal = document.getElementById('mergeConfirmModal');
         this.previewText = document.getElementById('mergePreviewText');
+        this.previewExamples = document.getElementById('mergePreviewExamples');
+        this.reverseToggle = document.getElementById('mergeReverseToggle');
         this.confirmBtn = document.getElementById('confirmMerge');
         this.pendingMergeId = null;
         this.pendingDocumentIds = null;
+        this.pendingReverse = false;
+        this.pendingInfo = null;
         this.docPreviewModal = document.getElementById('previewModal');
         this.docPreviewContent = document.getElementById('previewContent');
         this.initialize();
@@ -51,6 +60,12 @@ class ReviewManager {
         this.modal?.querySelector('.modal-close')?.addEventListener('click', () => this.hideModal());
         document.getElementById('cancelMerge')?.addEventListener('click', () => this.hideModal());
         this.confirmBtn?.addEventListener('click', () => this.confirmMerge());
+        this.reverseToggle?.addEventListener('change', () => {
+            this.loadMergeDirection(this.reverseToggle.checked).catch(error => {
+                console.error('Failed to switch merge direction:', error);
+                alert(error.message || 'Failed to switch merge direction. Please try again.');
+            });
+        });
 
         this.docPreviewModal?.querySelector('.modal-overlay')?.addEventListener('click', () => this.hideDocumentPreview());
         this.docPreviewModal?.querySelector('.modal-close')?.addEventListener('click', () => this.hideDocumentPreview());
@@ -115,28 +130,46 @@ class ReviewManager {
 
     async previewMerge(button) {
         const id = button.dataset.id;
-        const proposedName = button.dataset.proposedName;
-        const candidateName = button.dataset.candidateName;
         try {
-            const response = await fetch(`/api/review/${id}/merge`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
-                body: JSON.stringify({ dryRun: true })
-            });
-            if (!response.ok) {
-                const body = await response.json().catch(() => ({}));
-                throw new Error(body.message || 'Preview failed');
-            }
-            const preview = await response.json();
+            const infoResponse = await fetch(`/api/review/${id}/documents`);
+            if (!infoResponse.ok) throw new Error(await extractErrorMessage(infoResponse, 'Merge preview failed'));
+            const info = await infoResponse.json();
 
             this.pendingMergeId = id;
-            this.pendingDocumentIds = preview.documentIds;
-            this.previewText.textContent = `"${proposedName}" will be deleted. ${preview.affectedCount} document(s) will be reassigned to "${candidateName}". Continue?`;
+            this.pendingInfo = info;
+            // Vorbelegung folgt der Dokumentzahl (3.1/B-3): die Seite mit mehr Dokumenten bleibt
+            // standardmaessig erhalten, unabhaengig davon, welche Seite proposed/candidate ist.
+            const defaultReverse = info.proposed.documentCount > info.candidate.documentCount;
+            await this.loadMergeDirection(defaultReverse);
             this.showModal();
         } catch (error) {
             console.error('Merge preview failed:', error);
             alert(error.message || 'Merge preview failed. Please try again.');
         }
+    }
+
+    async loadMergeDirection(reverse) {
+        const response = await fetch(`/api/review/${this.pendingMergeId}/merge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+            body: JSON.stringify({ dryRun: true, reverse })
+        });
+        if (!response.ok) throw new Error(await extractErrorMessage(response, 'Merge preview failed'));
+        const preview = await response.json();
+
+        this.pendingReverse = reverse;
+        this.pendingDocumentIds = preview.documentIds;
+        this.renderMergePreview(preview);
+    }
+
+    renderMergePreview(preview) {
+        const { proposed, candidate } = this.pendingInfo;
+        const [fromSide, toSide] = this.pendingReverse ? [candidate, proposed] : [proposed, candidate];
+
+        this.previewText.textContent = `"${fromSide.name}" (${fromSide.documentCount} document(s)) will be deleted. `
+            + `${preview.affectedCount} document(s) will be reassigned to "${toSide.name}" (${toSide.documentCount} document(s)). Continue?`;
+
+        if (this.reverseToggle) this.reverseToggle.checked = this.pendingReverse;
     }
 
     async confirmMerge() {
@@ -145,12 +178,9 @@ class ReviewManager {
             const response = await fetch(`/api/review/${this.pendingMergeId}/merge`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
-                body: JSON.stringify({ dryRun: false, documentIds: this.pendingDocumentIds })
+                body: JSON.stringify({ dryRun: false, documentIds: this.pendingDocumentIds, reverse: this.pendingReverse })
             });
-            if (!response.ok) {
-                const body = await response.json().catch(() => ({}));
-                throw new Error(body.message || 'Merge failed');
-            }
+            if (!response.ok) throw new Error(await extractErrorMessage(response, 'Merge failed'));
 
             document.querySelector(`tr[data-queue-id="${this.pendingMergeId}"]`)?.remove();
             this.hideModal();
@@ -236,6 +266,8 @@ class ReviewManager {
         this.modal?.classList.add('hidden');
         this.pendingMergeId = null;
         this.pendingDocumentIds = null;
+        this.pendingReverse = false;
+        this.pendingInfo = null;
     }
 }
 

@@ -136,7 +136,7 @@
                                                 <i class="fa-solid fa-eye"></i>
                                                 <span class="hidden sm:inline ml-1">Preview</span>
                                             </button>
-                                            <button class="merge-btn px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" data-id="<%= entry.id %>" data-proposed-name="<%= entry.proposed_name %>" data-candidate-name="<%= entry.candidate_name %>">Merge</button>
+                                            <button class="merge-btn px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" data-id="<%= entry.id %>">Merge</button>
                                             <button class="reject-btn px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors" data-id="<%= entry.id %>">Not a duplicate</button>
                                         </div>
                                     </td>
@@ -181,6 +181,11 @@
             </div>
             <div class="modal-content">
                 <p class="mb-4" id="mergePreviewText"></p>
+                <label class="flex items-center gap-2 mb-4">
+                    <input type="checkbox" id="mergeReverseToggle">
+                    <span>Merge the other way round</span>
+                </label>
+                <div id="mergePreviewExamples" class="mb-4 text-sm"></div>
                 <div class="flex justify-end gap-4">
                     <button id="cancelMerge" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
                     <button id="confirmMerge" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">Merge permanently</button>
