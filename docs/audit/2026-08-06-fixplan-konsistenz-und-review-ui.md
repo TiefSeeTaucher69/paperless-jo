@@ -75,7 +75,7 @@ und bessere** Einträge, und erst dann lohnt der Umbau der Oberfläche.
 2. [x] **Paket 2 — Altdaten bereinigen** (Folge von A-1/A-2, plus FIX-01)
    → Setzt Paket 1 voraus: vor der Reparatur aufzuräumen wäre verlorene Arbeit.
 
-3. [ ] **Paket 3 — Review-/Merge-UI** (B-1 bis B-13, A-6-Rest)
+3. [x] **Paket 3 — Review-/Merge-UI** (B-1 bis B-13, A-6-Rest)
    → Setzt Paket 1 voraus, damit die UI gegen realistische Datenmengen
    entworfen wird statt gegen die heutige Flut aus Timeout-Einträgen.
 
