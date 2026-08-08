@@ -34,7 +34,7 @@ class AliasManager {
 
     async deleteAlias(id, button) {
         const row = document.querySelector(`tr[data-alias-id="${id}"]`);
-        const canonicalName = row?.children[2]?.textContent || 'this alias';
+        const canonicalName = row?.dataset.canonicalName || 'this alias';
         if (!confirm(`Delete the alias pointing to "${canonicalName}"? The next matching pair will go through resolution again.`)) {
             return;
         }
