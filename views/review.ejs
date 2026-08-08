@@ -143,7 +143,7 @@
                                     <td>
                                         <div class="judge-verdict"><%= entry.llm_verdict || 'nicht bewertet (Altbestands-Scan)' %></div>
                                         <% if (entry.llm_reason) { %><div class="judge-reason text-xs text-gray-400"><%= entry.llm_reason %></div><% } %>
-                                        <% if (!entry.llm_verdict) { %>
+                                        <% if (!entry.llm_verdict && entry.status === 'open') { %>
                                         <button class="ask-judge-btn text-xs text-blue-500 hover:underline mt-1" data-id="<%= entry.id %>">Ask judge</button>
                                         <% } %>
                                     </td>

@@ -44,55 +44,60 @@ const QUEUE_STATUSES = ['open', 'merged', 'rejected'];
 const REVIEW_PAGE_SIZE = 25;
 
 router.get('/review', isAuthenticated, async (req, res) => {
-  const { reviewQueueService } = getServices();
+  try {
+    const { reviewQueueService } = getServices();
 
-  const entityType = ENTITY_TYPES.includes(req.query.entityType) ? req.query.entityType : null;
-  const status = QUEUE_STATUSES.includes(req.query.status) ? req.query.status : 'open';
-  const sort = QUEUE_SORTS.includes(req.query.sort) ? req.query.sort : 'created_at_asc';
-  const requestedPage = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const entityType = ENTITY_TYPES.includes(req.query.entityType) ? req.query.entityType : null;
+    const status = QUEUE_STATUSES.includes(req.query.status) ? req.query.status : 'open';
+    const sort = QUEUE_SORTS.includes(req.query.sort) ? req.query.sort : 'created_at_asc';
+    const requestedPage = Math.max(1, parseInt(req.query.page, 10) || 1);
 
-  const total = reviewQueueService.countOpen({ entityType, status });
-  const totalPages = Math.max(1, Math.ceil(total / REVIEW_PAGE_SIZE));
-  const currentPage = Math.min(requestedPage, totalPages);
+    const total = reviewQueueService.countOpen({ entityType, status });
+    const totalPages = Math.max(1, Math.ceil(total / REVIEW_PAGE_SIZE));
+    const currentPage = Math.min(requestedPage, totalPages);
 
-  const baseURL = (process.env.PAPERLESS_API_URL || '').replace(/\/api$/, '');
-  const rawQueue = reviewQueueService.listOpen({
-    entityType, status, sort, limit: REVIEW_PAGE_SIZE, offset: (currentPage - 1) * REVIEW_PAGE_SIZE
-  });
-  // Ein Live-Aufruf pro Seite und Entitaet (bis zu 2 * REVIEW_PAGE_SIZE Paperless-Requests) -
-  // bei der aktuellen Bestandsgroesse (siehe Fixplan, 64 Dokumente) unkritisch. Sollte die
-  // Instanz deutlich wachsen, ist das der erste Ort, an dem sich ein Cache lohnt.
-  const queue = await Promise.all(rawQueue.map(async entry => ({
-    ...entry,
-    documentLink: entry.document_id ? `${baseURL}/documents/${entry.document_id}/` : null,
-    proposedDocumentCount: entry.proposed_id
-      ? await paperlessService.getDocumentCountForEntity(entry.entity_type, entry.proposed_id).catch(() => null)
-      : 0,
-    candidateDocumentCount: await paperlessService.getDocumentCountForEntity(entry.entity_type, entry.candidate_id).catch(() => null)
-  })));
+    const baseURL = (process.env.PAPERLESS_API_URL || '').replace(/\/api$/, '');
+    const rawQueue = reviewQueueService.listOpen({
+      entityType, status, sort, limit: REVIEW_PAGE_SIZE, offset: (currentPage - 1) * REVIEW_PAGE_SIZE
+    });
+    // Ein Live-Aufruf pro Seite und Entitaet (bis zu 2 * REVIEW_PAGE_SIZE Paperless-Requests) -
+    // bei der aktuellen Bestandsgroesse (siehe Fixplan, 64 Dokumente) unkritisch. Sollte die
+    // Instanz deutlich wachsen, ist das der erste Ort, an dem sich ein Cache lohnt.
+    const queue = await Promise.all(rawQueue.map(async entry => ({
+      ...entry,
+      documentLink: entry.document_id ? `${baseURL}/documents/${entry.document_id}/` : null,
+      proposedDocumentCount: entry.proposed_id
+        ? await paperlessService.getDocumentCountForEntity(entry.entity_type, entry.proposed_id).catch(() => null)
+        : 0,
+      candidateDocumentCount: await paperlessService.getDocumentCountForEntity(entry.entity_type, entry.candidate_id).catch(() => null)
+    })));
 
-  const pageUrl = (targetPage) => {
-    const params = new URLSearchParams();
-    if (entityType) params.set('entityType', entityType);
-    if (status !== 'open') params.set('status', status);
-    if (sort !== 'created_at_asc') params.set('sort', sort);
-    params.set('page', targetPage);
-    return `/review?${params.toString()}`;
-  };
+    const pageUrl = (targetPage) => {
+      const params = new URLSearchParams();
+      if (entityType) params.set('entityType', entityType);
+      if (status !== 'open') params.set('status', status);
+      if (sort !== 'created_at_asc') params.set('sort', sort);
+      params.set('page', targetPage);
+      return `/review?${params.toString()}`;
+    };
 
-  res.render('review', {
-    queue, version: config.PAPERLESS_AI_VERSION || ' ',
-    entityType, status, sort, entityTypes: ENTITY_TYPES, statuses: QUEUE_STATUSES,
-    currentPage, totalPages, total,
-    prevPageUrl: pageUrl(Math.max(1, currentPage - 1)),
-    nextPageUrl: pageUrl(Math.min(totalPages, currentPage + 1)),
-    thresholds: {
-      autoThreshold: config.entityResolver.autoThreshold,
-      judgeMin: config.entityResolver.judgeMin,
-      embedJudgeMin: config.embedding.judgeMin
-    },
-    embeddingEnabled: config.embedding.enabled
-  });
+    res.render('review', {
+      queue, version: config.PAPERLESS_AI_VERSION || ' ',
+      entityType, status, sort, entityTypes: ENTITY_TYPES, statuses: QUEUE_STATUSES,
+      currentPage, totalPages, total,
+      prevPageUrl: pageUrl(Math.max(1, currentPage - 1)),
+      nextPageUrl: pageUrl(Math.min(totalPages, currentPage + 1)),
+      thresholds: {
+        autoThreshold: config.entityResolver.autoThreshold,
+        judgeMin: config.entityResolver.judgeMin,
+        embedJudgeMin: config.embedding.judgeMin
+      },
+      embeddingEnabled: config.embedding.enabled
+    });
+  } catch (error) {
+    console.error('[ERROR] loading review queue page:', error.message);
+    res.status(500).send('Error loading review queue page');
+  }
 });
 
 router.get('/api/review/:id/documents', authenticateJWT, async (req, res) => {
@@ -170,6 +175,9 @@ router.post('/api/review/:id/ask-judge', authenticateJWT, async (req, res) => {
   if (!entry) {
     return res.status(404).json({ message: `No queue entry with id=${id}` });
   }
+  if (entry.status !== 'open') {
+    return res.status(400).json({ message: `Cannot ask judge for a resolved entry (status=${entry.status})` });
+  }
 
   // Dieselbe Fehler-zu-'unavailable'-Abbildung wie entityResolver._askJudge (1.1.c) - ein
   // ausgefallener Judge ist keine Modellunsicherheit.
@@ -228,17 +236,22 @@ router.post('/api/review/bulk-reject', authenticateJWT, (req, res) => {
 });
 
 router.get('/review/aliases', isAuthenticated, async (req, res) => {
-  const { store } = getServices();
-  const aliases = store.listAliases();
+  try {
+    const { store } = getServices();
+    const aliases = store.listAliases();
 
-  const counts = await Promise.all(
-    aliases.map(alias => paperlessService.getDocumentCountForEntity(alias.entity_type, alias.canonical_id).catch(() => null))
-  );
+    const counts = await Promise.all(
+      aliases.map(alias => paperlessService.getDocumentCountForEntity(alias.entity_type, alias.canonical_id).catch(() => null))
+    );
 
-  res.render('review-aliases', {
-    version: config.PAPERLESS_AI_VERSION || ' ',
-    aliases: aliases.map((alias, i) => ({ ...alias, targetDocumentCount: counts[i] }))
-  });
+    res.render('review-aliases', {
+      version: config.PAPERLESS_AI_VERSION || ' ',
+      aliases: aliases.map((alias, i) => ({ ...alias, targetDocumentCount: counts[i] }))
+    });
+  } catch (error) {
+    console.error('[ERROR] loading aliases page:', error.message);
+    res.status(500).send('Error loading aliases page');
+  }
 });
 
 router.delete('/api/review/aliases/:id', authenticateJWT, (req, res) => {
