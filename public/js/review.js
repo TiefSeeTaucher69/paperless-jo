@@ -77,7 +77,7 @@ class ReviewManager {
     async showDocumentPreview(id) {
         try {
             const response = await fetch(`/api/review/${id}/documents`);
-            if (!response.ok) throw new Error('Failed to load example documents');
+            if (!response.ok) throw new Error(await extractErrorMessage(response, 'Failed to load example documents'));
             const data = await response.json();
 
             this.docPreviewContent.replaceChildren(
@@ -284,10 +284,7 @@ class ReviewManager {
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
                 body: JSON.stringify({ entityType, maxSimilarity })
             });
-            if (!response.ok) {
-                const body = await response.json().catch(() => ({}));
-                throw new Error(body.message || 'Bulk reject failed');
-            }
+            if (!response.ok) throw new Error(await extractErrorMessage(response, 'Bulk reject failed'));
             const result = await response.json();
             alert(`${result.rejected} entries rejected.`);
             window.location.reload();
