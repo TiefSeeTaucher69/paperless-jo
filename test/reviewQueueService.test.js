@@ -4,7 +4,7 @@ const ReviewQueueService = require('../services/reviewQueueService');
 
 function fakeStore(overrides = {}) {
   const entries = new Map();
-  return {
+  const store = {
     entries,
     listOpenQueueEntries: () => Array.from(entries.values()).filter(e => e.status === 'open'),
     getQueueEntryById: (id) => entries.get(id) || null,
@@ -15,13 +15,16 @@ function fakeStore(overrides = {}) {
     },
     insertAlias: () => true,
     insertMergeLog: () => true,
-    completeMerge: ({ queueEntryId }) => {
+    completeMerge: (args) => {
+      store.completeMergeArgs = args;
+      const { queueEntryId } = args;
       if (!entries.has(queueEntryId)) return false;
       entries.get(queueEntryId).status = 'merged';
       return true;
     },
     ...overrides
   };
+  return store;
 }
 
 test('listOpen delegiert an store.listOpenQueueEntries', () => {
@@ -200,4 +203,35 @@ test('merge reicht expectedDocumentIds an mergeEntity durch', async () => {
   await service.merge(1, { expectedDocumentIds: [1, 2, 3] });
 
   assert.deepStrictEqual(calls[0], { dryRun: false, expectedDocumentIds: [1, 2, 3] });
+});
+
+test('previewMerge mit reverse=true vertauscht fromId/toId', async () => {
+  const store = fakeStore();
+  store.entries.set(1, { id: 1, status: 'open', entity_type: 'tag', proposed_id: 10, proposed_name: 'Zeugniss', proposed_normalized: 'zeugniss', candidate_id: 20, candidate_name: 'Zeugnis', candidate_normalized: 'zeugnis' });
+  const calls = [];
+  const paperlessService = {
+    mergeEntity: async (type, fromId, toId, opts) => { calls.push({ type, fromId, toId, opts }); return { affectedCount: 5, documentIds: [1, 2, 3, 4, 5], deleted: false }; }
+  };
+  const service = new ReviewQueueService({ store, paperlessService });
+
+  await service.previewMerge(1, { reverse: true });
+
+  assert.strictEqual(calls[0].fromId, 20);
+  assert.strictEqual(calls[0].toId, 10);
+});
+
+test('merge mit reverse=true speichert den Alias in die andere Richtung', async () => {
+  const store = fakeStore();
+  store.entries.set(1, { id: 1, status: 'open', entity_type: 'tag', proposed_id: 10, proposed_name: 'Zeugniss', proposed_normalized: 'zeugniss', candidate_id: 20, candidate_name: 'Zeugnis', candidate_normalized: 'zeugnis' });
+  const paperlessService = {
+    mergeEntity: async () => ({ affectedCount: 0, documentIds: [], deleted: true, chunksCompleted: 0, chunksTotal: 0 })
+  };
+  const service = new ReviewQueueService({ store, paperlessService });
+
+  await service.merge(1, { reverse: true });
+
+  const alias = store.completeMergeArgs.alias;
+  assert.strictEqual(alias.aliasNormalized, 'zeugnis');
+  assert.strictEqual(alias.canonicalId, 10);
+  assert.strictEqual(alias.canonicalName, 'Zeugniss');
 });

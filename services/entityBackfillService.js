@@ -35,9 +35,17 @@ class EntityBackfillService {
         const a = existingEntities[i];
         const b = existingEntities[j];
 
-        // Aeltere (kleinere) id gilt als kanonisch, die neuere als moeglicher Dublette-Kandidat -
-        // dieselbe Richtung, die auch der Live-Pfad fuer Merge annimmt (proposed -> candidate).
-        const [candidate, proposed] = a.id < b.id ? [a, b] : [b, a];
+        // Bevorzugt die Seite mit mehr Dokumenten als kanonisch (3.1/B-3) - ein Merge in die
+        // falsche Richtung loescht sonst die etablierte Variante zugunsten einer kaum genutzten,
+        // z.B. "Zeugnis" (5 Dokumente) haette "Zeugniss" (0 Dokumente) verloren, weil Zeugniss
+        // die kleinere id hatte. Bei Gleichstand (typischerweise 0 = 0, oder wenn der Aufrufer
+        // eine Liste ohne document_count uebergibt) faellt der Tiebreak auf die aeltere
+        // (kleinere) id zurueck, wie bisher.
+        const countA = a.document_count ?? 0;
+        const countB = b.document_count ?? 0;
+        const [candidate, proposed] = countA !== countB
+          ? (countA > countB ? [a, b] : [b, a])
+          : (a.id < b.id ? [a, b] : [b, a]);
 
         const normalizedCandidate = normalizeForType(candidate.name, entityType);
         const normalizedProposed = normalizeForType(proposed.name, entityType);

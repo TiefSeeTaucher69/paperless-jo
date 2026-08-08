@@ -46,6 +46,7 @@
                     <li><a href="/chat" class="sidebar-link"><i class="fa-solid fa-comment"></i><span>Chat</span></a></li>
                     <li><a href="/history" class="sidebar-link"><i class="fa-solid fa-clock-rotate-left"></i><span>History</span></a></li>
                     <li><a href="/review" class="sidebar-link active"><i class="fa-solid fa-code-compare"></i><span>Review Queue</span></a></li>
+                    <li><a href="/review/aliases" class="sidebar-link"><i class="fa-solid fa-link"></i><span>Aliases</span></a></li>
                     <li><a href="/settings" class="sidebar-link"><i class="fas fa-cog"></i><span>Settings</span></a></li>
                     <li><a href="/logout" class="sidebar-link"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a></li>
                 </ul>
@@ -56,6 +57,12 @@
             <div class="content-wrapper">
                 <div class="content-header flex justify-between items-center mb-6">
                     <h1 class="content-title">Review Queue</h1>
+                </div>
+
+                <div class="material-card mb-6 p-4 text-sm">
+                    <p class="mb-1"><strong>Trigram</strong> (0-1, string similarity): below <%= thresholds.judgeMin.toFixed(2) %> a pair never reaches the Judge; at or above <%= thresholds.autoThreshold.toFixed(2) %> it is merged automatically and never appears here.</p>
+                    <p class="mb-1"><strong>Embedding</strong> (0-1, meaning similarity): only computed while embeddings are enabled (currently <%= embeddingEnabled ? 'on' : 'off' %>); feeds the Judge at or above <%= thresholds.embedJudgeMin.toFixed(2) %>.</p>
+                    <p><strong>Judge</strong>: an LLM verdict (same/different/unsure/unavailable) requested for pairs that reach either threshold above. "unavailable" means the Judge could not be reached, not that it is unsure.</p>
                 </div>
 
                 <div class="flex flex-wrap gap-4 mb-6">
@@ -76,6 +83,14 @@
                             </select>
                         </div>
                         <div>
+                            <label class="block text-sm mb-1" for="status">Status</label>
+                            <select name="status" id="status" class="border rounded px-2 py-1">
+                                <% statuses.forEach(function(s) { %>
+                                <option value="<%= s %>" <%= status === s ? 'selected' : '' %>><%= s %></option>
+                                <% }); %>
+                            </select>
+                        </div>
+                        <div>
                             <label class="block text-sm mb-1" for="sort">Sort</label>
                             <select name="sort" id="sort" class="border rounded px-2 py-1">
                                 <option value="created_at_asc" <%= sort === 'created_at_asc' ? 'selected' : '' %>>Oldest first</option>
@@ -85,7 +100,7 @@
                             </select>
                         </div>
                         <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">Apply</button>
-                        <span class="text-sm text-gray-400"><%= total %> open entries</span>
+                        <span id="openEntriesCount" class="text-sm text-gray-400" data-status="<%= status %>"><%= total %> <%= status %> entries</span>
                     </form>
                 </div>
 
@@ -107,9 +122,11 @@
                                     <th>Type</th>
                                     <th>Proposed</th>
                                     <th>Candidate</th>
+                                    <th>Documents</th>
                                     <th>Trigram</th>
                                     <th>Embedding</th>
                                     <th>Judge</th>
+                                    <th>Origin</th>
                                     <th>Document</th>
                                     <th>Actions</th>
                                 </tr>
@@ -120,9 +137,17 @@
                                     <td><%= entry.entity_type %></td>
                                     <td><%= entry.proposed_name %></td>
                                     <td><%= entry.candidate_name %></td>
+                                    <td><%= entry.proposedDocumentCount == null ? '?' : entry.proposedDocumentCount %> / <%= entry.candidateDocumentCount == null ? '?' : entry.candidateDocumentCount %></td>
                                     <td><%= entry.trigram_similarity != null ? entry.trigram_similarity.toFixed(2) : (entry.embedding_similarity == null ? entry.similarity.toFixed(2) : '-') %></td>
                                     <td><%= entry.embedding_similarity != null ? entry.embedding_similarity.toFixed(2) : '-' %></td>
-                                    <td<% if (entry.llm_reason) { %> title="<%= entry.llm_reason %>" class="cursor-help underline decoration-dotted"<% } %>><%= entry.llm_verdict || '-' %></td>
+                                    <td>
+                                        <div class="judge-verdict"><%= entry.llm_verdict || 'nicht bewertet (Altbestands-Scan)' %></div>
+                                        <% if (entry.llm_reason) { %><div class="judge-reason text-xs text-gray-400"><%= entry.llm_reason %></div><% } %>
+                                        <% if (!entry.llm_verdict && entry.status === 'open') { %>
+                                        <button class="ask-judge-btn text-xs text-blue-500 hover:underline mt-1" data-id="<%= entry.id %>">Ask judge</button>
+                                        <% } %>
+                                    </td>
+                                    <td><%= entry.document_id ? 'Live scan' : 'Backfill' %></td>
                                     <td>
                                         <% if (entry.documentLink) { %>
                                             <a href="<%= entry.documentLink %>" target="_blank" class="text-blue-500 hover:underline">View</a>
@@ -131,19 +156,23 @@
                                         <% } %>
                                     </td>
                                     <td>
+                                        <% if (entry.status === 'open') { %>
                                         <div class="flex gap-2">
                                             <button class="preview-btn px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors" data-id="<%= entry.id %>" title="Preview">
                                                 <i class="fa-solid fa-eye"></i>
                                                 <span class="hidden sm:inline ml-1">Preview</span>
                                             </button>
-                                            <button class="merge-btn px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" data-id="<%= entry.id %>" data-proposed-name="<%= entry.proposed_name %>" data-candidate-name="<%= entry.candidate_name %>">Merge</button>
+                                            <button class="merge-btn px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors" data-id="<%= entry.id %>">Merge</button>
                                             <button class="reject-btn px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors" data-id="<%= entry.id %>">Not a duplicate</button>
                                         </div>
+                                        <% } else { %>
+                                        <span class="text-gray-400 text-sm"><%= entry.status %><% if (entry.resolved_at) { %> (<%= entry.resolved_at.slice(0, 10) %>)<% } %></span>
+                                        <% } %>
                                     </td>
                                 </tr>
                                 <% }); %>
                                 <% if (queue.length === 0) { %>
-                                <tr><td colspan="8" class="text-center text-gray-400 py-6">No open entries</td></tr>
+                                <tr><td colspan="10" class="text-center text-gray-400 py-6">No open entries</td></tr>
                                 <% } %>
                             </tbody>
                         </table>
@@ -181,6 +210,11 @@
             </div>
             <div class="modal-content">
                 <p class="mb-4" id="mergePreviewText"></p>
+                <label class="flex items-center gap-2 mb-4">
+                    <input type="checkbox" id="mergeReverseToggle">
+                    <span>Merge the other way round</span>
+                </label>
+                <div id="mergePreviewExamples" class="mb-4 text-sm"></div>
                 <div class="flex justify-end gap-4">
                     <button id="cancelMerge" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
                     <button id="confirmMerge" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">Merge permanently</button>

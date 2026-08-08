@@ -1,0 +1,122 @@
+<!-- views/review-aliases.ejs -->
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aliases - Paperless-AI</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <style>
+        .modal {
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .modal.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="h-full">
+    <button id="themeToggle" class="theme-toggle">
+        <i class="fas fa-moon dark:fas fa-sun"></i>
+    </button>
+
+    <div class="layout-container">
+        <button id="mobileMenuButton" class="mobile-menu-button">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="/favicon.ico" class="no-invert" alt="Paperless AI Logo" style="height: 60px;">
+                <h1 class="brand-title">Paperless-AI<small style="display: block;"><%= version %></small></h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li><a href="/dashboard" class="sidebar-link"><i class="fas fa-home"></i><span>Dashboard</span></a></li>
+                    <li><a href="/manual" class="sidebar-link"><i class="fas fa-file-alt"></i><span>Manual</span></a></li>
+                    <li><a href="/chat" class="sidebar-link"><i class="fa-solid fa-comment"></i><span>Chat</span></a></li>
+                    <li><a href="/history" class="sidebar-link"><i class="fa-solid fa-clock-rotate-left"></i><span>History</span></a></li>
+                    <li><a href="/review" class="sidebar-link"><i class="fa-solid fa-code-compare"></i><span>Review Queue</span></a></li>
+                    <li><a href="/review/aliases" class="sidebar-link active"><i class="fa-solid fa-link"></i><span>Aliases</span></a></li>
+                    <li><a href="/settings" class="sidebar-link"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+                    <li><a href="/logout" class="sidebar-link"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="content-wrapper">
+                <div class="content-header flex justify-between items-center mb-6">
+                    <h1 class="content-title">Aliases</h1>
+                </div>
+
+                <div class="material-card">
+                    <div class="overflow-x-auto">
+                        <table class="w-full" id="aliasTable">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Alias (source)</th>
+                                    <th>Canonical (target)</th>
+                                    <th>Target document count</th>
+                                    <th>Source</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% aliases.forEach(function(alias) { %>
+                                <tr data-alias-id="<%= alias.id %>" data-canonical-name="<%= alias.canonical_name %>">
+                                    <td><%= alias.entity_type %></td>
+                                    <td><%= alias.alias_normalized %></td>
+                                    <td><%= alias.canonical_name %></td>
+                                    <td><%= alias.targetDocumentCount === null ? 'unknown (target deleted?)' : alias.targetDocumentCount %></td>
+                                    <td><%= alias.source %></td>
+                                    <td>
+                                        <button class="delete-alias-btn px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors" data-id="<%= alias.id %>">Delete</button>
+                                    </td>
+                                </tr>
+                                <% }); %>
+                                <% if (aliases.length === 0) { %>
+                                <tr><td colspan="6" class="text-center text-gray-400 py-6">No aliases</td></tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuButton = document.getElementById('mobileMenuButton');
+            const sidebar = document.querySelector('.sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+            function toggleSidebar(event) {
+                event.stopPropagation();
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+            }
+
+            mobileMenuButton.addEventListener('click', toggleSidebar);
+            sidebarOverlay.addEventListener('click', function(event) {
+                event.stopPropagation();
+                if (sidebar.classList.contains('active')) toggleSidebar(event);
+            });
+            sidebar.addEventListener('click', function(event) { event.stopPropagation(); });
+        });
+    </script>
+    <script src="/js/csrf.js"></script>
+    <script src="/js/review-aliases.js"></script>
+</body>
+</html>

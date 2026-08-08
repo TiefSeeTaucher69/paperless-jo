@@ -252,6 +252,47 @@ test('run ueberspringt den Embedding-Kanal fuer einen ausgeschlossenen Typ, kein
   }
 });
 
+test('run bevorzugt die Seite mit mehr Dokumenten als kanonisch, auch wenn die id groesser ist', async () => {
+  const store = new EntityStore(':memory:');
+  try {
+    const service = new EntityBackfillService({ store, judgeMin: 0.6 });
+
+    // Zeugniss hat die kleinere id, aber 0 Dokumente - Zeugnis (5 Dokumente) muss trotzdem
+    // kanonisch (candidate) bleiben.
+    const result = await service.run('tag', [
+      { id: 10, name: 'Zeugniss', document_count: 0 },
+      { id: 20, name: 'Zeugnis', document_count: 5 }
+    ]);
+
+    assert.strictEqual(result.inserted, 1);
+    const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE entity_type = 'tag'`).get();
+    assert.strictEqual(row.candidate_id, 20);
+    assert.strictEqual(row.candidate_name, 'Zeugnis');
+    assert.strictEqual(row.proposed_id, 10);
+    assert.strictEqual(row.proposed_name, 'Zeugniss');
+  } finally {
+    store.close();
+  }
+});
+
+test('run faellt bei gleicher Dokumentzahl auf die kleinere id zurueck', async () => {
+  const store = new EntityStore(':memory:');
+  try {
+    const service = new EntityBackfillService({ store, judgeMin: 0.6 });
+
+    const result = await service.run('document_type', [
+      { id: 5, name: 'Meldebescheinigung', document_count: 3 },
+      { id: 12, name: 'Meldebeschreibung', document_count: 3 }
+    ]);
+
+    assert.strictEqual(result.inserted, 1);
+    const row = store.db.prepare(`SELECT * FROM entity_review_queue WHERE entity_type = 'document_type'`).get();
+    assert.strictEqual(row.candidate_id, 5);
+  } finally {
+    store.close();
+  }
+});
+
 test('run schreibt keine NaN-Aehnlichkeit, wenn cosineSimilarity einen ungueltigen Wert liefert', async () => {
   const store = new EntityStore(':memory:');
   try {

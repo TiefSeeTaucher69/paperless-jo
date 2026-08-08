@@ -27,21 +27,27 @@ class ReviewQueueService {
     return entry;
   }
 
-  async previewMerge(id) {
+  async previewMerge(id, { reverse = false } = {}) {
     const entry = this._getEntryOrThrow(id);
-    return this.paperlessService.mergeEntity(entry.entity_type, entry.proposed_id, entry.candidate_id, { dryRun: true });
+    const [fromId, toId] = reverse ? [entry.candidate_id, entry.proposed_id] : [entry.proposed_id, entry.candidate_id];
+    return this.paperlessService.mergeEntity(entry.entity_type, fromId, toId, { dryRun: true });
   }
 
-  async merge(id, { expectedDocumentIds = null } = {}) {
+  async merge(id, { expectedDocumentIds = null, reverse = false } = {}) {
     const entry = this._getEntryOrThrow(id);
+    // reverse (3.1/B-3): welche Seite geloescht wird, folgt jetzt einer expliziten Nutzerwahl
+    // statt fest "proposed wird geloescht" zu sein - siehe views/review.ejs Merge-Dialog.
+    const [fromId, toId] = reverse ? [entry.candidate_id, entry.proposed_id] : [entry.proposed_id, entry.candidate_id];
+    const toName = reverse ? entry.proposed_name : entry.candidate_name;
+    const fromNormalized = reverse ? entry.candidate_normalized : entry.proposed_normalized;
 
     let result;
     try {
-      result = await this.paperlessService.mergeEntity(entry.entity_type, entry.proposed_id, entry.candidate_id, { dryRun: false, expectedDocumentIds });
+      result = await this.paperlessService.mergeEntity(entry.entity_type, fromId, toId, { dryRun: false, expectedDocumentIds });
     } catch (error) {
       const progress = error.mergeProgress || {};
       this.store.insertMergeLog({
-        queueEntryId: id, entityType: entry.entity_type, fromId: entry.proposed_id, toId: entry.candidate_id,
+        queueEntryId: id, entityType: entry.entity_type, fromId, toId,
         affectedCount: progress.affectedCount ?? 0, chunksCompleted: progress.chunksCompleted ?? 0, chunksTotal: progress.chunksTotal ?? 0,
         status: 'failed', errorMessage: error.message
       });
@@ -51,14 +57,14 @@ class ReviewQueueService {
     const persisted = this.store.completeMerge({
       alias: {
         entityType: entry.entity_type,
-        aliasNormalized: entry.proposed_normalized,
-        canonicalName: entry.candidate_name,
-        canonicalId: entry.candidate_id,
+        aliasNormalized: fromNormalized,
+        canonicalName: toName,
+        canonicalId: toId,
         source: 'user'
       },
       queueEntryId: id,
       mergeLog: {
-        queueEntryId: id, entityType: entry.entity_type, fromId: entry.proposed_id, toId: entry.candidate_id,
+        queueEntryId: id, entityType: entry.entity_type, fromId, toId,
         affectedCount: result.affectedCount, chunksCompleted: result.chunksCompleted ?? 0, chunksTotal: result.chunksTotal ?? 0,
         status: 'completed', errorMessage: null
       }
@@ -74,7 +80,7 @@ class ReviewQueueService {
       // Transaktion, damit ein erneuter Fehler hier zumindest sichtbar wuerde statt den Verlust
       // ein zweites Mal stillschweigend zu wiederholen.
       this.store.insertMergeLog({
-        queueEntryId: id, entityType: entry.entity_type, fromId: entry.proposed_id, toId: entry.candidate_id,
+        queueEntryId: id, entityType: entry.entity_type, fromId, toId,
         affectedCount: result.affectedCount, chunksCompleted: result.chunksCompleted ?? 0, chunksTotal: result.chunksTotal ?? 0,
         status: 'completed', errorMessage: 'Alias/Queue-Status nicht persistiert (completeMerge fehlgeschlagen)'
       });

@@ -1662,6 +1662,24 @@ async getOrCreateDocumentType(name, options = {}) {
     return response.data.results.map(doc => ({ id: doc.id, title: doc.title }));
   }
 
+  async getDocumentCountForEntity(type, id) {
+    this.initialize();
+    const filterFieldMap = {
+      tag: 'tags__id',
+      correspondent: 'correspondent__id',
+      document_type: 'document_type__id'
+    };
+    const filterField = filterFieldMap[type];
+    if (!filterField) {
+      throw new Error(`getDocumentCountForEntity: unknown type "${type}"`);
+    }
+
+    const response = await this.client.get('/documents/', {
+      params: { [filterField]: id, page: 1, page_size: 1 }
+    });
+    return response.data.count;
+  }
+
   async getTagTextFromId(tagId) {
     this.initialize();
     try {
