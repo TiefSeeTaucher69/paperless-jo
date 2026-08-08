@@ -7,14 +7,22 @@ const path = require('path');
 // Finding 1): routes/setup.js's router.use() applies isAuthenticated ->
 // csrfProtection to effectively every non-public browser route in the app
 // (it's mounted at '/' before reviewRoutes/ragRoutes, so its blanket
-// middleware gates them too -- see routes/setup.js and server.js). A POST
-// fetch() call from the frontend that targets a protected route but doesn't
-// send the X-CSRF-Token header will get a 403 the moment a user's browser
-// actually has a csrfToken cookie. Task 9 wired the header into 5 call-sites;
-// a later whole-branch review found ~8 more that were missed. This test
-// scans the actual frontend source (not a hardcoded snapshot of "the files we
-// remembered to check") so a *future* POST call added without the header
-// fails here too, instead of silently shipping a 403 in production.
+// middleware gates them too -- see routes/setup.js and server.js). A
+// state-changing fetch() call from the frontend that targets a protected
+// route but doesn't send the X-CSRF-Token header will get a 403 the moment a
+// user's browser actually has a csrfToken cookie. Task 9 wired the header
+// into 5 call-sites; a later whole-branch review found ~8 more that were
+// missed. This test scans the actual frontend source (not a hardcoded
+// snapshot of "the files we remembered to check") so a *future*
+// POST/PUT/PATCH/DELETE call added without the header fails here too,
+// instead of silently shipping a 403 in production.
+//
+// Originally this only matched method: 'POST'. A Paket-3 final review
+// (Finding 5) found public/js/review-aliases.js's method: 'DELETE' call to
+// /api/review/aliases/:id -- this repo's first non-POST state-changing fetch
+// -- which the POST-only regex was blind to. Broadened to also match PUT,
+// PATCH, and DELETE so the next non-POST call site that forgets the header
+// gets caught too.
 //
 // This is a pragmatic line/regex scan, not a real JS/HTML parser -- see the
 // plan doc and final-review-fix-report.md for why that tradeoff was made.
@@ -40,9 +48,10 @@ function listSourceFiles() {
   return [...jsFiles, ...viewFiles];
 }
 
-// Finds the fetch(...) target nearest (at or before) the `method: 'POST'`
-// line. Handles string literals, template literals, and bare identifiers
-// (e.g. `fetch(endpoint, ...)` or `fetch(this.action, ...)`).
+// Finds the fetch(...) target nearest (at or before) the
+// `method: 'POST'/'PUT'/'PATCH'/'DELETE'` line. Handles string literals,
+// template literals, and bare identifiers (e.g. `fetch(endpoint, ...)` or
+// `fetch(this.action, ...)`).
 function extractUrlToken(lines, matchIndex) {
   const start = Math.max(0, matchIndex - 6);
   const windowText = lines.slice(start, matchIndex + 1).join('\n');
@@ -62,7 +71,7 @@ function hasNearbyCsrfHeader(lines, matchIndex) {
   return /X-CSRF-Token/i.test(lines.slice(start, end).join('\n'));
 }
 
-test('every protected POST fetch() call in public/js and views sends X-CSRF-Token', () => {
+test('every protected POST/PUT/PATCH/DELETE fetch() call in public/js and views sends X-CSRF-Token', () => {
   const violations = [];
 
   for (const file of listSourceFiles()) {
@@ -71,7 +80,7 @@ test('every protected POST fetch() call in public/js and views sends X-CSRF-Toke
     const relPath = path.relative(ROOT, file).replace(/\\/g, '/');
 
     lines.forEach((line, i) => {
-      if (!/method\s*:\s*['"]POST['"]/.test(line)) return;
+      if (!/method\s*:\s*['"](POST|PUT|PATCH|DELETE)['"]/.test(line)) return;
 
       const urlToken = extractUrlToken(lines, i);
 
@@ -94,8 +103,9 @@ test('every protected POST fetch() call in public/js and views sends X-CSRF-Toke
       if (isPublicUrlToken(urlToken)) return;
 
       if (!hasNearbyCsrfHeader(lines, i)) {
+        const method = line.match(/method\s*:\s*['"](POST|PUT|PATCH|DELETE)['"]/)[1];
         violations.push(
-          `${relPath}:${i + 1} -- POST fetch (target: ${urlToken || '<unresolved>'}) has no X-CSRF-Token header nearby`
+          `${relPath}:${i + 1} -- ${method} fetch (target: ${urlToken || '<unresolved>'}) has no X-CSRF-Token header nearby`
         );
       }
     });
